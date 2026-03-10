@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools", "meson-python", "pybind11"]
+build-backend = "mesonpy"
+
+[project]
+name = "ncarray"
+description="NumPy compatible non-contiguous arrays including PEP3118 support and specializations."
+requires-python = ">=3.8"
+dynamic = ["version"]
+
+[tool.meson-python.args]
+# Need to do this.... I couldn't for the life of me figure out how to get meson
+# meson-python and the subprojects to work well together for installing the
+# shared library...
+install = ['--skip-subprojects']
