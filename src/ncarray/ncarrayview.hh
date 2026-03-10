@@ -6,6 +6,7 @@
 #include <pybind11/stl.h>
 
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <iostream>
 #include <numeric>
@@ -20,6 +21,21 @@
 namespace py = pybind11;
 
 namespace ncarray {
+  template <typename T>
+  concept Shaped = requires(const T a) {
+    a.shape();
+  };
+
+  template <typename T>
+  concept Strided = requires (const T a) {
+    a.strides();
+  };
+
+  template <typename T>
+  concept ArrayLike = Shaped<T> && Strided<T>;
+
+  py::object add(ArrayLike auto& arr);
+
   template <typename T>
   struct op_traits {
     using sum_type = T;

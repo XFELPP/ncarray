@@ -1,6 +1,6 @@
 # ncarray
 
-`ncarray` provides a number of NumPy compatible classes for working with non-contiguous data that cannot be described exclusively by by strides.
+`ncarray` provides a number of NumPy compatible classes for working with non-contiguous data that cannot be described exclusively by strides.
 
 NumPy is extraordinarily powerful and flexible, but it does not support PEP3118 **sub-offsets** which are the general Python mechanism for dealing with array-like data spread out in memory. `ncarray` provides support for both sub-offsets, as well as additional specializations where the "pointer axis" is known in advance, and the general flexibility of sub-offsets is not needed.
 

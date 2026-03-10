@@ -248,24 +248,27 @@ namespace ncarray {
                                                           std::vector<ssize_t>& new_shape,
                                                           std::vector<ssize_t>& new_strides,
                                                           std::vector<ssize_t>& new_offsets) const {
+    size_t shape_diff { static_cast<size_t>(ndim()) - new_shape.size() };
+    size_t axis_offset = axis - shape_diff;
+
     if (index < 0) {
-      index += new_shape[axis];
+      index += new_shape[axis_offset];
     }
-    if (index < 0 || index >= new_shape[axis]) {
+    if (index < 0 || index >= new_shape[axis_offset]) {
       throw py::index_error();
     }
 
-    if (axis != 0) {
-      new_offsets[axis] += index * m_strides[axis];
+    new_shape.erase(new_shape.begin() + axis_offset);
+    new_strides.erase(new_strides.begin() + axis_offset);
+    if (new_offsets.size() > 1) {
+      // Don't remove the total offset if reducing to a scalar (so we can apply it)
+      new_offsets.erase(new_offsets.begin() + axis_offset);
     }
-
-    new_shape.erase(new_shape.begin() + axis);
-    new_strides.erase(new_strides.begin() + axis);
-    new_offsets.erase(new_offsets.begin() + axis);
 
     if (axis == 0) {
       return {&curr_data[index], false};
     }
+    new_offsets[axis_offset] += index * m_strides[axis];
 
     return {curr_data, true};
   }
@@ -276,29 +279,41 @@ namespace ncarray {
                                                             std::vector<ssize_t>& new_shape,
                                                             std::vector<ssize_t>& new_strides,
                                                             std::vector<ssize_t>& new_offsets) const {
+    size_t shape_diff{static_cast<size_t>(ndim()) - new_shape.size()};
+    size_t axis_offset = axis - shape_diff;
+
     ssize_t start, stop, step, length;
     if (!slice.compute(m_shape[axis], &start, &stop, &step, &length)) {
       throw py::error_already_set();
     }
     if (start < 0) {
-      start += new_shape[axis];
+      start += new_shape[axis_offset];
     }
     if (stop < 0) {
-      stop += new_shape[axis];
+      stop += new_shape[axis_offset];
     }
-    if (start < 0 || stop < 0 || start >= new_shape[axis] || stop > new_shape[axis]) {
+    if (start < 0 || stop < 0 || start >= new_shape[axis_offset] || stop > new_shape[axis_offset]) {
       throw py::index_error();
     }
 
-    new_shape[axis] = length;
+    ssize_t new_axis { axis_offset };
+
+    if (length > 1) {
+      new_shape[axis_offset] = length;
+    } else {
+      new_shape.erase(new_shape.begin() + axis_offset);
+      new_strides.erase(new_strides.begin() + axis_offset);
+      new_offsets.erase(new_offsets.begin() + axis_offset);
+      new_axis -= 1;
+    }
     if (axis == 0) {
       if (length == 1) {
         return {&curr_data[start], false};
       }
       return {&curr_data[start], true};
     }
-    new_strides[axis] *= step;
-    new_offsets[axis] += start * m_strides[axis];
+    new_strides[new_axis] *= step;
+    new_offsets[new_axis] += start * m_strides[axis];
     return {curr_data, true};
   }
 
@@ -310,6 +325,7 @@ namespace ncarray {
                                                             std::vector<ssize_t>& new_offsets) const {
     size_t n_specified_dim{indices.size()};
     bool first_axis_ptrs{true};
+
     // Handle each dimension specified by the tuple
     for (auto arg : indices) {
       if (py::isinstance<py::slice>(arg)) {
@@ -338,10 +354,10 @@ namespace ncarray {
         if (!new_first_axis_ptrs) {
           first_axis_ptrs = false;
         }
+
         curr_data = ret_data;
+        axis++;
       } else if (py::isinstance<py::ellipsis>(arg)) {
-        // size_t n_skipped { static_cast<size_t>(ndim()) - n_specified_dim };
-        // axis = new_shape.size();
         axis += ndim() - static_cast<ssize_t>(n_specified_dim) + 1;
       } else {
         throw py::index_error("Unrecognized indexing type.");
@@ -364,16 +380,14 @@ namespace ncarray {
     if (py::isinstance<py::int_>(slices_or_indices)) {
       // Just an integer passed as index
       ssize_t idx = slices_or_indices.cast<ssize_t>();
-
       auto [ret_data, first_axis_ptrs] = handle_int_indices(idx,
                                                             axis,
                                                             new_data,
                                                             new_shape,
                                                             new_strides,
                                                             new_offsets);
-      void* arr_data = ret_data[0];
-      return py::array(py::buffer_info(arr_data, itemsize(), format_descriptor().c_str(),
-                                       new_shape.size(), new_shape, new_strides));
+      new_data = ret_data;
+      new_first_axis_ptrs = false;
     } else if (py::isinstance<py::slice>(slices_or_indices)) {
       py::slice slice = slices_or_indices.cast<py::slice>();
       auto [ret_data, first_axis_ptrs] = handle_slice_indices(slice,
@@ -383,6 +397,7 @@ namespace ncarray {
                                                               new_strides,
                                                               new_offsets);
       new_first_axis_ptrs = first_axis_ptrs;
+      new_data = ret_data;
     } else if (py::isinstance<py::tuple>(slices_or_indices)) {
       py::tuple tup = slices_or_indices.cast<py::tuple>();
       auto [ret_data, first_axis_ptrs] = handle_tuple_indices(tup,
@@ -393,16 +408,26 @@ namespace ncarray {
                                                               new_offsets);
 
       new_first_axis_ptrs = first_axis_ptrs;
+      new_data = ret_data;
     }
     if (!new_first_axis_ptrs) {
-      return py::array(py::buffer_info(new_data[0],
+      // If we don't have first_axis_ptrs we will be returning an array
+      // Offsets are an NCArray* concept only - so adjust the pointer appropriately
+      ssize_t total_offset = std::accumulate(new_offsets.begin(),
+                                             new_offsets.end(),
+                                             static_cast<ssize_t>(0));
+      auto* offset_data = reinterpret_cast<std::uint8_t*>(new_data[0]) + total_offset;
+      return py::array(py::buffer_info(offset_data,
                                        itemsize(),
                                        format_descriptor().c_str(),
                                        new_shape.size(),
                                        new_shape,
                                        new_strides));
     } else {
-      return this->new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype);
+      if (new_offsets.size() != new_shape.size()) {
+        new_offsets.erase(new_offsets.end() - 1);
+      }
+      return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype);
     }
   }
 
