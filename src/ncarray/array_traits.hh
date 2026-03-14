@@ -3,8 +3,7 @@
 
 #include "dtype.hh"
 
-// How - Requirements and concepts
-
+#include <complex>
 #include <concepts>
 #include <cstdint>
 #include <limits>
@@ -14,8 +13,12 @@ typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 #endif
+#include <vector>
 
 namespace ncarray {
+  namespace impl {
+    template <typename T = void> struct default_owner;
+  } // namespace impl
   /**
    * The following concepts enforce the interface for the generic algorithms.
    */
@@ -43,6 +46,19 @@ namespace ncarray {
   template <typename T>
   concept ArrayLike = Shaped<T> && Strided<T> && HasData<T> && HasDType<T>;
 
+  // Mutable/writable arrays can get data that is not just const void*
+  template <typename T>
+  concept MutableArrayLike = ArrayLike<T> && requires(T arr) {
+    { arr.data() } -> std::same_as<void*>;
+  };
+
+  // ArrayLikes that own the data should be constructable from just the shape and type
+  // This indicates they can control data buffer
+  template <typename T>
+  concept OwningArrayLike = ArrayLike<T> && requires(std::vector<ssize_t> shape, DType dtype) {
+    T(shape, dtype);
+  };
+
   // NCArray* arrays have pointer axes (suboffsets may too) - so additional
   // optional contract for that
   template <typename T>
@@ -57,8 +73,9 @@ namespace ncarray {
 
   // Likewise check if there are offsets
   template <typename T>
-  constexpr ssize_t* if_has_get_offsets(const T& arr) {
-    if constexpr (requires { arr.ofsets() -> std::convertible_to<const ssize_t*>; }) {
+  constexpr const ssize_t* if_has_get_offsets(const T& arr) {
+    if constexpr (requires { arr.offsets(); } &&
+                  std::is_convertible_v<decltype(arr.offsets()), const ssize_t*>) {
       return arr.offsets();
     } else {
       return nullptr;

@@ -18,14 +18,14 @@ namespace ncarray {
       : start(start_)
       , stop(stop_)
       , step(1)
-      , length(stop - start)
+      , length((stop - start + step - 1) / step)
     {}
 
     Slice(ssize_t start_, ssize_t stop_, ssize_t step_)
       : start(start_)
       , stop(stop_)
       , step(step_)
-      , length(step % 2 == 0 ? (stop - start) / 2 : (stop - start + 1) / 2)
+      , length((stop - start + step - 1) / step)
     {}
 
     ssize_t start;

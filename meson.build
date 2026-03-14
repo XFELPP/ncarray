@@ -76,7 +76,8 @@ libncarray = shared_library(
     'ncarray',
     [
         'src/ncarray/ncarrayview.cc',
-        #'ncarrayref.cc',
+        'src/ncarray/ncarray.cc',
+        'src/ncarray/ncarrayref.cc',
     ],
     include_directories: ncarray_headers,
     install: true,
@@ -93,26 +94,23 @@ ncarray_dep = declare_dependency(
     include_directories: ncarray_headers,
 )
 
-#py_mod = py3.extension_module(
-#    'ncarray',
-#    [
-#        'src/ncarray/ncarrayref.cc',
-#        'src/ncarray/ncarrayview.cc',
-#        'src/python/ncarray.cc'
-#    ],
-#    install: true,
-#    install_dir: py3.get_install_dir(),
-#    include_directories: ncarray_headers,
-#    dependencies : [
-#        # ncarray_dep,
-#        pybind11_dep,
-#    #    spdlog_dep,
-#    ],
-#    # No sub-directory required - the entire project compiles to a single extension
-#    # `ncarray` which will be installed in site-packages
-#    # subdir: '',
-#    install_rpath: lib_install_rpath,
-#)
+py_mod = py3.extension_module(
+    'ncarray',
+    [
+        'src/python/ncarray.cc'
+    ],
+    install: true,
+    install_dir: py3.get_install_dir(),
+    include_directories: ncarray_headers,
+    dependencies : [
+        ncarray_dep,
+        pybind11_dep,
+    ],
+    # No sub-directory required - the entire project compiles to a single extension
+    # `ncarray` which will be installed in site-packages
+    # subdir: '',
+    install_rpath: lib_install_rpath,
+)
 
 #### CuFile Python module ####
 ##############################

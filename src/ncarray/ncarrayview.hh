@@ -28,15 +28,24 @@ namespace ncarray {
   class NCArrayView {
   public:
     NCArrayView(void** data_,
-                std::vector<ssize_t>& shape_,
-                std::vector<ssize_t>& strides_,
+                const std::vector<ssize_t>& shape_,
+                const std::vector<ssize_t>& strides_,
                 DType dtype_,
                 ssize_t ptr_axis = 0);
 
     NCArrayView(void** data_,
-                std::vector<ssize_t>& shape_,
-                std::vector<ssize_t>& strides_,
-                std::vector<ssize_t>& offsets_,
+                const std::vector<ssize_t>& shape_,
+                const std::vector<ssize_t>& strides_,
+                const std::vector<ssize_t>& offsets_,
+                DType dtype_,
+                ssize_t ptr_axis = 0);
+
+    // Also provide a constructor with direct pointers
+    // This is convenient particularly for construction from Python arrays
+    NCArrayView(void** data_,
+                const ssize_t ndim,
+                const ssize_t* shape_,
+                const ssize_t* strides_,
                 DType dtype_,
                 ssize_t ptr_axis = 0);
 
@@ -147,10 +156,28 @@ namespace ncarray {
     }
 
     // Binary operations
-    //py::array add(const py::object& other) const;
-    //py::array mul(const py::object& other) const;
-    //py::array div(const py::object& other) const;
-    //py::array truediv(const py::object& other) const;
+    template <ArrayLike OtherType,
+              typename R = void, // Added so compiler evaluates after NCArray defined
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType add(const OtherType& other) const {
+      return ncarray::add<NCArrayView, OtherType, ResultType>(*this, other);
+    }
+
+    template <ArrayLike OtherType,
+              typename R = void, // Added so compiler evaluates after NCArray defined
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType mul(const OtherType& other) const {
+      return ncarray::mul<NCArrayView, OtherType, ResultType>(*this, other);
+    }
+
+    template <ArrayLike OtherType,
+              typename R = void, // Added so compiler evaluates after NCArray defined
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType truediv(const OtherType& other) const {
+      return ncarray::truediv<NCArrayView, OtherType, ResultType>(*this, other);
+    }
+
+    //NCArray div(const py::object& other) const;
 
   protected:
     virtual std::string class_name() const {

@@ -1,14 +1,11 @@
 #ifndef NCARRAY_DTYPE_HH
 #define NCARRAY_DTYPE_HH
 
-#include "array_operations.hh"
 #include <complex>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <variant>
-
-// "What" - The type system
 
 namespace ncarray {
   class type_error : public std::invalid_argument {
@@ -36,7 +33,7 @@ namespace ncarray {
   };
 
   template <typename T> struct dtype_traits;
-#define REGISTER_NCARRAY_DTYPE(TYPE, ENUM_VAL)       \
+#define REGISTER_NCARRAY_DTYPE(TYPE, ENUM_VAL)      \
   template <> struct dtype_traits<TYPE> {           \
     static constexpr DType value = DType::ENUM_VAL; \
     using type = TYPE;                              \

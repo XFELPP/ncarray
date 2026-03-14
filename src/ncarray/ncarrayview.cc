@@ -5,10 +5,6 @@
 #include "dtype.hh"
 #include "indexing.hh"
 
-// #include <pybind11/numpy.h>
-// #include <pybind11/pybind11.h>
-// #include <pybind11/stl.h>
-
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -20,12 +16,10 @@
 #include <variant>
 #include <vector>
 
-// namespace py = pybind11;
-
 namespace ncarray {
   NCArrayView::NCArrayView(void** data_,
-                           std::vector<ssize_t>& shape_,
-                           std::vector<ssize_t>& strides_,
+                           const std::vector<ssize_t>& shape_,
+                           const std::vector<ssize_t>& strides_,
                            DType dtype_,
                            ssize_t ptr_axis)
       : m_data(data_)
@@ -37,9 +31,9 @@ namespace ncarray {
   {}
 
   NCArrayView::NCArrayView(void** data_,
-                           std::vector<ssize_t>& shape_,
-                           std::vector<ssize_t>& strides_,
-                           std::vector<ssize_t>& offsets_,
+                           const std::vector<ssize_t>& shape_,
+                           const std::vector<ssize_t>& strides_,
+                           const std::vector<ssize_t>& offsets_,
                            DType dtype_,
                            ssize_t ptr_axis)
       : m_data(data_)
@@ -49,157 +43,21 @@ namespace ncarray {
       , m_dtype(dtype_)
       , m_pointer_axis(ptr_axis)
   {}
-  /*
 
-  py::array NCArrayView::add(const py::object& other) const {
-    std::vector<ssize_t> other_strides(ndim());
-    std::vector<ssize_t> other_offsets(ndim());
-    void* other_data { nullptr };
+  NCArrayView::NCArrayView(void** data_,
+                           const ssize_t ndim,
+                           const ssize_t* shape_,
+                           const ssize_t* strides_,
+                           DType dtype_,
+                           ssize_t ptr_axis)
+    : m_data(data_)
+    , m_shape(shape_, shape_ + ndim)
+    , m_strides(strides_, strides_ + ndim)
+    , m_offsets(m_strides.size())
+    , m_dtype(dtype_)
+    , m_pointer_axis(ptr_axis)
+  {}
 
-    bool other_is_arr { false };
-    if (py::isinstance<py::array>(other)) {
-      auto arr = other.cast<py::array>();
-      other_strides = std::vector<ssize_t>(arr.strides(), arr.strides() + ndim());
-      other_data = const_cast<void*>(arr.data());
-      other_is_arr = true;
-    } else if (py::isinstance<NCArrayView>(other)) {
-      auto view = other.cast<NCArrayView>();
-      other_strides = std::vector<ssize_t>(view.strides(), view.strides() + ndim());
-      other_offsets = std::vector<ssize_t>(view.offsets(), view.offsets() + ndim());
-      other_data = const_cast<void*>(view.data());
-    } else {
-      throw py::value_error("Incompatible type - must be array or ncarray type.");
-    }
-
-    auto add_operation = [&]<typename T>() {
-      auto add_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, T* output) {
-        *output = *reinterpret_cast<const T*>(lhs) + *reinterpret_cast<const T*>(rhs);
-      };
-
-      return binary_op_impl<T, decltype(add_op_internal), T>(add_op_internal,
-                                                             other_is_arr,
-                                                             other_data,
-                                                             other_strides.data(),
-                                                             other_offsets.data());
-    };
-
-    return dispatch(add_operation);
-  }
-
-  py::array NCArrayView::mul(const py::object& other) const {
-    std::vector<ssize_t> other_strides(ndim());
-    std::vector<ssize_t> other_offsets(ndim());
-    void* other_data { nullptr };
-
-    bool other_is_arr { false };
-    if (py::isinstance<py::array>(other)) {
-      auto arr = other.cast<py::array>();
-      other_strides = std::vector<ssize_t>(arr.strides(), arr.strides() + ndim());
-      other_data = const_cast<void*>(arr.data());
-      other_is_arr = true;
-    } else if (py::isinstance<NCArrayView>(other)) {
-      auto view = other.cast<NCArrayView>();
-      other_strides = std::vector<ssize_t>(view.strides(), view.strides() + ndim());
-      other_offsets = std::vector<ssize_t>(view.offsets(), view.offsets() + ndim());
-      other_data = const_cast<void*>(view.data());
-    } else {
-      throw py::value_error("Incompatible type - must be array or ncarray type.");
-    }
-
-    auto mul_operation = [&]<typename T>() {
-      auto mul_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, T* output) {
-        if constexpr (std::is_same_v<T, bool>) {
-          *output = *reinterpret_cast<const bool*>(lhs) && *reinterpret_cast<const bool*>(rhs);
-        } else {
-          *output = *reinterpret_cast<const T*>(lhs) * *reinterpret_cast<const T*>(rhs);
-        }
-      };
-
-      return binary_op_impl<T, decltype(mul_op_internal), T>(mul_op_internal,
-                                                             other_is_arr,
-                                                             other_data,
-                                                             other_strides.data(),
-                                                             other_offsets.data());
-    };
-
-    return dispatch(mul_operation);
-  }
-
-  py::array NCArrayView::truediv(const py::object& other) const {
-    std::vector<ssize_t> other_strides(ndim());
-    std::vector<ssize_t> other_offsets(ndim());
-    void* other_data { nullptr };
-
-    bool other_is_arr { false };
-    if (py::isinstance<py::array>(other)) {
-      auto arr = other.cast<py::array>();
-      other_strides = std::vector<ssize_t>(arr.strides(), arr.strides() + ndim());
-      other_data = const_cast<void*>(arr.data());
-      other_is_arr = true;
-    } else if (py::isinstance<NCArrayView>(other)) {
-      auto view = other.cast<NCArrayView>();
-      other_strides = std::vector<ssize_t>(view.strides(), view.strides() + ndim());
-      other_offsets = std::vector<ssize_t>(view.offsets(), view.offsets() + ndim());
-      other_data = const_cast<void*>(view.data());
-    } else {
-      throw py::value_error("Incompatible type - must be array or ncarray type.");
-    }
-
-    auto truediv_operation = [&]<typename T>() {
-      using ResultT = typename op_traits<T>::truediv_type;
-      auto truediv_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, ResultT*
-  output) { const T lhs_val = *reinterpret_cast<const T*>(lhs); const T rhs_val =
-  *reinterpret_cast<const T*>(rhs); if (rhs_val == T(0)) { *output = std::isfinite(lhs_val) ?
-  std::nan("") : static_cast<ResultT>(lhs_val); } else { *output = static_cast<ResultT>(lhs_val) /
-  static_cast<ResultT>(rhs_val);
-        }
-      };
-
-      return binary_op_impl<T, decltype(truediv_op_internal), ResultT>(truediv_op_internal,
-                                                                       other_is_arr,
-                                                                       other_data,
-                                                                       other_strides.data(),
-                                                                       other_offsets.data());
-    };
-
-    return dispatch(truediv_operation);
-  }
-  */
-  /*
-  std::string NCArrayView::format_descriptor() const {
-    if (m_dtype.is(py::dtype::of<std::uint8_t>())) {
-      return py::format_descriptor<std::uint8_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::uint16_t>())) {
-      return py::format_descriptor<std::uint16_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::uint32_t>())) {
-      return py::format_descriptor<std::uint32_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::uint64_t>())) {
-      return py::format_descriptor<std::uint64_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::int8_t>())) {
-      return py::format_descriptor<std::int8_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::int16_t>())) {
-      return py::format_descriptor<std::int16_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::int32_t>())) {
-      return py::format_descriptor<std::int32_t>::format();
-    } else if (m_dtype.is(py::dtype::of<std::int64_t>())) {
-      return py::format_descriptor<std::int64_t>::format();
-    } else if (m_dtype.is(py::dtype::of<bool>())) {
-      return py::format_descriptor<bool>::format();
-
-      //} else if (m_dtype.is(py::dtype::of<float16?>())) {
-      //  return py::format_descriptor<float16?>::format();
-      //} else if (m_dtype.is(py::dtype::of<float32?>())) {
-      //  return py::format_descriptor<float32?>::format();
-
-    } else if (m_dtype.is(py::dtype::of<float>())) {
-      return py::format_descriptor<float>::format();
-    } else if (m_dtype.is(py::dtype::of<double>())) {
-      return py::format_descriptor<double>::format();
-    }
-    // I guess we have some unhandled type here then...
-    throw py::type_error();
-  }
-  */
   std::pair<void**, bool> NCArrayView::handle_int_indices(ssize_t index,
                                                           ssize_t axis,
                                                           void** curr_data,
@@ -223,7 +81,7 @@ namespace ncarray {
       new_offsets.erase(new_offsets.begin() + axis_offset);
     }
 
-    if (axis == 0) {
+    if (get_is_pointer_axis(*this, axis)) {
       return {&curr_data[index], false};
     }
     new_offsets[axis_offset] += index * m_strides[axis];
@@ -265,7 +123,7 @@ namespace ncarray {
       new_offsets.erase(new_offsets.begin() + axis_offset);
       new_axis -= 1;
     }
-    if (axis == 0) {
+    if (get_is_pointer_axis(*this, axis)) {
       if (length == 1) {
         return {&curr_data[start], false};
       }

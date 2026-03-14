@@ -1,11 +1,11 @@
 #ifndef NCARRAY_ARRAY_OPERATIONS_HH
 #define NCARRAY_ARRAY_OPERATIONS_HH
 
-// "Doing" - Generic Algorithms
-
 #include "array_traits.hh"
 #include "dtype.hh"
 
+#include <cmath>
+#include <complex>
 #include <concepts>
 #include <limits>
 #include <stdexcept>
@@ -88,16 +88,12 @@ namespace ncarray {
                res);
             res++;
           } else {
-            binary_op_recursive<T>(left_arr, right_arr, lhs_next, rhs_next, axis + 1, op, res);
+            binary_reduce_recursive<T>(left_arr, right_arr, lhs_next, rhs_next, axis + 1, op, res);
           }
         } else {
           size_t offset_l = offsets_l ? offsets_l[axis] : 0;
           const std::uint8_t* lhs_ptr =
             reinterpret_cast<const std::uint8_t*>(lhs_data) + i * strides_l[axis] + offset_l;
-
-          //size_t offset_r = offsets_r ? offsets_r[axis] : 0;
-          //const std::uint8_t* rhs_ptr =
-          //    reinterpret_cast<const std::uint8_t*>(rhs_data) + i * strides_r[axis] + offset_r;
 
           const void* rhs_ptr = [&]() {
             if (get_is_pointer_axis(right_arr, axis)) {
@@ -111,37 +107,14 @@ namespace ncarray {
           }();
 
           if (is_last_axis) {
-            op(lhs_ptr, rhs_ptr, res);
+            op(lhs_ptr, reinterpret_cast<const std::uint8_t*>(rhs_ptr), res);
             res++;
           } else {
-            binary_op_recursive<T>(left_arr, right_arr, lhs_ptr, rhs_ptr, axis + 1, op, res);
+            binary_reduce_recursive<T>(left_arr, right_arr, lhs_ptr, rhs_ptr, axis + 1, op, res);
           }
         }
       }
     }
-
-    /*
- *
-     template <typename T, typename Op, typename ResultTorAccumT>
-py::object binary_op_impl(Op op,
-                          bool other_is_arr,
-                          const void* other_data,
-                          const ssize_t* other_strides,
-                          const ssize_t* other_offsets) const {
-  py::array_t<ResultTorAccumT> result(m_shape);
-  py::buffer_info result_info = result.request();
-  auto* ptr = reinterpret_cast<ResultTorAccumT*>(result_info.ptr);
-  binary_op_recursive<T>(m_data,
-                         other_data,
-                         other_is_arr,
-                         other_strides,
-                         other_offsets,
-                         0,
-                         op,
-                         ptr);
-  return result;
-}
-*/
   } // namespace impl
 
   class index_error : public std::invalid_argument {
@@ -205,6 +178,9 @@ py::object binary_op_impl(Op op,
     throw type_error("Unsupported type for operation");
   }
 
+  // Unary reduction operations
+  // --------------------------
+
   template <ArrayLike A>
   Scalar sum(const A& arr) {
     auto sum_operation = [&]<typename T>() -> Scalar {
@@ -249,7 +225,8 @@ py::object binary_op_impl(Op op,
     return dispatch(arr.dtype(), sum_operation);
   }
 
-  template <ArrayLike A> Scalar max(const A& arr) {
+  template <ArrayLike A>
+  Scalar max(const A& arr) {
     auto max_operation = [&]<typename T>() {
       // Don't need a broader type for this one
       auto max_op_internal = [](const std::uint8_t* data, T* output) {
@@ -291,6 +268,114 @@ py::object binary_op_impl(Op op,
 
     return dispatch(arr.dtype(), min_operation);
   }
+
+  // Binary non-broadcast operations (same shape)
+  // --------------------------------------------
+  // TODO: In the future, may make ResultType ArrayLike (instead of Owning)
+  // but this requires supporting user-provided buffer to put result in
+  // TODO: Handle different shape, types and so on for left/right. Not dealt with atm
+
+  template<ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto add(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto add_operation = [&]<typename T>() {
+      auto add_op_internal = [](const std::uint8_t* lhs,
+                                const std::uint8_t* rhs,
+                                T* output) {
+        *output = *reinterpret_cast<const T*>(lhs) + *reinterpret_cast<const T*>(rhs);
+      };
+
+      ssize_t starting_axis { 0 };
+      T* result_ptr = reinterpret_cast<T*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(add_op_internal), T>(left,
+                                                                     right,
+                                                                     left.data(),
+                                                                     right.data(),
+                                                                     starting_axis,
+                                                                     add_op_internal,
+                                                                     result_ptr);
+    };
+
+    dispatch(left.dtype(), add_operation);
+    return result;
+  }
+
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto mul(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto mul_operation = [&]<typename T>() {
+      auto mul_op_internal = [](const std::uint8_t* lhs,
+                                const std::uint8_t* rhs,
+                                T* output) {
+        if constexpr (std::is_same_v<T, bool>) {
+          *output = *reinterpret_cast<const bool*>(lhs) && *reinterpret_cast<const bool*>(rhs);
+        } else {
+          *output = *reinterpret_cast<const T*>(lhs) * *reinterpret_cast<const T*>(rhs);
+        }
+      };
+
+      ssize_t starting_axis { 0 };
+      T* result_ptr = reinterpret_cast<T*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(mul_op_internal), T>(left,
+                                                                     right,
+                                                                     left.data(),
+                                                                     right.data(),
+                                                                     starting_axis,
+                                                                     mul_op_internal,
+                                                                     result_ptr);
+    };
+
+    dispatch(left.dtype(), mul_operation);
+    return result;
+  }
+
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto truediv(const Left& left, const Right& right) {
+    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
+        using ResultT = typename op_traits<T>::truediv_type;
+        return dtype_traits<ResultT>::value;
+      });
+
+    ResultType result(left.ndim(), left.shape(), result_dtype);
+
+    auto truediv_operation = [&]<typename T>() {
+      using ResultT = typename op_traits<T>::truediv_type;
+      auto truediv_op_internal = [](const std::uint8_t* lhs,
+                                    const std::uint8_t* rhs,
+                                    ResultT* output) {
+        const T lhs_val = *reinterpret_cast<const T*>(lhs);
+        const T rhs_val = *reinterpret_cast<const T*>(rhs);
+
+        if (rhs_val == T(0)) {
+          bool is_finite { false };
+          if constexpr (requires { lhs_val.real(); }) {
+            is_finite = std::isfinite(lhs_val.real()) && std::isfinite(lhs_val.imag());
+          } else {
+            is_finite = std::isfinite(lhs_val);
+          }
+          *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
+        } else {
+          *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs_val);
+        }
+      };
+
+      ssize_t starting_axis { 0 };
+      ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(truediv_op_internal), ResultT>(left,
+                                                                               right,
+                                                                               left.data(),
+                                                                               right.data(),
+                                                                               starting_axis,
+                                                                               truediv_op_internal,
+                                                                               result_ptr);
+    };
+
+    dispatch(left.dtype(), truediv_operation);
+    return result;
+  }
+
 } // namespace ncarray
 
 #endif // NCARRAY_ARRAY_OPERATIONS_HH
