@@ -1,17 +1,19 @@
+#define PYBIND11_DETAILED_ERROR_MESSAGES
 #include "dtype.hh"
 #include "indexing.hh"
 #include "ncarrayref.hh"
 #include "ncarrayview.hh"
 #include "ncarray.hh"
 
+#include <pybind11/native_enum.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 #include <cstdint>
 #include <cstdlib>
-#include <iostream>
 #include <optional>
+#include <sstream>
 #include <vector>
 
 namespace py = pybind11;
@@ -41,6 +43,9 @@ namespace {
     } else if (dtype.is(py::dtype::of<double>())) {
       return ncarray::dtype_traits<double>::value;
     }
+    std::ostringstream oss;
+    oss << "Unsupported type: " << dtype << "!";
+    throw py::type_error(oss.str());
   }
 
   ncarray::Slice pyslice_to_slice(py::slice s) {
@@ -48,12 +53,73 @@ namespace {
                           s.attr("stop").cast<ssize_t>(),
                           s.attr("step").is_none() ? 1 : s.attr("step").cast<ssize_t>());
   }
-}
+
+  ncarray::NCArrayRef* pyarray_to_ref(const py::array& arr) {
+    py::buffer_info arr_info = arr.request();
+    ssize_t ndim { arr.ndim() };
+    std::vector<ssize_t> shape(arr.shape(), arr.shape() + ndim);
+    std::vector<ssize_t> strides(arr.strides(), arr.strides() + ndim);
+
+    shape.insert(shape.begin(), 1);
+    strides.insert(strides.begin(), 1);
+
+    std::vector<void*> data_ptrs { arr_info.ptr };
+    ncarray::DType dtype = pydtype_to_dtype(arr.dtype());
+    return new ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+  }
+
+  ncarray::NCArrayRef* pylist_to_ref(const py::list& list) {
+    ssize_t len_ptr_axis = list.size();
+    std::vector<ssize_t> strides { 1 };
+    std::vector<ssize_t> shape { len_ptr_axis };
+    std::vector<void*> data_ptrs;
+
+    // Assume each array in list is same shape for now
+    py::dtype pydtype;
+    bool assigned { false };
+    for (py::handle o : list) {
+      py::array data = py::cast<py::array>(o);
+      py::buffer_info arr_info = data.request();
+      data_ptrs.push_back(arr_info.ptr);
+      if (!assigned) {
+        for (ssize_t i = 0; i < data.ndim(); ++i) {
+          strides.push_back(data.strides()[i]);
+          shape.push_back(data.shape()[i]);
+        }
+        assigned = true;
+      }
+      pydtype = data.dtype();
+    }
+    ncarray::DType dtype = pydtype_to_dtype(pydtype);
+    return new ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+  }
+} // anonymous namespace
 
 PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
   ncarray_module.doc() = "Non-contiguous (NC) Array Classes.";
 
-  //py::classh<ncarray::NCArray>(ncarray_module, "NCArray");
+  py::native_enum<ncarray::DType>(ncarray_module,
+                                  "DType",
+                                  "enum.Enum",
+                                  "Type enumerators supported by ncarray.")
+    .value("bool", ncarray::DType::bool_)
+    .value("char", ncarray::DType::char_)
+    .value("uint8", ncarray::DType::uint8)
+    .value("uint16", ncarray::DType::uint16)
+    .value("uint32", ncarray::DType::uint32)
+    .value("uint64", ncarray::DType::uint64)
+    .value("int8", ncarray::DType::int8)
+    .value("int16", ncarray::DType::int16)
+    .value("int32", ncarray::DType::int32)
+    .value("int64", ncarray::DType::int64)
+    .value("float32", ncarray::DType::float32)
+    .value("float64", ncarray::DType::float64)
+    .value("complex64", ncarray::DType::complex64)
+    .value("complex128", ncarray::DType::complex128)
+    .value("complex256", ncarray::DType::complex256)
+    .export_values()
+    .finalize();
+
   py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")
     .def("__repr__", &ncarray::NCArrayView::repr)
     .def_property_readonly("shape", [](const ncarray::NCArrayView& self) -> py::tuple {
@@ -160,98 +226,18 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
          },
        py::is_operator());
 
-  /*
-  py::classh<ncarray::NCArrayRef>(ncarray_module, "NCArrayRef")
-    .def(py::init([](const py::array& data) {
-      py::buffer_info arr_info = data.request();
-      ssize_t ndim {data.ndim()};
-      std::vector<ssize_t> shape(data.shape(), data.shape() + ndim);
-      std::vector<ssize_t> strides(data.strides(), data.strides() + ndim);
-      shape.insert(shape.begin(), 1);
-      strides.insert(strides.begin(), 1);
-      std::vector<void*> data_ptrs {arr_info.ptr};
-      ncarray::DType dtype = pydtype_to_dtype(data.dtype());
-      return new ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+  py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")
+    .def(py::init([](const py::array& arr) {
+      return pyarray_to_ref(arr);
     }))
-    .def(py::init([](const py::list data_list) {
-      ssize_t len_ptr_axis = data_list.size();
-      std::vector<ssize_t> strides {1};
-      std::vector<ssize_t> shape {len_ptr_axis};
-      std::vector<void*> data_ptrs;
-      // Assume each array in list is same shape for now
-      py::dtype pydtype;
-      bool assigned { false };
-      for (py::handle o : data_list) {
-        py::array data = py::cast<py::array>(o);
-        py::buffer_info arr_info = data.request();
-        data_ptrs.push_back(arr_info.ptr);
-        if (!assigned) {
-          for (ssize_t i = 0; i < data.ndim(); ++i) {
-            strides.push_back(data.strides()[i]);
-            shape.push_back(data.shape()[i]);
-          }
-          assigned = true;
-        }
-        pydtype = data.dtype();
-      }
-      ncarray::DType dtype = pydtype_to_dtype(pydtype);
-      return new ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
-    }))
-    .def("__repr__", &ncarray::NCArrayRef::repr)
-    .def_property_readonly("shape", [](const ncarray::NCArrayRef& self) -> py::tuple {
-      auto* shape = self.shape();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(shape[i]);
-      }
-      return l;
-    })
-    .def_property_readonly("strides", [](const ncarray::NCArrayRef& self) -> py::tuple {
-      auto* strides = self.strides();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(strides[i]);
-      }
-      return l;
-    })
-    .def_property_readonly("size", &ncarray::NCArrayRef::size)
-    .def_property_readonly("ndim", &ncarray::NCArrayRef::ndim)
-    .def_property_readonly("itemsize", &ncarray::NCArrayRef::itemsize)
-    .def_property_readonly("nbytes", &ncarray::NCArrayRef::nbytes)
-    .def("__getitem__", &ncarray::NCArrayRef::operator[], py::is_operator())
-    .def("sum", &ncarray::NCArrayRef::sum)
-    .def("max", &ncarray::NCArrayRef::max)
-    .def("min", &ncarray::NCArrayRef::min)
-    .def("mean", &ncarray::NCArrayRef::mean)
-    .def("__add__", &ncarray::NCArrayRef::add, py::is_operator());
+    .def(py::init([](const py::list& list) {
+      return pylist_to_ref(list);
+    }));
 
-  py::classh<ncarray::NCArray>(ncarray_module, "NCArray")
-    .def("__repr__", &ncarray::NCArray::repr)
-    .def_property_readonly("shape", [](const ncarray::NCArray& self) -> py::tuple {
-      auto* shape = self.shape();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(shape[i]);
-      }
-      return l;
-    })
-    .def_property_readonly("strides", [](const ncarray::NCArray& self) -> py::tuple {
-      auto* strides = self.strides();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(strides[i]);
-      }
-      return l;
-    })
-    .def_property_readonly("size", &ncarray::NCArray::size)
-    .def_property_readonly("ndim", &ncarray::NCArray::ndim)
-    .def_property_readonly("itemsize", &ncarray::NCArray::itemsize)
-    .def_property_readonly("nbytes", &ncarray::NCArray::nbytes)
-    .def("__getitem__", &ncarray::NCArray::operator[], py::is_operator())
-    .def("sum", &ncarray::NCArray::sum)
-    .def("max", &ncarray::NCArray::max)
-    .def("min", &ncarray::NCArray::min)
-    .def("mean", &ncarray::NCArray::mean)
-    .def("__add__", &ncarray::NCArray::add, py::is_operator());
-  */
+  py::classh<ncarray::NCArray, ncarray::NCArrayView>(ncarray_module, "NCArray")
+    .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
+      return new ncarray::NCArray(shape, dtype);
+    }),
+      py::arg("shape"),
+      py::arg("dtype") = py::cast(ncarray::DType::float32));
 } // ncarray_module
