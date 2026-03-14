@@ -1,8 +1,13 @@
 #include "ncarrayview.hh"
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include "array_operations.hh"
+#include "array_traits.hh"
+#include "dtype.hh"
+#include "indexing.hh"
+
+//#include <pybind11/numpy.h>
+//#include <pybind11/pybind11.h>
+//#include <pybind11/stl.h>
 
 #include <cstdint>
 #include <iostream>
@@ -15,13 +20,13 @@
 #include <variant>
 #include <vector>
 
-namespace py = pybind11;
+//namespace py = pybind11;
 
 namespace ncarray {
   NCArrayView::NCArrayView(void** data_,
                            std::vector<ssize_t>& shape_,
                            std::vector<ssize_t>& strides_,
-                           py::dtype dtype_)
+                           DType dtype_)
       : m_data(data_)
       , m_shape(shape_)
       , m_strides(strides_)
@@ -33,64 +38,14 @@ namespace ncarray {
                            std::vector<ssize_t>& shape_,
                            std::vector<ssize_t>& strides_,
                            std::vector<ssize_t>& offsets_,
-                           py::dtype dtype_)
+                           DType dtype_)
       : m_data(data_)
       , m_shape(shape_)
       , m_strides(strides_)
       , m_offsets(offsets_)
       , m_dtype(dtype_)
   {}
-
-  py::object NCArrayView::sum() const {
-    auto sum_operation = [&] <typename T>() {
-      using AccumT = typename op_traits<T>::sum_type;
-      auto sum_op_internal = [](const std::uint8_t* data, AccumT* output) {
-        *output += static_cast<AccumT>(*reinterpret_cast<const T*>(data));
-      };
-
-      return op_impl<T>(sum_op_internal, AccumT {0});
-    };
-
-    return dispatch(sum_operation);
-  }
-
-  py::object NCArrayView::max() const {
-    auto max_operation = [&]<typename T>() {
-      // Don't need a broader type for this one
-      auto max_op_internal = [](const std::uint8_t* data, T* output) {
-        T val = *reinterpret_cast<const T*>(data);
-        if (val > *output) {
-          *output = val;
-        }
-      };
-
-      return op_impl<T>(max_op_internal, std::numeric_limits<T>::lowest());
-    };
-
-    return dispatch(max_operation);
-  }
-
-  py::object NCArrayView::min() const {
-    auto min_operation = [&]<typename T>() {
-      // Don't need a broader type for this one
-      auto min_op_internal = [](const std::uint8_t* data, T* output) {
-        T val = *reinterpret_cast<const T*>(data);
-        if (val < *output) {
-          *output = val;
-        }
-      };
-
-      return op_impl<T>(min_op_internal, std::numeric_limits<T>::max());
-    };
-
-    return dispatch(min_operation);
-  }
-
-  py::object NCArrayView::mean() const {
-    // Not sure if we should do by type stuff for the mean here?
-    double total = sum().cast<double>();
-    return py::cast(total / size());
-  }
+  /*
 
   py::array NCArrayView::add(const py::object& other) const {
     std::vector<ssize_t> other_strides(ndim());
@@ -207,7 +162,8 @@ namespace ncarray {
 
     return dispatch(truediv_operation);
   }
-
+  */
+  /*
   std::string NCArrayView::format_descriptor() const {
     if (m_dtype.is(py::dtype::of<std::uint8_t>())) {
       return py::format_descriptor<std::uint8_t>::format();
@@ -241,7 +197,7 @@ namespace ncarray {
     // I guess we have some unhandled type here then...
     throw py::type_error();
   }
-
+  */
   std::pair<void**, bool> NCArrayView::handle_int_indices(ssize_t index,
                                                           ssize_t axis,
                                                           void** curr_data,
@@ -255,7 +211,7 @@ namespace ncarray {
       index += new_shape[axis_offset];
     }
     if (index < 0 || index >= new_shape[axis_offset]) {
-      throw py::index_error();
+      throw index_error("Integer index out of bounds!");
     }
 
     new_shape.erase(new_shape.begin() + axis_offset);
@@ -273,7 +229,7 @@ namespace ncarray {
     return {curr_data, true};
   }
 
-  std::pair<void**, bool> NCArrayView::handle_slice_indices(py::slice slice,
+  std::pair<void**, bool> NCArrayView::handle_slice_indices(Slice slice,
                                                             ssize_t axis,
                                                             void** curr_data,
                                                             std::vector<ssize_t>& new_shape,
@@ -282,10 +238,11 @@ namespace ncarray {
     size_t shape_diff{static_cast<size_t>(ndim()) - new_shape.size()};
     size_t axis_offset = axis - shape_diff;
 
-    ssize_t start, stop, step, length;
-    if (!slice.compute(m_shape[axis], &start, &stop, &step, &length)) {
-      throw py::error_already_set();
-    }
+    ssize_t start = slice.start;
+    ssize_t stop = slice.stop;
+    ssize_t step = slice.step;
+    ssize_t length = slice.length;
+
     if (start < 0) {
       start += new_shape[axis_offset];
     }
@@ -293,7 +250,7 @@ namespace ncarray {
       stop += new_shape[axis_offset];
     }
     if (start < 0 || stop < 0 || start >= new_shape[axis_offset] || stop > new_shape[axis_offset]) {
-      throw py::index_error();
+      throw index_error("Slice indices out of bounds!");
     }
 
     ssize_t new_axis { axis_offset };
@@ -317,7 +274,7 @@ namespace ncarray {
     return {curr_data, true};
   }
 
-  std::pair<void**, bool> NCArrayView::handle_tuple_indices(py::tuple indices,
+  std::pair<void**, bool> NCArrayView::handle_tuple_indices(ArrayIndices indices,
                                                             ssize_t axis,
                                                             void** curr_data,
                                                             std::vector<ssize_t>& new_shape,
@@ -328,9 +285,9 @@ namespace ncarray {
 
     // Handle each dimension specified by the tuple
     for (auto arg : indices) {
-      if (py::isinstance<py::slice>(arg)) {
+      if (std::holds_alternative<Slice>(arg)) {
         // Dealing with slices
-        py::slice slice = arg.cast<py::slice>();
+        Slice slice = std::get<Slice>(arg);
         auto [ret_data, new_first_axis_ptrs] = handle_slice_indices(slice,
                                                                     axis,
                                                                     curr_data,
@@ -342,9 +299,9 @@ namespace ncarray {
         }
         curr_data = ret_data;
         axis++;
-      } else if (py::isinstance<py::int_>(arg)) {
+      } else if (std::holds_alternative<ssize_t>(arg)) {
         // Dealing with single integer indices for the axis
-        ssize_t idx = arg.cast<ssize_t>();
+        ssize_t idx = std::get<ssize_t>(arg);
         auto [ret_data, new_first_axis_ptrs] = handle_int_indices(idx,
                                                                   axis,
                                                                   curr_data,
@@ -357,15 +314,15 @@ namespace ncarray {
 
         curr_data = ret_data;
         axis++;
-      } else if (py::isinstance<py::ellipsis>(arg)) {
+      } else if (std::holds_alternative<Ellipsis>(arg)) {
         axis += ndim() - static_cast<ssize_t>(n_specified_dim) + 1;
       } else {
-        throw py::index_error("Unrecognized indexing type.");
+        throw index_error("Unrecognized indexing type.");
       }
     }
     return {curr_data, first_axis_ptrs};
   }
-
+  /*
   std::variant<NCArrayView, py::array>
   NCArrayView::operator[](py::object slices_or_indices) const {
     void** new_data = m_data;
@@ -430,7 +387,8 @@ namespace ncarray {
       return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype);
     }
   }
-
+ */
+  /*
   std::string NCArrayView::repr() const {
     if (m_shape.empty()) {
       return class_name() + "([], dtype=" + py::str(m_dtype).cast<std::string>() + ")";
@@ -476,11 +434,12 @@ namespace ncarray {
       repr_recursive_dispatched<double>(oss, current_data, axis, indent, edge_items);
     }
   }
+  */
   NCArrayView NCArrayView::new_sub_view(void** data,
                                         std::vector<ssize_t>& shape,
                                         std::vector<ssize_t>& strides,
                                         std::vector<ssize_t>& offsets,
-                                        py::dtype dtype) const {
+                                        DType dtype) const {
     return NCArrayView(data, shape, strides, offsets, dtype);
   }
 } // namespace ncarray
