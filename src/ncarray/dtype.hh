@@ -1,13 +1,21 @@
 #ifndef NCARRAY_DTYPE_HH
 #define NCARRAY_DTYPE_HH
 
+#include "array_operations.hh"
 #include <complex>
 #include <cstdint>
+#include <stdexcept>
+#include <string>
 #include <variant>
 
 // "What" - The type system
 
 namespace ncarray {
+  class type_error : public std::invalid_argument {
+  public:
+    using std::invalid_argument::invalid_argument;
+  };
+
   enum class DType {
     bool_,
     char_,
@@ -81,6 +89,43 @@ namespace ncarray {
     }
   }
 
+  inline std::string to_string(DType type) {
+    switch (type) {
+    case DType::bool_:
+      return "bool";
+    case DType::char_:
+      return "char";
+    case DType::int8:
+      return "int8";
+    case DType::int16:
+      return "int16";
+    case DType::int32:
+      return "int32";
+    case DType::int64:
+      return "int64";
+    case DType::uint8:
+      return "uint8";
+    case DType::uint16:
+      return "uint16";
+    case DType::uint32:
+      return "uint32";
+    case DType::uint64:
+      return "uint64";
+    case DType::float32:
+      return "float32";
+    case DType::float64:
+      return "float64";
+    case DType::complex64:
+      return "complex64";
+    case DType::complex128:
+      return "complex128";
+    case DType::complex256:
+      return "complex256";
+    default:
+      throw type_error("Unkonwn type!");
+    }
+  }
+
   using Scalar = std::variant<
     // Cannot use unsigned char, identical to std::uint8_t
     bool, char,
@@ -88,6 +133,10 @@ namespace ncarray {
     std::int8_t, std::int16_t, std::int32_t, std::int64_t,
     float, double, std::complex<float>, std::complex<double>, std::complex<long double>>;
 
+  template <typename T> Scalar
+  to_scalar(const void* ptr) {
+    return Scalar(*reinterpret_cast<const T*>(ptr));
+  }
 } // namespace ncarray
 
 #endif // NCARRAY_DTYPE_HH

@@ -6,15 +6,10 @@
 #include "dtype.hh"
 #include "indexing.hh"
 
-//#include <pybind11/numpy.h>
-//#include <pybind11/pybind11.h>
-//#include <pybind11/stl.h>
-
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
 #include <cstdlib>
-//#include <initializer_list>
 #include <iostream>
 #include <numeric>
 #include <sstream>
@@ -26,21 +21,24 @@
 #include <variant>
 #include <vector>
 
-//namespace py = pybind11;
-
 namespace ncarray {
+  class NCArrayView;
+  using ViewOrScalar = std::variant<Scalar, NCArrayView>;
+
   class NCArrayView {
   public:
     NCArrayView(void** data_,
                 std::vector<ssize_t>& shape_,
                 std::vector<ssize_t>& strides_,
-                DType dtype_);
+                DType dtype_,
+                ssize_t ptr_axis = 0);
 
     NCArrayView(void** data_,
                 std::vector<ssize_t>& shape_,
                 std::vector<ssize_t>& strides_,
                 std::vector<ssize_t>& offsets_,
-                DType dtype_);
+                DType dtype_,
+                ssize_t ptr_axis = 0);
 
     NCArrayView(const NCArrayView& other) = default;
     NCArrayView(NCArrayView&& other) noexcept = default;
@@ -65,9 +63,9 @@ namespace ncarray {
      * NumPy array instead of an NCArrayView.
      * TODO: Clean up to remove the duplication of code for various cases.
      */
-    NCArrayView operator[](ssize_t idx) const;
-    NCArrayView operator[](Slice slice) const;
-    NCArrayView operator[](ArrayIndices indices) const;
+    ViewOrScalar operator[](ssize_t idx) const;
+    ViewOrScalar operator[](Slice slice) const;
+    ViewOrScalar operator[](ArrayIndices indices) const;
 
     // Basic information - dimensions, shape, etc.
     ssize_t ndim() const {
@@ -139,6 +137,13 @@ namespace ncarray {
     }
     Scalar mean() const {
       return ncarray::mean(*this);
+    }
+
+    Scalar get_scalar(void* ptr) const {
+      auto reduce = [&]<typename T>() -> Scalar {
+        return Scalar {*reinterpret_cast<T*>(ptr)};
+      };
+      return dispatch(m_dtype, reduce);
     }
 
     // Binary operations
@@ -291,7 +296,8 @@ namespace ncarray {
                                      std::vector<ssize_t>& shape,
                                      std::vector<ssize_t>& strides,
                                      std::vector<ssize_t>& offsets,
-                                     DType dtype) const;
+                                     DType dtype,
+                                     ssize_t ptr_axis = -1) const;
 
   protected:
     void** m_data;

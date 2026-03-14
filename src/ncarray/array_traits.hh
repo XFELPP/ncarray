@@ -28,7 +28,6 @@ namespace ncarray {
   template <typename T>
   concept Strided = requires(const T arr) {
     { arr.strides() } -> std::convertible_to<const ssize_t*>;
-    { arr.offsets() } -> std::convertible_to<const ssize_t*>;
   };
 
   template <typename T>
@@ -53,6 +52,16 @@ namespace ncarray {
     } else {
       // Non-NCArray* or suboffsets arrays never have pointer axis
       return false;
+    }
+  }
+
+  // Likewise check if there are offsets
+  template <typename T>
+  constexpr ssize_t* if_has_get_offsets(const T& arr) {
+    if constexpr (requires { arr.ofsets() -> std::convertible_to<const ssize_t*>; }) {
+      return arr.offsets();
+    } else {
+      return nullptr;
     }
   }
 

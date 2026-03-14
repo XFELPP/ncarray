@@ -50,52 +50,37 @@ namespace ncarray {
       return acc;
     }
 
-    /*
-     *
-         template <typename T, typename Op, typename ResultTorAccumT>
-    py::object binary_op_impl(Op op,
-                              bool other_is_arr,
-                              const void* other_data,
-                              const ssize_t* other_strides,
-                              const ssize_t* other_offsets) const {
-      py::array_t<ResultTorAccumT> result(m_shape);
-      py::buffer_info result_info = result.request();
-      auto* ptr = reinterpret_cast<ResultTorAccumT*>(result_info.ptr);
-      binary_op_recursive<T>(m_data,
-                             other_data,
-                             other_is_arr,
-                             other_strides,
-                             other_offsets,
-                             0,
-                             op,
-                             ptr);
-      return result;
-    }
-
-    template <typename T, typename Op, typename ResultTOrAccumT>
-    void binary_op_recursive(const void* lhs_data,
-                             const void* rhs_data,
-                             bool other_is_arr,
-                             const ssize_t* other_strides,
-                             const ssize_t* other_offsets,
-                             ssize_t axis,
-                             Op op,
-                             ResultTOrAccumT*& res) const {
+    template <typename T, typename Op, typename ResultTOrAccumT, ArrayLike A, ArrayLike B>
+    void binary_reduce_recursive(const A& left_arr,
+                                 const B& right_arr,
+                                 const void* lhs_data,
+                                 const void* rhs_data,
+                                 ssize_t axis,
+                                 Op op,
+                                 ResultTOrAccumT*& res) {
       // Assume both sides have same shape for this function
-      ssize_t dim = m_shape[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(m_shape.size()) - 1);
+      ssize_t dim = left_arr.shape()[axis];
+      bool is_last_axis = (axis == static_cast<ssize_t>(left_arr.ndim()) - 1);
+
+      const ssize_t* strides_l = left_arr.strides();
+      const ssize_t* strides_r = right_arr.strides();
+
+      const ssize_t* offsets_l = if_has_get_offsets(left_arr);
+      const ssize_t* offsets_r = if_has_get_offsets(right_arr);
+
       for (ssize_t i = 0; i < dim; ++i) {
-        if (axis == 0) {
-          const void* lhs_next = reinterpret_cast<const void* const*>(lhs_data)[i * m_strides[0]];
-          const void* rhs_next { [&]() {
-            if (other_is_arr) {
-              auto* data =
-                reinterpret_cast<const std::uint8_t*>(rhs_data) + i * other_strides[axis];
-              return reinterpret_cast<const void*>(data);
+        if (get_is_pointer_axis(left_arr, axis)) {
+          const void* lhs_next = reinterpret_cast<const void* const*>(lhs_data)[i * strides_l[axis]];
+          const void* rhs_next = [&]() {
+            if (get_is_pointer_axis(right_arr, axis)) {
+              return reinterpret_cast<const void* const*>(rhs_data)[i * strides_r[axis]];
             } else {
-              return reinterpret_cast<const void* const*>(rhs_data)[i * other_strides[axis]];
+              size_t offset = offsets_r ? offsets_r[axis] : 0;
+              auto* data =
+                reinterpret_cast<const std::uint8_t*>(rhs_data) + i * strides_r[axis] + offset;
+              return reinterpret_cast<const void*>(data);
             }
-          }()};
+          }();
 
           if (is_last_axis) {
             op(reinterpret_cast<const std::uint8_t*>(lhs_next),
@@ -103,24 +88,25 @@ namespace ncarray {
                res);
             res++;
           } else {
-            binary_op_recursive<T>(lhs_next,
-                                   rhs_next,
-                                   other_is_arr,
-                                   other_strides,
-                                   other_offsets,
-                                   axis + 1,
-                                   op,
-                                   res);
+            binary_op_recursive<T>(left_arr, right_arr, lhs_next, rhs_next, axis + 1, op, res);
           }
         } else {
+          size_t offset_l = offsets_l ? offsets_l[axis] : 0;
           const std::uint8_t* lhs_ptr =
-            reinterpret_cast<const std::uint8_t*>(lhs_data) + i * m_strides[axis] + m_offsets[axis];
-          const std::uint8_t* rhs_ptr = [&]() {
-            if (other_is_arr) {
-              return reinterpret_cast<const std::uint8_t*>(rhs_data) + i * other_strides[axis];
+            reinterpret_cast<const std::uint8_t*>(lhs_data) + i * strides_l[axis] + offset_l;
+
+          //size_t offset_r = offsets_r ? offsets_r[axis] : 0;
+          //const std::uint8_t* rhs_ptr =
+          //    reinterpret_cast<const std::uint8_t*>(rhs_data) + i * strides_r[axis] + offset_r;
+
+          const void* rhs_ptr = [&]() {
+            if (get_is_pointer_axis(right_arr, axis)) {
+              return reinterpret_cast<const void* const*>(rhs_data)[i * strides_r[axis]];
             } else {
-              return
-                reinterpret_cast<const std::uint8_t*>(rhs_data) + i * other_strides[axis] + other_offsets[axis];
+              size_t offset = offsets_r ? offsets_r[axis] : 0;
+              auto* data =
+                  reinterpret_cast<const std::uint8_t*>(rhs_data) + i * strides_r[axis] + offset;
+              return reinterpret_cast<const void*>(data);
             }
           }();
 
@@ -128,28 +114,37 @@ namespace ncarray {
             op(lhs_ptr, rhs_ptr, res);
             res++;
           } else {
-            binary_op_recursive<T>(lhs_ptr,
-                                   rhs_ptr,
-                                   other_is_arr,
-                                   other_strides,
-                                   other_offsets,
-                                   axis + 1,
-                                   op,
-                                   res);
+            binary_op_recursive<T>(left_arr, right_arr, lhs_ptr, rhs_ptr, axis + 1, op, res);
           }
         }
       }
     }
 
-     */
+    /*
+ *
+     template <typename T, typename Op, typename ResultTorAccumT>
+py::object binary_op_impl(Op op,
+                          bool other_is_arr,
+                          const void* other_data,
+                          const ssize_t* other_strides,
+                          const ssize_t* other_offsets) const {
+  py::array_t<ResultTorAccumT> result(m_shape);
+  py::buffer_info result_info = result.request();
+  auto* ptr = reinterpret_cast<ResultTorAccumT*>(result_info.ptr);
+  binary_op_recursive<T>(m_data,
+                         other_data,
+                         other_is_arr,
+                         other_strides,
+                         other_offsets,
+                         0,
+                         op,
+                         ptr);
+  return result;
+}
+*/
   } // namespace impl
 
   class index_error : public std::invalid_argument {
-  public:
-    using std::invalid_argument::invalid_argument;
-  };
-
-  class type_error : public std::invalid_argument {
   public:
     using std::invalid_argument::invalid_argument;
   };

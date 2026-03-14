@@ -5,9 +5,9 @@
 #include "dtype.hh"
 #include "indexing.hh"
 
-//#include <pybind11/numpy.h>
-//#include <pybind11/pybind11.h>
-//#include <pybind11/stl.h>
+// #include <pybind11/numpy.h>
+// #include <pybind11/pybind11.h>
+// #include <pybind11/stl.h>
 
 #include <cstdint>
 #include <iostream>
@@ -20,30 +20,34 @@
 #include <variant>
 #include <vector>
 
-//namespace py = pybind11;
+// namespace py = pybind11;
 
 namespace ncarray {
   NCArrayView::NCArrayView(void** data_,
                            std::vector<ssize_t>& shape_,
                            std::vector<ssize_t>& strides_,
-                           DType dtype_)
+                           DType dtype_,
+                           ssize_t ptr_axis)
       : m_data(data_)
       , m_shape(shape_)
       , m_strides(strides_)
       , m_offsets(m_strides.size())
       , m_dtype(dtype_)
+      , m_pointer_axis(ptr_axis)
   {}
 
   NCArrayView::NCArrayView(void** data_,
                            std::vector<ssize_t>& shape_,
                            std::vector<ssize_t>& strides_,
                            std::vector<ssize_t>& offsets_,
-                           DType dtype_)
+                           DType dtype_,
+                           ssize_t ptr_axis)
       : m_data(data_)
       , m_shape(shape_)
       , m_strides(strides_)
       , m_offsets(offsets_)
       , m_dtype(dtype_)
+      , m_pointer_axis(ptr_axis)
   {}
   /*
 
@@ -143,13 +147,11 @@ namespace ncarray {
 
     auto truediv_operation = [&]<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
-      auto truediv_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, ResultT* output) {
-        const T lhs_val = *reinterpret_cast<const T*>(lhs);
-        const T rhs_val = *reinterpret_cast<const T*>(rhs);
-        if (rhs_val == T(0)) {
-          *output = std::isfinite(lhs_val) ? std::nan("") : static_cast<ResultT>(lhs_val);
-        } else {
-          *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs_val);
+      auto truediv_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, ResultT*
+  output) { const T lhs_val = *reinterpret_cast<const T*>(lhs); const T rhs_val =
+  *reinterpret_cast<const T*>(rhs); if (rhs_val == T(0)) { *output = std::isfinite(lhs_val) ?
+  std::nan("") : static_cast<ResultT>(lhs_val); } else { *output = static_cast<ResultT>(lhs_val) /
+  static_cast<ResultT>(rhs_val);
         }
       };
 
@@ -235,7 +237,7 @@ namespace ncarray {
                                                             std::vector<ssize_t>& new_shape,
                                                             std::vector<ssize_t>& new_strides,
                                                             std::vector<ssize_t>& new_offsets) const {
-    size_t shape_diff{static_cast<size_t>(ndim()) - new_shape.size()};
+    size_t shape_diff { static_cast<size_t>(ndim()) - new_shape.size() };
     size_t axis_offset = axis - shape_diff;
 
     ssize_t start = slice.start;
@@ -253,7 +255,7 @@ namespace ncarray {
       throw index_error("Slice indices out of bounds!");
     }
 
-    ssize_t new_axis { axis_offset };
+    ssize_t new_axis { static_cast<ssize_t>(axis_offset) };
 
     if (length > 1) {
       new_shape[axis_offset] = length;
@@ -322,9 +324,8 @@ namespace ncarray {
     }
     return {curr_data, first_axis_ptrs};
   }
-  /*
-  std::variant<NCArrayView, py::array>
-  NCArrayView::operator[](py::object slices_or_indices) const {
+
+  ViewOrScalar NCArrayView::operator[](ssize_t idx) const {
     void** new_data = m_data;
     std::vector<ssize_t> new_shape = m_shape;
     std::vector<ssize_t> new_strides = m_strides;
@@ -334,64 +335,90 @@ namespace ncarray {
     // if not, we'll just return a NumPy array
     bool new_first_axis_ptrs{true};
     size_t axis{0};
-    if (py::isinstance<py::int_>(slices_or_indices)) {
-      // Just an integer passed as index
-      ssize_t idx = slices_or_indices.cast<ssize_t>();
-      auto [ret_data, first_axis_ptrs] = handle_int_indices(idx,
+
+    auto [ret_data, first_axis_ptrs] = handle_int_indices(idx,
+                                                          axis,
+                                                          new_data,
+                                                          new_shape,
+                                                          new_strides,
+                                                          new_offsets);
+    new_data = ret_data;
+    new_first_axis_ptrs = false;
+
+    if (new_shape.empty()) {
+      return get_scalar(new_data[0]);
+    }
+
+    // No pointer axis, so set last arg (pointer axis) to -1
+    return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, -1);
+  }
+
+  ViewOrScalar NCArrayView::operator[](Slice slice) const {
+    void** new_data = m_data;
+    std::vector<ssize_t> new_shape = m_shape;
+    std::vector<ssize_t> new_strides = m_strides;
+    std::vector<ssize_t> new_offsets = m_offsets;
+
+    // Check to see if we still need the double pointers for the first axis
+    // if not, we'll just return a NumPy array
+    bool new_first_axis_ptrs{true};
+    size_t axis{0};
+
+    auto [ret_data, first_axis_ptrs] = handle_slice_indices(slice,
                                                             axis,
                                                             new_data,
                                                             new_shape,
                                                             new_strides,
                                                             new_offsets);
-      new_data = ret_data;
-      new_first_axis_ptrs = false;
-    } else if (py::isinstance<py::slice>(slices_or_indices)) {
-      py::slice slice = slices_or_indices.cast<py::slice>();
-      auto [ret_data, first_axis_ptrs] = handle_slice_indices(slice,
-                                                              axis,
-                                                              new_data,
-                                                              new_shape,
-                                                              new_strides,
-                                                              new_offsets);
-      new_first_axis_ptrs = first_axis_ptrs;
-      new_data = ret_data;
-    } else if (py::isinstance<py::tuple>(slices_or_indices)) {
-      py::tuple tup = slices_or_indices.cast<py::tuple>();
-      auto [ret_data, first_axis_ptrs] = handle_tuple_indices(tup,
-                                                              axis,
-                                                              new_data,
-                                                              new_shape,
-                                                              new_strides,
-                                                              new_offsets);
+    new_first_axis_ptrs = first_axis_ptrs;
+    new_data = ret_data;
 
-      new_first_axis_ptrs = first_axis_ptrs;
-      new_data = ret_data;
-    }
+    ssize_t ptr_axis{m_pointer_axis};
     if (!new_first_axis_ptrs) {
-      // If we don't have first_axis_ptrs we will be returning an array
-      // Offsets are an NCArray* concept only - so adjust the pointer appropriately
-      ssize_t total_offset = std::accumulate(new_offsets.begin(),
-                                             new_offsets.end(),
-                                             static_cast<ssize_t>(0));
-      auto* offset_data = reinterpret_cast<std::uint8_t*>(new_data[0]) + total_offset;
-      return py::array(py::buffer_info(offset_data,
-                                       itemsize(),
-                                       format_descriptor().c_str(),
-                                       new_shape.size(),
-                                       new_shape,
-                                       new_strides));
-    } else {
-      if (new_offsets.size() != new_shape.size()) {
-        new_offsets.erase(new_offsets.end() - 1);
-      }
-      return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype);
+      // No pointer axis, so set last arg (pointer axis) to -1
+      ptr_axis = -1;
     }
+    return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, ptr_axis);
   }
- */
-  /*
+
+  ViewOrScalar NCArrayView::operator[](ArrayIndices tup) const {
+    void** new_data = m_data;
+    std::vector<ssize_t> new_shape = m_shape;
+    std::vector<ssize_t> new_strides = m_strides;
+    std::vector<ssize_t> new_offsets = m_offsets;
+
+    // Check to see if we still need the double pointers for the first axis
+    // if not, we'll just return a NumPy array
+    bool new_first_axis_ptrs{true};
+    size_t axis{0};
+
+    auto [ret_data, first_axis_ptrs] = handle_tuple_indices(tup,
+                                                            axis,
+                                                            new_data,
+                                                            new_shape,
+                                                            new_strides,
+                                                            new_offsets);
+    new_first_axis_ptrs = first_axis_ptrs;
+    new_data = ret_data;
+
+    // ssize_t total_offset =
+    //     std::accumulate(new_offsets.begin(), new_offsets.end(), static_cast<ssize_t>(0));
+
+    // auto* offset_data = reinterpret_cast<std::uint8_t*>(new_data[0]) + total_offset;
+    if (new_shape.empty()) {
+      return get_scalar(new_data[0]);
+    }
+    ssize_t ptr_axis{m_pointer_axis};
+    if (!new_first_axis_ptrs) {
+      // No pointer axis, so set last arg (pointer axis) to -1
+      ptr_axis = -1;
+    }
+    return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, ptr_axis);
+  }
+
   std::string NCArrayView::repr() const {
     if (m_shape.empty()) {
-      return class_name() + "([], dtype=" + py::str(m_dtype).cast<std::string>() + ")";
+      return class_name() + "([], dtype=" + ncarray::to_string(m_dtype) + ")";
     }
 
     std::string prefix{class_name() + "("};
@@ -404,42 +431,25 @@ namespace ncarray {
 
     repr_recursive(oss, m_data, 0, indent, edge_items);
 
-    oss << ", dtype=" << py::str(m_dtype).cast<std::string>() << ")";
+    oss << ", dtype=" << ncarray::to_string(m_dtype) << ")";
     return oss.str();
   }
-
-  void NCArrayView::repr_recursive(std::ostringstream& oss, void* current_data, ssize_t axis,
-                                   ssize_t indent, ssize_t edge_items) const {
-    if (m_dtype.is(py::dtype::of<std::uint8_t>())) {
-      repr_recursive_dispatched<std::uint8_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::uint16_t>())) {
-      repr_recursive_dispatched<std::uint16_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::uint32_t>())) {
-      repr_recursive_dispatched<std::uint32_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::uint64_t>())) {
-      repr_recursive_dispatched<std::uint64_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::int8_t>())) {
-      repr_recursive_dispatched<std::int8_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::int16_t>())) {
-      repr_recursive_dispatched<std::int16_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::int32_t>())) {
-      repr_recursive_dispatched<std::int32_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<std::int64_t>())) {
-      repr_recursive_dispatched<std::int64_t>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<bool>())) {
-      repr_recursive_dispatched<bool>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<float>())) {
-      repr_recursive_dispatched<float>(oss, current_data, axis, indent, edge_items);
-    } else if (m_dtype.is(py::dtype::of<double>())) {
-      repr_recursive_dispatched<double>(oss, current_data, axis, indent, edge_items);
-    }
+  void NCArrayView::repr_recursive(std::ostringstream& oss,
+                                   void* current_data,
+                                   ssize_t axis,
+                                   ssize_t indent,
+                                   ssize_t edge_items) const {
+    dispatch(m_dtype, [&]<typename T> {
+               repr_recursive_dispatched<T>(oss, current_data, axis, indent, edge_items);
+             });
   }
-  */
+
   NCArrayView NCArrayView::new_sub_view(void** data,
                                         std::vector<ssize_t>& shape,
                                         std::vector<ssize_t>& strides,
                                         std::vector<ssize_t>& offsets,
-                                        DType dtype) const {
-    return NCArrayView(data, shape, strides, offsets, dtype);
+                                        DType dtype,
+                                        ssize_t ptr_axis) const {
+    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis);
   }
 } // namespace ncarray
