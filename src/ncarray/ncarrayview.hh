@@ -162,18 +162,36 @@ namespace ncarray {
     ResultType add(const OtherType& other) const {
       return ncarray::add<NCArrayView, OtherType, ResultType>(*this, other);
     }
+    template <ArrayLike OtherType,
+              typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator+(const OtherType& other) const {
+      return ncarray::add<NCArrayView, OtherType, ResultType>(*this, other);
+    }
 
     template <ArrayLike OtherType,
-              typename R = void, // Added so compiler evaluates after NCArray defined
+              typename R = void,
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
     ResultType mul(const OtherType& other) const {
       return ncarray::mul<NCArrayView, OtherType, ResultType>(*this, other);
     }
+    template <ArrayLike OtherType,
+              typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator*(const OtherType& other) const {
+      return ncarray::mul<NCArrayView, OtherType, ResultType>(*this, other);
+    }
 
     template <ArrayLike OtherType,
-              typename R = void, // Added so compiler evaluates after NCArray defined
+              typename R = void,
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
     ResultType truediv(const OtherType& other) const {
+      return ncarray::truediv<NCArrayView, OtherType, ResultType>(*this, other);
+    }
+    template <ArrayLike OtherType,
+              typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator/(const OtherType& other) const {
       return ncarray::truediv<NCArrayView, OtherType, ResultType>(*this, other);
     }
 
@@ -206,9 +224,10 @@ namespace ncarray {
       oss << "[";
 
       auto format_element = [&](size_t i) {
-        if (axis == 0) {
-          // First axis is a pointer axis
-          void* next_ptr = reinterpret_cast<void**>(current_data)[i];
+        if (is_pointer_axis(axis)) {
+          void* next_ptr =
+            reinterpret_cast<std::uint8_t*>(reinterpret_cast<void**>(current_data)[i]) +
+            m_offsets[axis];
           if (is_last_axis) {
             // Formatting gets garbled with int8/uint8 and ostringstream so cast
             T val = *reinterpret_cast<T*>(next_ptr);
@@ -257,7 +276,7 @@ namespace ncarray {
               // Extra newline for higher dimensions
               ssize_t ndim{static_cast<ssize_t>(m_shape.size())};
               for (ssize_t j = 0; j < ndim - axis - 2; ++j) {
-                oss << "\n";
+                oss << "\n" << std::string(indent + 1, ' ');
               }
             }
           }
@@ -298,26 +317,20 @@ namespace ncarray {
     std::string format_descriptor() const;
 
   private:
-    std::pair<void**, bool> handle_int_indices(ssize_t index,
-                                               ssize_t axis,
-                                               void** curr_data,
-                                               std::vector<ssize_t>& new_shape,
-                                               std::vector<ssize_t>& new_strides,
-                                               std::vector<ssize_t>& new_offsets) const;
+    std::pair<void**, AxisDescr> handle_int_indices(ssize_t index,
+                                                    ssize_t axis,
+                                                    void** curr_data) const;
 
-    std::pair<void**, bool> handle_slice_indices(Slice slice,
-                                                 ssize_t axis,
-                                                 void** curr_data,
-                                                 std::vector<ssize_t>& new_shape,
-                                                 std::vector<ssize_t>& new_strides,
-                                                 std::vector<ssize_t>& new_offsets) const;
+    std::pair<void**, AxisDescr> handle_slice_indices(Slice slice,
+                                                      ssize_t axis,
+                                                      void** curr_data) const;
 
-    std::pair<void**, bool> handle_tuple_indices(ArrayIndices indices,
-                                                 ssize_t axis,
-                                                 void** curr_data,
-                                                 std::vector<ssize_t>& new_shape,
-                                                 std::vector<ssize_t>& new_strides,
-                                                 std::vector<ssize_t>& new_offsets) const;
+    std::pair<void**, std::vector<AxisDescr>> handle_tuple_indices(ArrayIndices indices,
+                                                                   ssize_t axis,
+                                                                   void** curr_data) const;
+
+    ViewOrScalar out_from_axes(void** new_data,
+                               std::variant<AxisDescr, std::vector<AxisDescr>> axes) const;
 
     virtual NCArrayView new_sub_view(void** data,
                                      std::vector<ssize_t>& shape,

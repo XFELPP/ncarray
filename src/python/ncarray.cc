@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <optional>
 #include <sstream>
 #include <vector>
@@ -48,10 +49,25 @@ namespace {
     throw py::type_error(oss.str());
   }
 
-  ncarray::Slice pyslice_to_slice(py::slice s) {
-    return ncarray::Slice(s.attr("start").cast<ssize_t>(),
-                          s.attr("stop").cast<ssize_t>(),
-                          s.attr("step").is_none() ? 1 : s.attr("step").cast<ssize_t>());
+  ncarray::Slice pyslice_to_slice(ssize_t axis_shape, py::slice slice) {
+    ssize_t start, stop, step, length;
+    if (!slice.compute(axis_shape, &start, &stop, &step, &length)) {
+      throw py::error_already_set();
+    }
+    return ncarray::Slice(start, stop, step);
+  }
+
+  auto pyarray_to_view(const py::array& arr) {
+    py::buffer_info info = arr.request();
+    auto buf_ptr = info.ptr;
+    // This is temporary!! Careful how you use it!
+    ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
+    return ncarray::NCArrayView(&buf_ptr,
+                                arr.ndim(),
+                                arr.shape(),
+                                arr.strides(),
+                                pydtype_to_dtype(arr.dtype()),
+                                ptr_axis);
   }
 
   ncarray::NCArrayRef* pyarray_to_ref(const py::array& arr) {
@@ -147,14 +163,16 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
            if (py::isinstance<py::int_>(idx)) {
              return py::cast(self[idx.cast<ssize_t>()]);
            } else if (py::isinstance<py::slice>(idx)) {
-             return py::cast(self[pyslice_to_slice(idx.cast<py::slice>())]);
+             return py::cast(self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())]);
            } else if (py::isinstance<py::tuple>(idx)) {
              ncarray::ArrayIndices indices;
+             ssize_t axis { 0 };
              for (auto& item : idx.cast<py::tuple>()) {
                if (py::isinstance<py::int_>(item)) {
                  indices.emplace_back(item.cast<ssize_t>());
                } else if (py::isinstance<py::slice>(item)) {
-                 indices.emplace_back(pyslice_to_slice(item.cast<py::slice>()));
+                 indices.emplace_back(pyslice_to_slice(self.shape(axis),
+                                                       item.cast<py::slice>()));
                } else if (item.is(py::ellipsis())) {
                  indices.emplace_back(ncarray::Ellipsis{});
                } else {
@@ -171,60 +189,30 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     .def("max", &ncarray::NCArrayView::max)
     .def("min", &ncarray::NCArrayView::min)
     .def("mean", &ncarray::NCArrayView::mean)
-    .def("__add__",
-         [](const ncarray::NCArrayView& self, py::object other) {
-           if (py::isinstance<py::array>(other)) {
-             auto arr = py::reinterpret_borrow<py::array>(other);
-             py::buffer_info info = arr.request();
-             auto buf_ptr = info.ptr;
-             ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
-             ncarray::NCArrayView view(&buf_ptr,
-                                       arr.ndim(),
-                                       arr.shape(),
-                                       arr.strides(),
-                                       pydtype_to_dtype(arr.dtype()),
-                                       ptr_axis);
-             return py::cast(self.add(view));
-           }
-           throw py::type_error("Only array types accepted!");
-         },
-         py::is_operator())
-    .def("__mul__",
-         [](const ncarray::NCArrayView& self, py::object other) {
-           if (py::isinstance<py::array>(other)) {
-             auto arr = py::reinterpret_borrow<py::array>(other);
-             py::buffer_info info = arr.request();
-             auto buf_ptr = info.ptr;
-             ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
-             ncarray::NCArrayView view(&buf_ptr,
-                                       arr.ndim(),
-                                       arr.shape(),
-                                       arr.strides(),
-                                       pydtype_to_dtype(arr.dtype()),
-                                       ptr_axis);
-             return py::cast(self.mul(view));
-           }
-           throw py::type_error("Only array types accepted!");
-         },
-       py::is_operator())
-    .def("__truediv__",
-         [](const ncarray::NCArrayView& self, py::object other) {
-           if (py::isinstance<py::array>(other)) {
-             auto arr = py::reinterpret_borrow<py::array>(other);
-             py::buffer_info info = arr.request();
-             auto buf_ptr = info.ptr;
-             ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
-             ncarray::NCArrayView view(&buf_ptr,
-                                       arr.ndim(),
-                                       arr.shape(),
-                                       arr.strides(),
-                                       pydtype_to_dtype(arr.dtype()),
-                                       ptr_axis);
-             return py::cast(self.truediv(view));
-           }
-           throw py::type_error("Only array types accepted!");
-         },
-       py::is_operator());
+    // Conversion helpers for py::array shouldn't really be needed... TODO
+    .def("__add__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
+      return py::cast(self + other);
+    })
+    .def("__add__", [](const ncarray::NCArrayView& self, const py::array& other) {
+      return py::cast(self + pyarray_to_view(other));
+    },
+      py::is_operator())
+    .def("__mul__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
+      return py::cast(self * other);
+    },
+      py::is_operator())
+    .def("__mul__", [](const ncarray::NCArrayView& self, const py::array& other) {
+      return py::cast (self * pyarray_to_view(other));
+    },
+      py::is_operator())
+    .def("__truediv__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
+      return py::cast(self / other);
+    },
+      py::is_operator())
+    .def("__truediv__", [](const ncarray::NCArrayView& self, const py::array& other) {
+      return py::cast(self / pyarray_to_view(other));
+    },
+      py::is_operator());
 
   py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")
     .def(py::init([](const py::array& arr) {

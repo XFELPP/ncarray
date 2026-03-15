@@ -36,5 +36,14 @@ namespace ncarray {
 
   using IndexVariant = std::variant<ssize_t, Slice, Ellipsis>;
   using ArrayIndices = std::vector<IndexVariant>;
+
+  struct AxisDescr {
+    ssize_t index;
+    ssize_t length;
+    ssize_t stride;
+    ssize_t offset;
+    bool is_pointer { false };
+  };
+
 } // namespace ncarray
 #endif // NCARRAY_INDEXING_HH

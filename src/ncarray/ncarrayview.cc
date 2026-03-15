@@ -58,220 +58,186 @@ namespace ncarray {
     , m_pointer_axis(ptr_axis)
   {}
 
-  std::pair<void**, bool> NCArrayView::handle_int_indices(ssize_t index,
-                                                          ssize_t axis,
-                                                          void** curr_data,
-                                                          std::vector<ssize_t>& new_shape,
-                                                          std::vector<ssize_t>& new_strides,
-                                                          std::vector<ssize_t>& new_offsets) const {
-    size_t shape_diff { static_cast<size_t>(ndim()) - new_shape.size() };
-    size_t axis_offset = axis - shape_diff;
-
+  std::pair<void**, AxisDescr> NCArrayView::handle_int_indices(ssize_t index,
+                                                               ssize_t axis,
+                                                               void** curr_data) const {
     if (index < 0) {
-      index += new_shape[axis_offset];
+      index += m_shape[axis];
     }
-    if (index < 0 || index >= new_shape[axis_offset]) {
+    if (index < 0 || index >= m_shape[axis]) {
       throw index_error("Integer index out of bounds!");
     }
 
-    new_shape.erase(new_shape.begin() + axis_offset);
-    new_strides.erase(new_strides.begin() + axis_offset);
-    if (new_offsets.size() > 1) {
-      // Don't remove the total offset if reducing to a scalar (so we can apply it)
-      new_offsets.erase(new_offsets.begin() + axis_offset);
-    }
+    ssize_t length { 1 };
+    ssize_t stride { m_strides[axis] };
+    ssize_t offset { m_offsets[axis] + index * m_strides[axis] };
+    bool is_pointer { false };
+    AxisDescr new_axis(axis, length, stride, offset, is_pointer);
 
     if (get_is_pointer_axis(*this, axis)) {
-      return {&curr_data[index], false};
+      new_axis.is_pointer = true;
+      return { reinterpret_cast<void**>(curr_data[index]), new_axis };
     }
-    new_offsets[axis_offset] += index * m_strides[axis];
 
-    return {curr_data, true};
+    return { curr_data, new_axis };
   }
 
-  std::pair<void**, bool> NCArrayView::handle_slice_indices(Slice slice,
-                                                            ssize_t axis,
-                                                            void** curr_data,
-                                                            std::vector<ssize_t>& new_shape,
-                                                            std::vector<ssize_t>& new_strides,
-                                                            std::vector<ssize_t>& new_offsets) const {
-    size_t shape_diff { static_cast<size_t>(ndim()) - new_shape.size() };
-    size_t axis_offset = axis - shape_diff;
-
+  std::pair<void**, AxisDescr> NCArrayView::handle_slice_indices(Slice slice,
+                                                                 ssize_t axis,
+                                                                 void** curr_data) const {
     ssize_t start = slice.start;
     ssize_t stop = slice.stop;
     ssize_t step = slice.step;
     ssize_t length = slice.length;
 
     if (start < 0) {
-      start += new_shape[axis_offset];
+      start += m_shape[axis];
     }
     if (stop < 0) {
-      stop += new_shape[axis_offset];
+      stop += m_shape[axis];
     }
-    if (start < 0 || stop < 0 || start >= new_shape[axis_offset] || stop > new_shape[axis_offset]) {
+    if (start < 0 || stop < 0 || start >= m_shape[axis] || stop > m_shape[axis]) {
       throw index_error("Slice indices out of bounds!");
     }
 
-    ssize_t new_axis { static_cast<ssize_t>(axis_offset) };
+    ssize_t stride { m_strides[axis] * step };
+    ssize_t offset { m_offsets[axis] + start * m_strides[axis] };
+    bool is_pointer { false };
+    AxisDescr new_axis(axis, length, stride, offset, is_pointer);
 
-    if (length > 1) {
-      new_shape[axis_offset] = length;
-    } else {
-      new_shape.erase(new_shape.begin() + axis_offset);
-      new_strides.erase(new_strides.begin() + axis_offset);
-      new_offsets.erase(new_offsets.begin() + axis_offset);
-      new_axis -= 1;
-    }
     if (get_is_pointer_axis(*this, axis)) {
+      new_axis.is_pointer = true;
       if (length == 1) {
-        return {&curr_data[start], false};
+        return { reinterpret_cast<void**>(curr_data[start]), new_axis };
       }
-      return {&curr_data[start], true};
+      return { &curr_data[start], new_axis };
     }
-    new_strides[new_axis] *= step;
-    new_offsets[new_axis] += start * m_strides[axis];
-    return {curr_data, true};
+    return { curr_data, new_axis };
   }
 
-  std::pair<void**, bool> NCArrayView::handle_tuple_indices(ArrayIndices indices,
-                                                            ssize_t axis,
-                                                            void** curr_data,
-                                                            std::vector<ssize_t>& new_shape,
-                                                            std::vector<ssize_t>& new_strides,
-                                                            std::vector<ssize_t>& new_offsets) const {
-    size_t n_specified_dim{indices.size()};
-    bool first_axis_ptrs{true};
-
-    // Handle each dimension specified by the tuple
+  std::pair<void**, std::vector<AxisDescr>> NCArrayView::handle_tuple_indices(ArrayIndices indices,
+                                                                              ssize_t axis,
+                                                                              void** curr_data) const {
+    size_t n_specified_dim { indices.size() };
+    std::vector<AxisDescr> new_axes;
     for (auto arg : indices) {
       if (std::holds_alternative<Slice>(arg)) {
         // Dealing with slices
         Slice slice = std::get<Slice>(arg);
-        auto [ret_data, new_first_axis_ptrs] = handle_slice_indices(slice,
-                                                                    axis,
-                                                                    curr_data,
-                                                                    new_shape,
-                                                                    new_strides,
-                                                                    new_offsets);
-        if (!new_first_axis_ptrs) {
-          first_axis_ptrs = false;
-        }
+        auto [ret_data, axis_descr] = handle_slice_indices(slice,
+                                                           axis,
+                                                           curr_data);
+        new_axes.push_back(axis_descr);
         curr_data = ret_data;
         axis++;
       } else if (std::holds_alternative<ssize_t>(arg)) {
-        // Dealing with single integer indices for the axis
         ssize_t idx = std::get<ssize_t>(arg);
-        auto [ret_data, new_first_axis_ptrs] = handle_int_indices(idx,
-                                                                  axis,
-                                                                  curr_data,
-                                                                  new_shape,
-                                                                  new_strides,
-                                                                  new_offsets);
-        if (!new_first_axis_ptrs) {
-          first_axis_ptrs = false;
-        }
-
+        auto [ret_data, axis_descr] = handle_int_indices(idx,
+                                                         axis,
+                                                         curr_data);
+        new_axes.push_back(axis_descr);
         curr_data = ret_data;
-        axis++;
+        axis++;;
       } else if (std::holds_alternative<Ellipsis>(arg)) {
         axis += ndim() - static_cast<ssize_t>(n_specified_dim) + 1;
       } else {
         throw index_error("Unrecognized indexing type.");
       }
     }
-    return {curr_data, first_axis_ptrs};
+    return { curr_data, new_axes };
+  }
+
+  ViewOrScalar
+  NCArrayView::out_from_axes(void** new_data,
+                             std::variant<AxisDescr, std::vector<AxisDescr>> ax_desc) const {
+    std::vector<ssize_t> new_shape;
+    std::vector<ssize_t> new_strides;
+    std::vector<ssize_t> new_offsets;
+    ssize_t ptr_axis { -1 };
+
+    std::vector<const AxisDescr*> desc_map(ndim(), nullptr);
+    if (std::holds_alternative<AxisDescr>(ax_desc)) {
+      desc_map[std::get<AxisDescr>(ax_desc).index] = &std::get<AxisDescr>(ax_desc);
+    } else {
+      for (const auto& d : std::get<std::vector<AxisDescr>>(ax_desc)) {
+        desc_map[d.index] = &d;
+      }
+    }
+
+    ssize_t total_offset { 0 };
+    for (ssize_t i = 0; i < ndim(); ++i) {
+      if (desc_map[i]) {
+        const auto& d = *desc_map[i];
+        if (d.length > 1) {
+          new_shape.push_back(d.length);
+          new_strides.push_back(d.stride);
+
+          // Accumulate the offset from a prior collapsed dimension
+          // and reset after doing so
+          new_offsets.push_back(d.offset + total_offset);
+          total_offset = 0;
+
+          if (d.is_pointer) {
+            ptr_axis = new_shape.size() - 1;
+          }
+        } else {
+          // For a collapsed dimension, accumulate any offset
+          total_offset += d.offset;
+          if (d.is_pointer) {
+            // If the collapsed dimension was a pointer axis, we no longer have one
+            ptr_axis = -1;
+          }
+        }
+      } else {
+        // Unindexed, ellipsis, or trailing axes
+        new_shape.push_back(m_shape[i]);
+        new_strides.push_back(m_strides[i]);
+        // Accumulate as above
+        new_offsets.push_back(m_offsets[i] + total_offset);
+        total_offset = 0;
+
+        if (i == m_pointer_axis) {
+          ptr_axis = new_shape.size() - 1;
+        }
+      }
+    }
+
+    // If we collapsed all the way to a scalar, total_offset is non-zero and should
+    // be baked into the data pointer (it is otherwise tracked in new_offsets)
+    // Also it is no longer a double pointer, so pass directly to get_scalar
+    if (new_shape.empty()) {
+      new_data =
+        reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(new_data) +
+                                 total_offset);
+      return get_scalar(new_data);
+    } else {
+      return
+        new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, ptr_axis);
+    }
   }
 
   ViewOrScalar NCArrayView::operator[](ssize_t idx) const {
     void** new_data = m_data;
-    std::vector<ssize_t> new_shape = m_shape;
-    std::vector<ssize_t> new_strides = m_strides;
-    std::vector<ssize_t> new_offsets = m_offsets;
 
-    // Check to see if we still need the double pointers for the first axis
-    // if not, we'll just return a NumPy array
-    bool new_first_axis_ptrs{true};
-    size_t axis{0};
-
-    auto [ret_data, first_axis_ptrs] = handle_int_indices(idx,
-                                                          axis,
-                                                          new_data,
-                                                          new_shape,
-                                                          new_strides,
-                                                          new_offsets);
-    new_data = ret_data;
-    new_first_axis_ptrs = false;
-
-    if (new_shape.empty()) {
-      return get_scalar(new_data[0]);
-    }
-
-    // No pointer axis, so set last arg (pointer axis) to -1
-    return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, -1);
+    size_t axis { 0 };
+    auto [ret_data, new_axis] = handle_int_indices(idx, axis, new_data);
+    return out_from_axes(ret_data, new_axis);
   }
 
   ViewOrScalar NCArrayView::operator[](Slice slice) const {
     void** new_data = m_data;
-    std::vector<ssize_t> new_shape = m_shape;
-    std::vector<ssize_t> new_strides = m_strides;
-    std::vector<ssize_t> new_offsets = m_offsets;
 
-    // Check to see if we still need the double pointers for the first axis
-    // if not, we'll just return a NumPy array
-    bool new_first_axis_ptrs{true};
-    size_t axis{0};
-
-    auto [ret_data, first_axis_ptrs] = handle_slice_indices(slice,
-                                                            axis,
-                                                            new_data,
-                                                            new_shape,
-                                                            new_strides,
-                                                            new_offsets);
-    new_first_axis_ptrs = first_axis_ptrs;
-    new_data = ret_data;
-
-    ssize_t ptr_axis{m_pointer_axis};
-    if (!new_first_axis_ptrs) {
-      // No pointer axis, so set last arg (pointer axis) to -1
-      ptr_axis = -1;
-    }
-    return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, ptr_axis);
+    size_t axis { 0 };
+    auto [ret_data, new_axis] = handle_slice_indices(slice, axis, new_data);
+    return out_from_axes(ret_data, new_axis);
   }
 
   ViewOrScalar NCArrayView::operator[](ArrayIndices tup) const {
     void** new_data = m_data;
-    std::vector<ssize_t> new_shape = m_shape;
-    std::vector<ssize_t> new_strides = m_strides;
-    std::vector<ssize_t> new_offsets = m_offsets;
 
-    // Check to see if we still need the double pointers for the first axis
-    // if not, we'll just return a NumPy array
-    bool new_first_axis_ptrs{true};
-    size_t axis{0};
-
-    auto [ret_data, first_axis_ptrs] = handle_tuple_indices(tup,
-                                                            axis,
-                                                            new_data,
-                                                            new_shape,
-                                                            new_strides,
-                                                            new_offsets);
-    new_first_axis_ptrs = first_axis_ptrs;
-    new_data = ret_data;
-
-    // ssize_t total_offset =
-    //     std::accumulate(new_offsets.begin(), new_offsets.end(), static_cast<ssize_t>(0));
-
-    // auto* offset_data = reinterpret_cast<std::uint8_t*>(new_data[0]) + total_offset;
-    if (new_shape.empty()) {
-      return get_scalar(new_data[0]);
-    }
-    ssize_t ptr_axis{m_pointer_axis};
-    if (!new_first_axis_ptrs) {
-      // No pointer axis, so set last arg (pointer axis) to -1
-      ptr_axis = -1;
-    }
-    return new_sub_view(new_data, new_shape, new_strides, new_offsets, m_dtype, ptr_axis);
+    size_t axis { 0 };
+    auto [ret_data, new_axes] = handle_tuple_indices(tup, axis, new_data);
+    return out_from_axes(ret_data, new_axes);
   }
 
   std::string NCArrayView::repr() const {
@@ -297,9 +263,10 @@ namespace ncarray {
                                    ssize_t axis,
                                    ssize_t indent,
                                    ssize_t edge_items) const {
-    dispatch(m_dtype, [&]<typename T> {
-               repr_recursive_dispatched<T>(oss, current_data, axis, indent, edge_items);
-             });
+    auto internal = [&]<typename T> {
+      repr_recursive_dispatched<T>(oss, current_data, axis, indent, edge_items);
+    };
+    dispatch(m_dtype, internal);
   }
 
   NCArrayView NCArrayView::new_sub_view(void** data,
