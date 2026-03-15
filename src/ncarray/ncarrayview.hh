@@ -67,86 +67,104 @@ namespace ncarray {
 
     /**
      * Support indexing using slices, integers, or tuples thereof.
-     *
-     * If the new set of indices returns a NumPy-compatible view, return the
-     * NumPy array instead of an NCArrayView.
-     * TODO: Clean up to remove the duplication of code for various cases.
      */
     ViewOrScalar operator[](ssize_t idx) const;
     ViewOrScalar operator[](Slice slice) const;
     ViewOrScalar operator[](ArrayIndices indices) const;
 
-    // Basic information - dimensions, shape, etc.
-    ssize_t ndim() const {
-      return m_shape.size();
-    }
+    ViewOrScalar squeeze() const;
 
-    ssize_t itemsize() const {
+    // Basic information - dimensions, shape, etc.
+    inline ssize_t ndim() const { return m_shape.size(); }
+
+    inline ssize_t itemsize() const {
       return static_cast<ssize_t>(ncarray::itemsize(m_dtype));
     }
 
-    ssize_t size() const {
+    inline ssize_t size() const {
       return std::accumulate(m_shape.begin(),
                              m_shape.end(),
                              static_cast<ssize_t>(1),
                              std::multiplies<ssize_t>{});
     }
 
-    ssize_t nbytes() const {
-      return size() * itemsize();
-    }
+    inline ssize_t nbytes() const { return size() * itemsize(); }
 
-    const ssize_t* shape() const {
-      return m_shape.data();
-    }
+    inline const ssize_t* shape() const { return m_shape.data(); }
 
-    ssize_t shape(ssize_t dim) const {
+    inline ssize_t shape(ssize_t dim) const {
       if (dim >= static_cast<ssize_t>(m_shape.size())) {
         throw index_error("Requested axis is out of bounds!");
       }
       return m_shape[dim];
     }
 
-    const ssize_t* strides() const {
-      return m_strides.data();
-    }
+    inline const ssize_t* strides() const { return m_strides.data(); }
 
-    ssize_t stride(ssize_t dim) const {
+    inline ssize_t stride(ssize_t dim) const {
       if (dim >= static_cast<ssize_t>(m_strides.size())) {
         throw index_error("Requested axis is out of bounds!");
       }
       return m_strides[dim];
     }
 
-    const ssize_t* offsets() const {
-      return m_offsets.data();
-    }
+    inline const ssize_t* offsets() const { return m_offsets.data(); }
 
-    DType dtype() const {
-      return m_dtype;
-    }
+    inline DType dtype() const { return m_dtype; }
 
-    void* data() const {
-      return m_data;
-    }
+    inline void* data() const { return m_data; }
 
     bool is_pointer_axis(ssize_t axis) const {
       return axis == m_pointer_axis;
     }
 
+    // Copy, cast, and buffer helpers/utilities
+    void copy_into(void* dest_buffer) const;
+
+    template <typename OutT>
+    void copy_into_astype(OutT* dest_buffer) const {
+      ncarray::copy_into(*this, dest_buffer);
+    }
+
+    // TODO: Perhaps this should have some smarter logic to avoid a copy if already
+    //       contiguous?
+    template<typename R = void, // So compiler evaluates after NCArray (see below too)
+             OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType to_contiguous() const {
+      ResultType result(m_shape, m_dtype);
+      auto copy_op = [&] <typename T> () {
+        T* dest_ptr = reinterpret_cast<T*>(result.data());
+        ncarray::copy_into(*this, dest_ptr);
+      };
+
+      dispatch(m_dtype, copy_op);
+
+      return result;
+    }
+
+    template <typename R = void, // So compiler evaluates after NCArray (see below too)
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType astype(DType& dtype_out) const {
+      ResultType result(m_shape, dtype_out);
+
+      auto copy_op = [&]<typename OutT>() {
+        OutT* dest_ptr = reinterpret_cast<OutT*>(result.data());
+        ncarray::copy_into(*this, dest_ptr);
+      };
+
+      dispatch(dtype_out, copy_op);
+
+      return result;
+    }
+
     // Reduction operations
-    Scalar sum() const {
-      return ncarray::sum(*this);
-    }
-    Scalar max() const {
-      return ncarray::max(*this);
-    }
-    Scalar min() const {
-      return ncarray::min(*this);
-    }
-    Scalar mean() const {
-      return ncarray::mean(*this);
-    }
+    Scalar sum() const { return ncarray::sum(*this); }
+
+    Scalar max() const { return ncarray::max(*this); }
+
+    Scalar min() const { return ncarray::min(*this); }
+
+    Scalar mean() const { return ncarray::mean(*this); }
 
     Scalar get_scalar(void* ptr) const {
       auto reduce = [&]<typename T>() -> Scalar {

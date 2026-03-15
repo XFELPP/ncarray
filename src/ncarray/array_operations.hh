@@ -13,6 +13,44 @@
 namespace ncarray {
 
   namespace impl {
+    template <typename T, typename OutputType, ArrayLike A>
+    void copy_into_recursive(const A& arr,
+                             const void* current_src,
+                             ssize_t axis,
+                             OutputType*& dest) {
+      ssize_t dim = arr.shape()[axis];
+      bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
+
+      const ssize_t* strides = arr.strides();
+      const ssize_t* offsets = if_has_get_offsets(arr);
+
+      for (ssize_t i = 0; i < dim; ++i) {
+        if (get_is_pointer_axis(arr, axis)) {
+          const void* next_ptr = reinterpret_cast<const void* const*>(current_src)[i];
+          if (is_last_axis) {
+            T val = *reinterpret_cast<const T*>(next_ptr);
+            *dest = op_traits<T>::template cast<OutputType>(val);
+            dest++;
+          } else {
+            copy_into_recursive<T, OutputType>(arr, next_ptr, axis + 1, dest);
+          }
+        } else {
+          const ssize_t offset = offsets ? offsets[axis] : 0;
+          const ssize_t stride = strides[axis];
+          const uint8_t* next_ptr =
+              reinterpret_cast<const uint8_t*>(current_src) + i * stride + offset;
+
+          if (is_last_axis) {
+            T val = *reinterpret_cast<const T*>(next_ptr);
+            *dest = op_traits<T>::template cast<OutputType>(val);
+            dest++;
+          } else {
+            copy_into_recursive<T, OutputType>(arr, next_ptr, axis + 1, dest);
+          }
+        }
+      }
+    }
+
     /**
      * Internal recursive engine for reductions.
      * T: The element type (deduced via dispatch)
@@ -376,6 +414,14 @@ namespace ncarray {
     return result;
   }
 
+  template <ArrayLike A, typename OutputType>
+  void copy_into(const A& arr, OutputType*& dest) {
+    auto copy_op = [&] <typename T> () {
+      ssize_t starting_axis { 0 };
+      impl::copy_into_recursive<T, OutputType>(arr, arr.data(), starting_axis, dest);
+    };
+    dispatch(arr.dtype(), copy_op);
+  }
 } // namespace ncarray
 
 #endif // NCARRAY_ARRAY_OPERATIONS_HH

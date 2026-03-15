@@ -43,6 +43,7 @@ namespace ncarray {
     ssize_t stride;
     ssize_t offset;
     bool is_pointer { false };
+    bool collapsed { false };
   };
 
 } // namespace ncarray

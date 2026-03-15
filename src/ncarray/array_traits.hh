@@ -101,6 +101,19 @@ namespace ncarray {
     static bool less(const T& a, const T& b) { return a < b; }
     static T lowest() { return std::numeric_limits<T>::lowest(); }
     static T max() { return std::numeric_limits<T>::max(); }
+
+    template <typename To>
+    static To cast(const T& val) {
+      if constexpr (std::is_same_v<To, T>) {
+        return val;
+      } else if constexpr (requires { To().real(); }) {
+        // Scalar cast to complex
+        return To(static_cast<typename To::value_type>(val), 0);
+      } else {
+        // Scalar cast to scalar
+        return static_cast<To>(val);
+      }
+    }
   };
 
   template <typename T> struct op_traits : BaseOpTraits<T> {};
@@ -131,6 +144,20 @@ namespace ncarray {
 
     static std::complex<T> max() {
       return {std::numeric_limits<T>::max(), std::numeric_limits<T>::max()};
+    }
+
+    template <typename To>
+    static To cast(const std::complex<T>& val) {
+      if constexpr (std::is_same_v<To, std::complex<T>>) {
+        return val;
+      } else if constexpr (requires { To().real(); }) {
+        // Complex to complex cast
+        return To(static_cast<typename To::value_type>(val.real()),
+                  static_cast<typename To::value_type>(val.imag()));
+      } else {
+        // Complex to scalar cast (narrowed to real)
+        return static_cast<To>(val.real());
+      }
     }
   };
 

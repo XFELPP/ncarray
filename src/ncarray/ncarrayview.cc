@@ -72,7 +72,8 @@ namespace ncarray {
     ssize_t stride { m_strides[axis] };
     ssize_t offset { m_offsets[axis] + index * m_strides[axis] };
     bool is_pointer { false };
-    AxisDescr new_axis(axis, length, stride, offset, is_pointer);
+    bool collapsed { true };
+    AxisDescr new_axis(axis, length, stride, offset, is_pointer, collapsed);
 
     if (get_is_pointer_axis(*this, axis)) {
       new_axis.is_pointer = true;
@@ -107,10 +108,12 @@ namespace ncarray {
     AxisDescr new_axis(axis, length, stride, offset, is_pointer);
 
     if (get_is_pointer_axis(*this, axis)) {
-      new_axis.is_pointer = true;
       if (length == 1) {
+        // If we are length 1, we do not collapse by default (see AxisDescr flags)
+        // however, this is no longer a pointer axis.
         return { reinterpret_cast<void**>(curr_data[start]), new_axis };
       }
+      new_axis.is_pointer = true;
       return { &curr_data[start], new_axis };
     }
     return { curr_data, new_axis };
@@ -169,11 +172,10 @@ namespace ncarray {
     for (ssize_t i = 0; i < ndim(); ++i) {
       if (desc_map[i]) {
         const auto& d = *desc_map[i];
-        // TODO: Consider handling slice separately from length == 1
-        // A "NumPy-like" implementation I think would not collapse the dim
-        // when you do arr[0:1], whereas it would for arr[0].
-        // Currently, NCArray* collapses the dimension in both cases
-        if (d.length > 1) {
+        // NOTE: Passing a length 1 slice does NOT collapse/remove the axis.
+        // E.g. a 3-D NCArray* ncarr indexed as ncarr[:1] will have shape (1, ...)
+        // The `squeeze` function can be used to remove this extra axis.
+        if (!d.collapsed) {
           new_shape.push_back(d.length);
           new_strides.push_back(d.stride);
 
@@ -243,6 +245,31 @@ namespace ncarray {
     size_t axis { 0 };
     auto [ret_data, new_axes] = handle_tuple_indices(tup, axis, new_data);
     return out_from_axes(ret_data, new_axes);
+  }
+
+  ViewOrScalar NCArrayView::squeeze() const {
+    void** new_data = m_data;
+
+    std::vector<AxisDescr> new_axes;
+    for (ssize_t dim = 0; dim < ndim(); ++dim) {
+      ssize_t length { m_shape[dim] };
+      ssize_t stride { m_strides[dim] };
+      ssize_t offset { m_offsets[dim] };
+      bool is_pointer { is_pointer_axis(dim) };
+      bool collapsed { length == 1 ? true : false };
+      new_axes.emplace_back(dim, length, stride, offset, is_pointer, collapsed);
+    }
+
+    return out_from_axes(new_data, new_axes);
+  }
+
+  void NCArrayView::copy_into(void* dest_buffer) const {
+    auto copy_op = [&]<typename T>() {
+      T* dest_ptr = reinterpret_cast<T*>(dest_buffer);
+      ncarray::copy_into(*this, dest_ptr);
+    };
+
+    dispatch(m_dtype, copy_op);
   }
 
   std::string NCArrayView::repr() const {

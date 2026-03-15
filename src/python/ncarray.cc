@@ -62,7 +62,8 @@ namespace {
     auto buf_ptr = info.ptr;
     // This is temporary!! Careful how you use it!
     ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
-    return ncarray::NCArrayView(&buf_ptr,
+    // When you have no pointer axis, just pass the raw pointer
+    return ncarray::NCArrayView(reinterpret_cast<void**>(buf_ptr),
                                 arr.ndim(),
                                 arr.shape(),
                                 arr.strides(),
@@ -70,7 +71,7 @@ namespace {
                                 ptr_axis);
   }
 
-  ncarray::NCArrayRef* pyarray_to_ref(const py::array& arr) {
+  ncarray::NCArrayRef pyarray_to_ref(const py::array& arr) {
     py::buffer_info arr_info = arr.request();
     ssize_t ndim { arr.ndim() };
     std::vector<ssize_t> shape(arr.shape(), arr.shape() + ndim);
@@ -81,10 +82,10 @@ namespace {
 
     std::vector<void*> data_ptrs { arr_info.ptr };
     ncarray::DType dtype = pydtype_to_dtype(arr.dtype());
-    return new ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
   }
 
-  ncarray::NCArrayRef* pylist_to_ref(const py::list& list) {
+  ncarray::NCArrayRef pylist_to_ref(const py::list& list) {
     ssize_t len_ptr_axis = list.size();
     std::vector<ssize_t> strides { 1 };
     std::vector<ssize_t> shape { len_ptr_axis };
@@ -107,7 +108,25 @@ namespace {
       pydtype = data.dtype();
     }
     ncarray::DType dtype = pydtype_to_dtype(pydtype);
-    return new ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+  }
+
+  py::array ncarr_to_numpy(const ncarray::NCArrayView& ncarr,
+                           std::optional<ncarray::DType> dtype = std::nullopt) {
+    ncarray::DType out_dtype = dtype.value_or(ncarr.dtype());
+
+    auto dispatched_copy = [&] <typename OutT> () {
+      // TODO: Consider adding a vector accessor on NCArrayView (like ncarr.shape_vec)
+      std::vector<ssize_t> shape_vec(ncarr.shape(), ncarr.shape() + ncarr.ndim());
+      py::array_t<OutT> out_arr(shape_vec);
+
+      auto* out_ptr  = reinterpret_cast<OutT*>(out_arr.mutable_data());
+      ncarr.copy_into_astype<OutT>(out_ptr);
+
+      return py::array(out_arr);
+    };
+
+    return ncarray::dispatch(out_dtype, dispatched_copy);
   }
 } // anonymous namespace
 
@@ -136,6 +155,20 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     .export_values()
     .finalize();
 
+#define REGISTER_OPERATION(PYMETHOD, OP)                                                               \
+    .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) { \
+      return py::cast(self OP other);                                                                  \
+    },                                                                                                 \
+      py::is_operator())                                                                               \
+    .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const py::array& other) {            \
+      return py::cast(self OP pyarray_to_view(other));                                                 \
+    },                                                                                                 \
+      py::is_operator())                                                                               \
+    .def("__r" PYMETHOD "__", [](const ncarray::NCArrayView& self, const py::array& other) {           \
+      return py::cast(pyarray_to_view(other) OP self);                                                 \
+    },                                                                                                 \
+      py::is_operator())
+
   py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")
     .def("__repr__", &ncarray::NCArrayView::repr)
     .def_property_readonly("shape", [](const ncarray::NCArrayView& self) -> py::tuple {
@@ -158,6 +191,15 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     .def_property_readonly("ndim", &ncarray::NCArrayView::ndim)
     .def_property_readonly("itemsize", &ncarray::NCArrayView::itemsize)
     .def_property_readonly("nbytes", &ncarray::NCArrayView::nbytes)
+    .def("squeeze",
+         &ncarray::NCArrayView::squeeze,
+         "Collapse and remove all axes of length 1.")
+    .def("astype",
+         [](const ncarray::NCArrayView& self, ncarray::DType& dtype_out) {
+           return self.astype(dtype_out);
+         },
+         py::arg("dtype"),
+         "Convert an NCArray* to the specified data type.")
     .def("__getitem__",
          [](const ncarray::NCArrayView& self, py::object idx) {
            if (py::isinstance<py::int_>(idx)) {
@@ -192,31 +234,23 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     // TODO: It would be nice to not need the view conversion when dealing with array
     // Arrays don't currently satisfy the concepts though due to py::dtype.
     // Minor thing to improve
-    .def("__add__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
-      return py::cast(self + other);
+    REGISTER_OPERATION("add", +)
+    REGISTER_OPERATION("mul", *)
+    REGISTER_OPERATION("truediv", /)
+    // NumPy protocol compatibility
+    // __array__(self, dtype=None, copy=None)
+    .def("__array__", [](const ncarray::NCArrayView& self,
+                         py::object& dtype,
+                         py::object& copy) {
+      return ncarr_to_numpy(self);
     })
-    .def("__add__", [](const ncarray::NCArrayView& self, const py::array& other) {
-      return py::cast(self + pyarray_to_view(other));
-    },
-      py::is_operator())
-    .def("__mul__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
-      return py::cast(self * other);
-    },
-      py::is_operator())
-    .def("__mul__", [](const ncarray::NCArrayView& self, const py::array& other) {
-      return py::cast (self * pyarray_to_view(other));
-    },
-      py::is_operator())
-    .def("__truediv__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
-      return py::cast(self / other);
-    },
-      py::is_operator())
-    .def("__truediv__", [](const ncarray::NCArrayView& self, const py::array& other) {
-      return py::cast(self / pyarray_to_view(other));
-    },
-      py::is_operator());
+    // __array_priority__ attribute - set high so NCArray* funcs used, and is returned
+    .def_property_readonly_static("__array_priority__", [](const py::object&) {
+      return 100.0;
+    });
   // TODO: Add implementations of NumPy compatibility methods -- allow operations to be
   // done as numpy + ncarrayview as well as ncarrayview + numpy
+#undef REGISTER_OPERATION
 
   py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")
     .def(py::init([](const py::array& arr) {
