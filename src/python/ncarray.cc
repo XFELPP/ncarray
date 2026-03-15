@@ -155,6 +155,9 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     .export_values()
     .finalize();
 
+// TODO: It would be nice to not need the view conversion when dealing with array
+// Arrays don't currently satisfy the concepts though due to py::dtype.
+// Minor thing to improve
 #define REGISTER_OPERATION(PYMETHOD, OP)                                                               \
     .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) { \
       return py::cast(self OP other);                                                                  \
@@ -187,6 +190,17 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
       }
       return l;
     })
+    // --- Standard Container Methods --- //
+    .def("__len__", [](const ncarray::NCArrayView& self) {
+      if (self.ndim() > 0) {
+        return self.shape(0);
+      }
+      return ssize_t(0);
+    })
+    .def("__iter__", [](const ncarray::NCArrayView& self) {
+        return py::make_iterator(self.begin(), self.end());
+    })
+    // --- Array-Like Methods (indexing, size, shape, dtype, etc) --- //
     .def_property_readonly("size", &ncarray::NCArrayView::size)
     .def_property_readonly("ndim", &ncarray::NCArrayView::ndim)
     .def_property_readonly("itemsize", &ncarray::NCArrayView::itemsize)
@@ -227,13 +241,12 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
            }
          },
          py::is_operator())
+    // --- Array Reduction Methods (Reduce to scalar) --- //
     .def("sum", &ncarray::NCArrayView::sum)
     .def("max", &ncarray::NCArrayView::max)
     .def("min", &ncarray::NCArrayView::min)
     .def("mean", &ncarray::NCArrayView::mean)
-    // TODO: It would be nice to not need the view conversion when dealing with array
-    // Arrays don't currently satisfy the concepts though due to py::dtype.
-    // Minor thing to improve
+    // --- Binary Array Methods --- //
     REGISTER_OPERATION("add", +)
     REGISTER_OPERATION("mul", *)
     REGISTER_OPERATION("truediv", /)
@@ -247,9 +260,28 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     // __array_priority__ attribute - set high so NCArray* funcs used, and is returned
     .def_property_readonly_static("__array_priority__", [](const py::object&) {
       return 100.0;
+    })
+    .def("__array_ufunc__", [](const ncarray::NCArrayView& self,
+                               py::handle ufunc,
+                               py::str method,
+                               py::args args,
+                               py::kwargs kwargs) {
+      if (method.cast<std::string>() != "__call__") {
+        return py::none().cast<py::object>();
+      }
+
+      // For now, just convert to NumPy
+      // TODO: Optimize this with NCArray* directly
+      py::list new_args;
+      for (auto& arg : args) {
+        if (py::isinstance<ncarray::NCArrayView>(arg)) {
+          new_args.append(ncarr_to_numpy(arg.cast<ncarray::NCArrayView>()));
+        } else {
+          new_args.append(arg);
+        }
+      }
+      return ufunc(*new_args, **kwargs);
     });
-  // TODO: Add implementations of NumPy compatibility methods -- allow operations to be
-  // done as numpy + ncarrayview as well as ncarrayview + numpy
 #undef REGISTER_OPERATION
 
   py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")

@@ -309,4 +309,22 @@ namespace ncarray {
                                         ssize_t ptr_axis) const {
     return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis);
   }
+
+  NCArrayView::Iterator NCArrayView::begin() {
+    return NCArrayView::Iterator(*this, 0);
+  }
+
+  NCArrayView::Iterator NCArrayView::end() {
+    ssize_t length = ndim() > 0 ? m_shape[0] : 0;
+    return NCArrayView::Iterator(*this, length);
+  }
+
+  NCArrayView::ConstIterator NCArrayView::begin() const {
+    return NCArrayView::ConstIterator(*this, 0);
+  }
+
+  NCArrayView::ConstIterator NCArrayView::end() const {
+    ssize_t length = ndim() > 0 ? m_shape[0] : 0;
+    return NCArrayView::ConstIterator(*this, length);
+  }
 } // namespace ncarray

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
@@ -24,6 +25,10 @@
 namespace ncarray {
   class NCArrayView;
   using ViewOrScalar = std::variant<Scalar, NCArrayView>;
+
+  // Setup simple concept to support const and non-const iterators
+  template <typename T>
+  concept ViewLike = std::is_base_of_v<NCArrayView, std::remove_const_t<T>>;
 
   class NCArrayView {
   public:
@@ -214,6 +219,57 @@ namespace ncarray {
     }
 
     //NCArray div(const py::object& other) const;
+
+    template <ViewLike VT>
+    class IteratorImpl {
+    public:
+      // Values generated on the fly so reference type is really value type
+      using iterator_category = std::input_iterator_tag;
+      using difference_type = std::ptrdiff_t;
+      using value_type = ViewOrScalar;
+      // using pointer = value_type*;
+      using pointer = void;
+      using reference = value_type;
+
+      IteratorImpl(VT view, ssize_t idx)
+        : m_view(view)
+        , m_idx(idx)
+      {}
+
+      reference operator*() const { return m_view[m_idx]; }
+      // pointer operator->() { return m_view; } // Not immediately sure how to do this
+      IteratorImpl& operator++() {
+        ++m_idx;
+        return *this;
+      }
+      IteratorImpl operator++(int) {
+        IteratorImpl tmp = *this;
+        ++(*this);
+        return tmp;
+      }
+
+      friend bool operator==(const IteratorImpl& a, const IteratorImpl& b) {
+        return (a.m_view.data() == b.m_view.data()) && (a.m_idx == b.m_idx);
+      }
+
+      friend bool operator!=(const IteratorImpl& a, const IteratorImpl& b) {
+        return !(a == b);
+      }
+
+    private:
+      // Storing by value is easier and safer... The NCArrayView is fairly light
+      VT m_view;
+      ssize_t m_idx;
+    };
+
+    using Iterator = IteratorImpl<NCArrayView>;
+    using ConstIterator = IteratorImpl<const NCArrayView>;
+
+    Iterator begin();
+    Iterator end();
+
+    ConstIterator begin() const;
+    ConstIterator end() const;
 
   protected:
     virtual std::string class_name() const {
