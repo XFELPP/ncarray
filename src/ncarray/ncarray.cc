@@ -17,7 +17,7 @@ namespace {
                                                  const ssize_t itemsize) {
     size_t ndim { shape.size() };
     std::vector<ssize_t> strides(ndim, itemsize);
-    for (ssize_t dim = ndim - 2; ndim >= 0; --dim) {
+    for (ssize_t dim = ndim - 2; dim >= 0; --dim) {
       strides[dim] = strides[dim + 1] * shape[dim + 1];
     }
     return strides;
@@ -27,7 +27,7 @@ namespace {
                                                  const ssize_t* shape,
                                                  const ssize_t itemsize) {
     std::vector<ssize_t> strides(ndim, itemsize);
-    for (ssize_t dim = ndim - 2; ndim >= 0; --dim) {
+    for (ssize_t dim = ndim - 2; dim >= 0; --dim) {
       strides[dim] = strides[dim + 1] * shape[dim + 1];
     }
     return strides;

@@ -76,6 +76,7 @@ namespace ncarray {
 
     if (get_is_pointer_axis(*this, axis)) {
       new_axis.is_pointer = true;
+      new_axis.offset = 0;
       return { reinterpret_cast<void**>(curr_data[index]), new_axis };
     }
 
@@ -168,6 +169,10 @@ namespace ncarray {
     for (ssize_t i = 0; i < ndim(); ++i) {
       if (desc_map[i]) {
         const auto& d = *desc_map[i];
+        // TODO: Consider handling slice separately from length == 1
+        // A "NumPy-like" implementation I think would not collapse the dim
+        // when you do arr[0:1], whereas it would for arr[0].
+        // Currently, NCArray* collapses the dimension in both cases
         if (d.length > 1) {
           new_shape.push_back(d.length);
           new_strides.push_back(d.stride);

@@ -189,7 +189,9 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
     .def("max", &ncarray::NCArrayView::max)
     .def("min", &ncarray::NCArrayView::min)
     .def("mean", &ncarray::NCArrayView::mean)
-    // Conversion helpers for py::array shouldn't really be needed... TODO
+    // TODO: It would be nice to not need the view conversion when dealing with array
+    // Arrays don't currently satisfy the concepts though due to py::dtype.
+    // Minor thing to improve
     .def("__add__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) {
       return py::cast(self + other);
     })
@@ -213,6 +215,8 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
       return py::cast(self / pyarray_to_view(other));
     },
       py::is_operator());
+  // TODO: Add implementations of NumPy compatibility methods -- allow operations to be
+  // done as numpy + ncarrayview as well as ncarrayview + numpy
 
   py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")
     .def(py::init([](const py::array& arr) {
