@@ -35,7 +35,7 @@ import ncarray # Alias it if you'd like :)
 
 # Construct a disjoint set of arrays - subarrays that are really part of 1 larger one
 subarray_list: List[npt.NDArray[np.uint32]] = [
-    np.random.randint(1,255,size=(512,1024),dtype=np.uint16) for _ in range(10)
+    np.random.randint(1, 255, size=(512,1024), dtype=np.uint16) for _ in range(10)
 ]
 
 # Create a wrapped reference
@@ -48,11 +48,18 @@ first_two_ptrs: ncarray.NCArrayView = ncarr[:2]
 my_int: int = ncarr[2, 1, 2]
 
 # Scalar broadcasts -- This creates a new OWNING array! (NCArray)
+# Supported: +, -, *, / (Will provide % and //, i.e. int division in the future)
 scalar_bcast_res: ncarray.NCArray = ncarr + 2
 
-# Perform operations on it -- also create new OWNING arrays
-result: ncarray.NCArray = np.sin(ncarr)
+# Array arithmetic, supporting +, -, *, / as above
+# Require identical shapes, currently!
+# Supportable broadcasts may come later (E.g. a row/col into a 2D array)
 other_res: ncarray.NCArray = ncarr + ncarr
+
+# Perform operations on it -- also create new OWNING arrays
+# Any ufunc *should* work -- this builds NumPy arrays, however.
+# Because of this, these operations are rather slow.
+result: ncarray.NCArray = np.sin(ncarr)
 ```
 
 ## Terminology
