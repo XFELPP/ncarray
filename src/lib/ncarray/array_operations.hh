@@ -441,24 +441,32 @@ namespace ncarray {
 
   template<ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
   auto sub(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
+    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
+      using DiffT = typename op_traits<T>::diff_type;
+      return dtype_traits<DiffT>::value;
+    });
+
+    ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto sub_operation = [&]<typename T>() {
+      using DiffT = typename op_traits<T>::diff_type;
       auto sub_op_internal = [](const std::uint8_t* lhs,
                                 const std::uint8_t* rhs,
-                                T* output) {
-        *output = *reinterpret_cast<const T*>(lhs) - *reinterpret_cast<const T*>(rhs);
+                                DiffT* output) {
+        *output =
+          static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) -
+          *reinterpret_cast<const T*>(rhs);
       };
 
       ssize_t starting_axis { 0 };
-      T* result_ptr = reinterpret_cast<T*>(result.data());
-      impl::binary_reduce_recursive<T, decltype(sub_op_internal), T>(left,
-                                                                     right,
-                                                                     left.data(),
-                                                                     right.data(),
-                                                                     starting_axis,
-                                                                     sub_op_internal,
-                                                                     result_ptr);
+      DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(sub_op_internal), DiffT>(left,
+                                                                         right,
+                                                                         left.data(),
+                                                                         right.data(),
+                                                                         starting_axis,
+                                                                         sub_op_internal,
+                                                                         result_ptr);
     };
 
     dispatch(left.dtype(), sub_operation);
@@ -580,11 +588,18 @@ namespace ncarray {
 
   template <ArrayLike Left, OwningArrayLike ResultType>
   ResultType sub_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
+    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
+      using DiffT = typename op_traits<T>::diff_type;
+      return dtype_traits<DiffT>::value;
+    });
+
+    ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto sub_operation = [&]<typename T>() {
-      auto sub_op_internal = [](const std::uint8_t* lhs, const T rhs, T* output) {
-        *output = *reinterpret_cast<const T*>(lhs) - rhs;
+      using DiffT = typename op_traits<T>::diff_type;
+
+      auto sub_op_internal = [](const std::uint8_t* lhs, const T rhs, DiffT* output) {
+        *output = static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - rhs;
       };
 
       ssize_t starting_axis { 0 };
@@ -593,13 +608,13 @@ namespace ncarray {
         return op_traits<FromT>::template cast<T>(arg);
       };
       T scalar_val = std::visit(cast_op, right);
-      T* result_ptr = reinterpret_cast<T*>(result.data());
-      impl::binary_scalar_recursive<T>(left,
-                                       left.data(),
-                                       scalar_val,
-                                       starting_axis,
-                                       sub_op_internal,
-                                       result_ptr);
+      DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
+      impl::binary_scalar_recursive<T, DiffT>(left,
+                                              left.data(),
+                                              scalar_val,
+                                              starting_axis,
+                                              sub_op_internal,
+                                              result_ptr);
     };
 
     dispatch(left.dtype(), sub_operation);

@@ -93,6 +93,7 @@ namespace ncarray {
    */
   template <typename T> struct BaseOpTraits {
     using sum_type = T;
+    using diff_type = T;
     using truediv_type = double;
 
     // Comparisons and identities -- needed especially for specializations below
@@ -122,6 +123,7 @@ namespace ncarray {
   template <typename T>
   struct op_traits<std::complex<T>> : BaseOpTraits<T> {
     using sum_type = std::complex<T>;
+    using diff_type = std::complex<T>;
     using truediv_type = std::complex<double>;
 
     static bool greater(const std::complex<T>& a, const std::complex<T>& b) {
@@ -164,21 +166,27 @@ namespace ncarray {
   template <>
   struct op_traits<std::int8_t> : BaseOpTraits<std::int8_t> {
     using sum_type = int64_t;
+    using diff_type = int64_t;
   };
 
   template <>
   struct op_traits<std::uint8_t> : BaseOpTraits<std::uint8_t> {
     using sum_type = uint64_t;
+    // NOTE: Unsigned types promot to SIGNED for subtraction!
+    using diff_type = int64_t;
   };
 
   template <>
   struct op_traits<std::int16_t> : BaseOpTraits<std::int16_t> {
     using sum_type = int64_t;
+    using diff_type = int64_t;
   };
 
   template <>
   struct op_traits<std::uint16_t> : BaseOpTraits<std::uint16_t> {
     using sum_type = uint64_t;
+    // NOTE: Unsigned types promot to SIGNED for subtraction!
+    using diff_type = int64_t;
   };
 
 } // namespace ncarray
