@@ -45,6 +45,8 @@ before-build = [
     "pip install 'meson>=1.10.1' meson-python ninja pybind11 setuptools",
 ]
 
+# For C++23 need a newer GCC coming from manylinux_2_28 (GCC 13) and later
+# manylinux_2_34 will give GCC 14
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 
