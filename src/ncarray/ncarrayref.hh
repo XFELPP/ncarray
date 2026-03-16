@@ -20,7 +20,8 @@ namespace ncarray {
                std::vector<ssize_t>& shape_,
                std::vector<ssize_t>& strides_,
                DType dtype_,
-               ssize_t ptr_axis = 0);
+               ssize_t ptr_axis = 0,
+               bool read_only = true);
 
     NCArrayRef(const NCArrayRef& other);
     NCArrayRef(NCArrayRef&& other) noexcept;

@@ -60,6 +60,7 @@ namespace {
   auto pyarray_to_view(const py::array& arr) {
     py::buffer_info info = arr.request();
     auto buf_ptr = info.ptr;
+    bool read_only = !arr.writeable();
     // This is temporary!! Careful how you use it!
     ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
     // When you have no pointer axis, just pass the raw pointer
@@ -68,10 +69,11 @@ namespace {
                                 arr.shape(),
                                 arr.strides(),
                                 pydtype_to_dtype(arr.dtype()),
-                                ptr_axis);
+                                ptr_axis,
+                                read_only);
   }
 
-  ncarray::NCArrayRef pyarray_to_ref(const py::array& arr) {
+  ncarray::NCArrayRef pyarray_to_ref(const py::array& arr, const bool read_only_ = false) {
     py::buffer_info arr_info = arr.request();
     ssize_t ndim { arr.ndim() };
     std::vector<ssize_t> shape(arr.shape(), arr.shape() + ndim);
@@ -82,10 +84,16 @@ namespace {
 
     std::vector<void*> data_ptrs { arr_info.ptr };
     ncarray::DType dtype = pydtype_to_dtype(arr.dtype());
-    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+    bool read_only { read_only_ };
+    if (!arr.writeable()) {
+      read_only = true;
+    }
+    // A single array will have no pointer axis
+    ssize_t ptr_axis { -1 };
+    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype, ptr_axis, read_only);
   }
 
-  ncarray::NCArrayRef pylist_to_ref(const py::list& list) {
+  ncarray::NCArrayRef pylist_to_ref(const py::list& list, const bool read_only_ = false) {
     ssize_t len_ptr_axis = list.size();
     std::vector<ssize_t> strides { 1 };
     std::vector<ssize_t> shape { len_ptr_axis };
@@ -94,10 +102,16 @@ namespace {
     // Assume each array in list is same shape for now
     py::dtype pydtype;
     bool assigned { false };
+    bool read_only { read_only_ };
     for (py::handle o : list) {
       py::array data = py::cast<py::array>(o);
       py::buffer_info arr_info = data.request();
       data_ptrs.push_back(arr_info.ptr);
+      if (!data.writeable()) {
+        // If any array from the list is read_only, all of them in the NCArrayRef
+        // will therefore be marked read only
+        read_only = true;
+      }
       if (!assigned) {
         for (ssize_t i = 0; i < data.ndim(); ++i) {
           strides.push_back(data.strides()[i]);
@@ -108,7 +122,8 @@ namespace {
       pydtype = data.dtype();
     }
     ncarray::DType dtype = pydtype_to_dtype(pydtype);
-    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype);
+    ssize_t ptr_axis { 0 };
+    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype, ptr_axis, read_only);
   }
 
   py::array ncarr_to_numpy(const ncarray::NCArrayView& ncarr,
@@ -127,6 +142,32 @@ namespace {
     };
 
     return ncarray::dispatch(out_dtype, dispatched_copy);
+  }
+
+  std::variant<ssize_t, ncarray::Slice,ncarray::ArrayIndices>
+  pyindices_to_indices(const py::object& pyindices, const ssize_t* shape) {
+    if (py::isinstance<py::int_>(pyindices)) {
+      return pyindices.cast<ssize_t>();
+    } else if (py::isinstance<py::slice>(pyindices)) {
+      return pyslice_to_slice(shape[0], pyindices.cast<py::slice>());
+    } else if (py::isinstance<py::tuple>(pyindices)) {
+      ncarray::ArrayIndices indices;
+      ssize_t axis { 0 };
+      for (auto& item : pyindices.cast<py::tuple>()) {
+        if (py::isinstance<py::int_>(item)) {
+          indices.emplace_back(item.cast<ssize_t>());
+        } else if (py::isinstance<py::slice>(item)) {
+          indices.emplace_back(pyslice_to_slice(shape[axis],
+                                                item.cast<py::slice>()));
+        } else if (item.is(py::ellipsis())) {
+          indices.emplace_back(ncarray::Ellipsis{});
+        } else {
+          throw py::type_error("Invalid indexing argument!");
+        }
+      }
+      return indices;
+    }
+    throw py::type_error("Invalid indexing argument!");
   }
 } // anonymous namespace
 
@@ -201,10 +242,18 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
         return py::make_iterator(self.begin(), self.end());
     })
     // --- Array-Like Methods (indexing, size, shape, dtype, etc) --- //
-    .def_property_readonly("size", &ncarray::NCArrayView::size)
-    .def_property_readonly("ndim", &ncarray::NCArrayView::ndim)
-    .def_property_readonly("itemsize", &ncarray::NCArrayView::itemsize)
-    .def_property_readonly("nbytes", &ncarray::NCArrayView::nbytes)
+    .def_property_readonly("size",
+                           &ncarray::NCArrayView::size,
+                           "The number of items in the NCArray*.")
+    .def_property_readonly("ndim",
+                           &ncarray::NCArrayView::ndim,
+                           "The number of dimensions in the NCArray*.")
+    .def_property_readonly("itemsize",
+                           &ncarray::NCArrayView::itemsize,
+                           "The size in bytes of a single item in the NCArray*.")
+    .def_property_readonly("nbytes",
+                           &ncarray::NCArrayView::nbytes,
+                           "The total size in bytes of all items in the NCArray*.")
     .def("squeeze",
          &ncarray::NCArrayView::squeeze,
          "Collapse and remove all axes of length 1.")
@@ -238,6 +287,30 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
              return py::cast(self[indices]);
            } else {
              throw py::type_error("Invalid indexing argument!");
+           }
+         },
+         py::is_operator())
+    .def("__setitem__",
+         [](const ncarray::NCArrayView& self, py::object idx, py::object val) {
+           auto indices = pyindices_to_indices(idx, self.shape());
+           ncarray::ViewOrScalar sub_view_or_scalar;
+           if (std::holds_alternative<ssize_t>(indices)) {
+             sub_view_or_scalar = self[std::get<ssize_t>(indices)];
+           } else if (std::holds_alternative<ncarray::Slice>(indices)) {
+             sub_view_or_scalar = self[std::get<ncarray::Slice>(indices)];
+           } else {
+             sub_view_or_scalar = self[std::get<ncarray::ArrayIndices>(indices)];
+           }
+
+           auto& view = std::get<ncarray::NCArrayView>(sub_view_or_scalar);
+           if (py::isinstance<py::array>(val)) {
+             // ... //
+           } else if (py::isinstance<ncarray::NCArrayView>(val)) {
+             view.assign(val.cast<ncarray::NCArrayView&>());
+           } else {
+             // Convertible to scalar
+             // Use the algorithm directly to avoid the variant gets
+             view.fill(val.cast<ncarray::Scalar>());
            }
          },
          py::is_operator())
@@ -285,12 +358,16 @@ PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
 #undef REGISTER_OPERATION
 
   py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")
-    .def(py::init([](const py::array& arr) {
-      return pyarray_to_ref(arr);
-    }))
-    .def(py::init([](const py::list& list) {
-      return pylist_to_ref(list);
-    }));
+    .def(py::init([](const py::array& arr, const bool read_only = false) {
+      return pyarray_to_ref(arr, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false))
+    .def(py::init([](const py::list& list, const bool read_only = false) {
+      return pylist_to_ref(list, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false));
 
   py::classh<ncarray::NCArray, ncarray::NCArrayView>(ncarray_module, "NCArray")
     .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {

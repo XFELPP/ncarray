@@ -35,24 +35,31 @@ namespace {
 } // anonymous namespace
 
 namespace ncarray {
-  NCArray::NCArray(const std::vector<ssize_t>& shape_, const DType& dtype_)
+  NCArray::NCArray(const std::vector<ssize_t>& shape_,
+                   const DType& dtype_,
+                   bool read_only)
     : NCArrayView(nullptr,
                   shape_,
                   calculate_c_order_strides(shape_, ncarray::itemsize(dtype_)),
                   dtype_,
-                  -1) // No pointer axis == -1
+                  -1, // No pointer axis == -1
+                  read_only)
   {
     m_storage = std::make_unique<std::uint8_t[]>(nbytes());
     m_data = reinterpret_cast<void**>(m_storage.get());
   }
 
-  NCArray::NCArray(const ssize_t ndim, const ssize_t* shape_, const DType& dtype_)
+  NCArray::NCArray(const ssize_t ndim,
+                   const ssize_t* shape_,
+                   const DType& dtype_,
+                   bool read_only)
     : NCArrayView(nullptr,
                   ndim,
                   shape_,
                   calculate_c_order_strides(ndim, shape_, ncarray::itemsize(dtype_)).data(),
                   dtype_,
-                  -1) // No pointer axis == -1
+                  -1, // No pointer axis == -1
+                  read_only)
   {
     m_storage = std::make_unique<std::uint8_t[]>(nbytes());
     m_data = reinterpret_cast<void**>(m_storage.get());
@@ -103,6 +110,6 @@ namespace ncarray {
                                     std::vector<ssize_t>& offsets,
                                     DType dtype,
                                     ssize_t ptr_axis) const {
-    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis);
+    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis, m_read_only);
   }
 } // namespace ncarray

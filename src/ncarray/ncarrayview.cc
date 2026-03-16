@@ -21,13 +21,15 @@ namespace ncarray {
                            const std::vector<ssize_t>& shape_,
                            const std::vector<ssize_t>& strides_,
                            DType dtype_,
-                           ssize_t ptr_axis)
+                           ssize_t ptr_axis,
+                           bool read_only)
       : m_data(data_)
       , m_shape(shape_)
       , m_strides(strides_)
       , m_offsets(m_strides.size())
       , m_dtype(dtype_)
       , m_pointer_axis(ptr_axis)
+      , m_read_only(read_only)
   {}
 
   NCArrayView::NCArrayView(void** data_,
@@ -35,13 +37,15 @@ namespace ncarray {
                            const std::vector<ssize_t>& strides_,
                            const std::vector<ssize_t>& offsets_,
                            DType dtype_,
-                           ssize_t ptr_axis)
+                           ssize_t ptr_axis,
+                           bool read_only)
       : m_data(data_)
       , m_shape(shape_)
       , m_strides(strides_)
       , m_offsets(offsets_)
       , m_dtype(dtype_)
       , m_pointer_axis(ptr_axis)
+      , m_read_only(read_only)
   {}
 
   NCArrayView::NCArrayView(void** data_,
@@ -49,13 +53,15 @@ namespace ncarray {
                            const ssize_t* shape_,
                            const ssize_t* strides_,
                            DType dtype_,
-                           ssize_t ptr_axis)
+                           ssize_t ptr_axis,
+                           bool read_only)
     : m_data(data_)
     , m_shape(shape_, shape_ + ndim)
     , m_strides(strides_, strides_ + ndim)
     , m_offsets(m_strides.size())
     , m_dtype(dtype_)
     , m_pointer_axis(ptr_axis)
+    , m_read_only(read_only)
   {}
 
   std::pair<void**, AxisDescr> NCArrayView::handle_int_indices(ssize_t index,
@@ -108,6 +114,7 @@ namespace ncarray {
     AxisDescr new_axis(axis, length, stride, offset, is_pointer);
 
     if (get_is_pointer_axis(*this, axis)) {
+      new_axis.offset = 0;
       if (length == 1) {
         // If we are length 1, we do not collapse by default (see AxisDescr flags)
         // however, this is no longer a pointer axis.
@@ -272,6 +279,14 @@ namespace ncarray {
     dispatch(m_dtype, copy_op);
   }
 
+  void NCArrayView::fill(Scalar val) {
+    if (m_read_only) {
+      throw type_error("Cannot modify a read-only view!");
+    }
+
+    ncarray::fill(*this, val);
+  }
+
   std::string NCArrayView::repr() const {
     if (m_shape.empty()) {
       return class_name() + "([], dtype=" + ncarray::to_string(m_dtype) + ")";
@@ -307,7 +322,7 @@ namespace ncarray {
                                         std::vector<ssize_t>& offsets,
                                         DType dtype,
                                         ssize_t ptr_axis) const {
-    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis);
+    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis, m_read_only);
   }
 
   NCArrayView::Iterator NCArrayView::begin() {

@@ -15,8 +15,9 @@ namespace ncarray {
                          std::vector<ssize_t>& shape_,
                          std::vector<ssize_t>& strides_,
                          DType dtype_,
-                         ssize_t ptr_axis)
-    : NCArrayView(nullptr, shape_, strides_, dtype_, ptr_axis)
+                         ssize_t ptr_axis,
+                         bool read_only)
+    : NCArrayView(nullptr, shape_, strides_, dtype_, ptr_axis, read_only)
     , m_ref_ptrs(data_)
   {
     m_data = m_ref_ptrs.data();
@@ -61,6 +62,6 @@ namespace ncarray {
                                        std::vector<ssize_t>& offsets,
                                        DType dtype,
                                        ssize_t ptr_axis) const {
-    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis);
+    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis, m_read_only);
   }
 } // namespace ncarray

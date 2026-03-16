@@ -18,8 +18,13 @@
 namespace ncarray {
   class NCArray : public NCArrayView {
   public:
-    NCArray(const std::vector<ssize_t>& shape_, const DType& dtype_);
-    NCArray(const ssize_t ndim, const ssize_t* shape_, const DType& dtype_);
+    NCArray(const std::vector<ssize_t>& shape_,
+            const DType& dtype_,
+            bool read_only = false); // By default owning classes will be writeable
+    NCArray(const ssize_t ndim,
+            const ssize_t* shape_,
+            const DType& dtype_,
+            bool read_only = false); // By default owning classes will be writeable
 
     NCArray(const NCArray& other);
     NCArray(NCArray&& other) noexcept;

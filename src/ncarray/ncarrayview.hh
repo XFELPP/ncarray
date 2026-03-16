@@ -36,14 +36,16 @@ namespace ncarray {
                 const std::vector<ssize_t>& shape_,
                 const std::vector<ssize_t>& strides_,
                 DType dtype_,
-                ssize_t ptr_axis = 0);
+                ssize_t ptr_axis = 0,
+                bool read_only = true);
 
     NCArrayView(void** data_,
                 const std::vector<ssize_t>& shape_,
                 const std::vector<ssize_t>& strides_,
                 const std::vector<ssize_t>& offsets_,
                 DType dtype_,
-                ssize_t ptr_axis = 0);
+                ssize_t ptr_axis = 0,
+                bool read_only = true);
 
     // Also provide a constructor with direct pointers
     // This is convenient particularly for construction from Python arrays
@@ -52,7 +54,8 @@ namespace ncarray {
                 const ssize_t* shape_,
                 const ssize_t* strides_,
                 DType dtype_,
-                ssize_t ptr_axis = 0);
+                ssize_t ptr_axis = 0,
+                bool read_only = true);
 
     NCArrayView(const NCArrayView& other) = default;
     NCArrayView(NCArrayView&& other) noexcept = default;
@@ -123,7 +126,7 @@ namespace ncarray {
       return axis == m_pointer_axis;
     }
 
-    // Copy, cast, and buffer helpers/utilities
+    // --- Copy, cast, modification and buffer helpers/utilities --- //
     void copy_into(void* dest_buffer) const;
 
     template <typename OutT>
@@ -162,7 +165,17 @@ namespace ncarray {
       return result;
     }
 
-    // Reduction operations
+    void fill(Scalar val);
+
+    void assign(ArrayLike auto arr) {
+      if (m_read_only) {
+        throw type_error("Cannot modify a read-only view!");
+      }
+
+      ncarray::assign(*this, arr);
+    }
+
+    // --- Reduction operations --- //
     Scalar sum() const { return ncarray::sum(*this); }
 
     Scalar max() const { return ncarray::max(*this); }
@@ -178,7 +191,7 @@ namespace ncarray {
       return dispatch(m_dtype, reduce);
     }
 
-    // Binary operations
+    // --- Binary operations --- //
     template <ArrayLike OtherType,
               typename R = void, // Added so compiler evaluates after NCArray defined
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
@@ -299,9 +312,9 @@ namespace ncarray {
 
       auto format_element = [&](size_t i) {
         if (is_pointer_axis(axis)) {
+          ssize_t ptr_offset = i * m_strides[axis] + m_offsets[axis];
           void* next_ptr =
-            reinterpret_cast<std::uint8_t*>(reinterpret_cast<void**>(current_data)[i]) +
-            m_offsets[axis];
+            reinterpret_cast<std::uint8_t*>(reinterpret_cast<void**>(current_data)[ptr_offset]);
           if (is_last_axis) {
             // Formatting gets garbled with int8/uint8 and ostringstream so cast
             T val = *reinterpret_cast<T*>(next_ptr);
@@ -318,7 +331,6 @@ namespace ncarray {
             repr_recursive_dispatched<T>(oss, next_ptr, axis + 1, indent + 1, edge_items);
           }
         } else {
-          // Subsequent axes use strides and offsets
           uint8_t* ptr =
               reinterpret_cast<uint8_t*>(current_data) + i * m_strides[axis] + m_offsets[axis];
           if (is_last_axis) {
@@ -422,6 +434,7 @@ namespace ncarray {
 
     // If one axis is a pointer axis, indicate here. Otherwise -1
     ssize_t m_pointer_axis { -1 };
+    bool m_read_only { true };
   };
 } // namespace ncarray
 
