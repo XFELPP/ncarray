@@ -171,7 +171,7 @@ namespace {
   }
 } // anonymous namespace
 
-PYBIND11_MODULE(ncarray, ncarray_module, py::mod_gil_not_used()) {
+PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
   ncarray_module.doc() = "Non-contiguous (NC) Array Classes.";
 
   py::native_enum<ncarray::DType>(ncarray_module,

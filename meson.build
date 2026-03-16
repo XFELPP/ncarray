@@ -1,17 +1,12 @@
 project(
-    'xtcpp',
+    'ncarray',
     'cpp',
     version: '0.1.0',
     default_options: [
         'cpp_std=c++23',
-        'cuda_std=c++20',
         'optimization=3',
-        # Statically link subproject libraries by default as there are
-        # difficulties getting the wheels to work with shared libraries
-        'default_library=static',
     ],
 )
-add_languages('cuda', required : true)
 
 add_project_arguments('-frtti', language: 'cpp')
 add_project_arguments('-fopenmp', language: 'cpp')
@@ -38,50 +33,55 @@ pybind11_dep = dependency('pybind11', required: true)
 
 py_install_dir = py3.get_install_dir()
 
-# Currently there are no sub-directories, so the root install dir is just
-# where ncarray is installed
-libncarray_install_dir = py_install_dir
+ncarray_lib_install_dir = py3.get_install_dir() / 'ncarray/lib'
+
+# Package and library setup will be:
+# site-packages/
+#    | - ncarray
+#           | - lib
+#           |    | - libncarray.so
+#           |
+#           | - core
+#           |    | - _pyncarray.so
+#           |
+#           | - __init__.py (utility functions and expose core lib)
+
+libncarray_install_dir = py_install_dir / 'ncarray/lib'
+pyncarray_install_dir = py_install_dir / 'ncarray/core'
+py_to_lib_path = '../lib'
 
 # Executables get installed in $prefix/bin while the libs are in $prefix/lib/...
 # So the relative path is:
 exe_to_libncarray = '..' / libncarray_install_dir
 
+lib_install_rpath = '$ORIGIN'
+
 # Setup RPATH for various platforms, for any executables that may need it
 if host_machine.system() == 'darwin'
     exe_install_rpath = '@executable_path' + ':' + ('@executable_path' / exe_to_libncarray)
+    py_to_lib_install_rpath = '@executable_path' + ':' + ('@executable_path' / py_to_lib_path)
 else
     exe_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / exe_to_libncarray)
+    py_to_lib_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / py_to_lib_path)
 endif
 
-
-lib_install_rpath = '$ORIGIN'
-
-
-#### Other Dependencies ####
-############################
-## spdlog
-# spdlog_proj = subproject('spdlog')
-# spdlog_dep = spdlog_proj.get_variable('spdlog_dep')
-
-## OpenMP
-# openmp_dep = dependency('openmp', required: true)
 
 #### ncarray ####
 #################
 ## Array definitions
 
-ncarray_headers = include_directories('src', 'src/ncarray')
+ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 
 libncarray = shared_library(
     'ncarray',
     [
-        'src/ncarray/ncarrayview.cc',
-        'src/ncarray/ncarray.cc',
-        'src/ncarray/ncarrayref.cc',
+        'src/lib/ncarray/ncarrayview.cc',
+        'src/lib/ncarray/ncarray.cc',
+        'src/lib/ncarray/ncarrayref.cc',
     ],
     include_directories: ncarray_headers,
     install: true,
-    install_dir: py3.get_install_dir(),
+    install_dir: libncarray_install_dir,
     install_rpath: lib_install_rpath,
     version: '1',
     soversion: '1',
@@ -94,43 +94,53 @@ ncarray_dep = declare_dependency(
     include_directories: ncarray_headers,
 )
 
+# Install headers into the package for easy bundling
+installed_headers = [
+    'src/lib/ncarray/array_operations.hh',
+    'src/lib/ncarray/array_traits.hh',
+    'src/lib/ncarray/dtype.hh',
+    'src/lib/ncarray/indexing.hh',
+    'src/lib/ncarray/ncarray.hh',
+    'src/lib/ncarray/ncarrayref.hh',
+    'src/lib/ncarray/ncarrayview.hh',
+]
+py3.install_sources(
+    installed_headers,
+    pure: false,
+    subdir: 'ncarray/include',
+)
+
 py_mod = py3.extension_module(
-    'ncarray',
+    '_pyncarray',
     [
-        'src/python/ncarray.cc'
+        'src/lib/python/ncarray.cc'
     ],
     install: true,
-    install_dir: py3.get_install_dir(),
+    install_dir: pyncarray_install_dir,
     include_directories: ncarray_headers,
     dependencies : [
         ncarray_dep,
         pybind11_dep,
     ],
-    # No sub-directory required - the entire project compiles to a single extension
-    # `ncarray` which will be installed in site-packages
-    # subdir: '',
-    install_rpath: lib_install_rpath,
+    install_rpath: py_to_lib_install_rpath,
 )
 
-#### CuFile Python module ####
-##############################
+py_sources = [
+    'src/ncarray/__init__.py',
+]
 
-#py_mod_gpu = py3.extension_module(
-#    '_xtcppgpu',
-#    [
-#        'src/python/pyxtcppgpu.cc'
-#    ],
-#    install: true,
-#    install_dir: py3.get_install_dir(),
-#    dependencies : [
-#        pybind11_dep,
-#        xtcpp_base_dep,
-#        xtcpp_cufile_dep,
-#        xtcpp_hdf5_dep,
-#        spdlog_dep,
-#        cufile_dep,
-#        #cudart_lib,
-#    ],
-#    install_rpath: '$ORIGIN',
-#    link_language: 'cpp',
-#)
+py3.install_sources(
+    py_sources,
+    pure: false,
+    subdir: 'ncarray',
+)
+
+placeholders = [
+    'src/ncarray/core/__init__.py',
+]
+
+py3.install_sources(
+    placeholders,
+    pure: false,
+    subdir: 'ncarray/core',
+)
