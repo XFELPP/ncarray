@@ -23,6 +23,8 @@ NumPy is extraordinarily powerful and flexible; however, it is designed for deal
 - Multi-dimensional array indexing using integers, slices or placeholder axes (ellipsis in Python).
 - NumPy-compatible Python bindings - implements interface methods like `__array__` and `__array_ufunc__` (**Note:** These operations may incur copies! The initial views are copy free, but not all operations thereafter)
 
+NOTE: The type and trait system will automatically promote small integers to larger ones. For subtraction, it will convert unsigned to signed. This behaviour may be different than what is done in NumPy.
+
 ## Example Python Usage
 
 ```py
