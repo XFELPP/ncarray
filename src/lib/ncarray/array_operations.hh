@@ -408,24 +408,31 @@ namespace ncarray {
 
   template<ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
   auto add(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
+    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
+      using AccumT = typename op_traits<T>::sum_type;
+      return dtype_traits<AccumT>::value;
+    });
+
+    ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto add_operation = [&]<typename T>() {
+      using AccumT = typename op_traits<T>::sum_type;
+
       auto add_op_internal = [](const std::uint8_t* lhs,
                                 const std::uint8_t* rhs,
-                                T* output) {
-        *output = *reinterpret_cast<const T*>(lhs) + *reinterpret_cast<const T*>(rhs);
+                                AccumT* output) {
+        *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) + *reinterpret_cast<const T*>(rhs);
       };
 
       ssize_t starting_axis { 0 };
-      T* result_ptr = reinterpret_cast<T*>(result.data());
-      impl::binary_reduce_recursive<T, decltype(add_op_internal), T>(left,
-                                                                     right,
-                                                                     left.data(),
-                                                                     right.data(),
-                                                                     starting_axis,
-                                                                     add_op_internal,
-                                                                     result_ptr);
+      AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(add_op_internal), AccumT>(left,
+                                                                          right,
+                                                                          left.data(),
+                                                                          right.data(),
+                                                                          starting_axis,
+                                                                          add_op_internal,
+                                                                          result_ptr);
     };
 
     dispatch(left.dtype(), add_operation);
@@ -537,11 +544,19 @@ namespace ncarray {
 
   template <ArrayLike Left, OwningArrayLike ResultType>
   ResultType add_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
+    DType result_dtype = dispatch(left.dtype(), [] <typename T> () {
+      using AccumT = typename op_traits<T>::sum_type;
+
+      return dtype_traits<AccumT>::value;
+    });
+
+    ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto add_operation = [&]<typename T>() {
-      auto add_op_internal = [](const std::uint8_t* lhs, const T rhs, T* output) {
-        *output = *reinterpret_cast<const T*>(lhs) + rhs;
+      using AccumT = typename op_traits<T>::sum_type;
+
+      auto add_op_internal = [](const std::uint8_t* lhs, const T rhs, AccumT* output) {
+        *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) + rhs;
       };
 
       ssize_t starting_axis { 0 };
@@ -550,13 +565,13 @@ namespace ncarray {
         return op_traits<FromT>::template cast<T>(arg);
       };
       T scalar_val = std::visit(cast_op, right);
-      T* result_ptr = reinterpret_cast<T*>(result.data());
-      impl::binary_scalar_recursive<T>(left,
-                                       left.data(),
-                                       scalar_val,
-                                       starting_axis,
-                                       add_op_internal,
-                                       result_ptr);
+      AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
+      impl::binary_scalar_recursive<T, AccumT>(left,
+                                               left.data(),
+                                               scalar_val,
+                                               starting_axis,
+                                               add_op_internal,
+                                               result_ptr);
     };
 
     dispatch(left.dtype(), add_operation);
