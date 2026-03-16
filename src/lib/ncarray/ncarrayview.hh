@@ -214,6 +214,20 @@ namespace ncarray {
     template <ArrayLike OtherType,
               typename R = void,
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType sub(const OtherType& other) const {
+      return ncarray::sub<NCArrayView, OtherType, ResultType>(*this, other);
+    }
+
+    template <ArrayLike OtherType,
+              typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator-(const OtherType& other) const {
+      return ncarray::sub<NCArrayView, OtherType, ResultType>(*this, other);
+    }
+
+    template <ArrayLike OtherType,
+              typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
     ResultType mul(const OtherType& other) const {
       return ncarray::mul<NCArrayView, OtherType, ResultType>(*this, other);
     }
@@ -251,6 +265,18 @@ namespace ncarray {
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
     ResultType operator+(const Scalar& other) const {
       return ncarray::add_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType sub(const Scalar& other) const {
+      return ncarray::sub_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator-(const Scalar& other) const {
+      return ncarray::sub_scalar<NCArrayView, ResultType>(*this, other);
     }
 
     template <typename R = void,

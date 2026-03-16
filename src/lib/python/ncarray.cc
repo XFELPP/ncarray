@@ -325,6 +325,7 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     .def("mean", &ncarray::NCArrayView::mean)
     // --- Binary Array Methods --- //
     REGISTER_OPERATION("add", +)
+    REGISTER_OPERATION("sub", -)
     REGISTER_OPERATION("mul", *)
     REGISTER_OPERATION("truediv", /)
     // NumPy protocol compatibility

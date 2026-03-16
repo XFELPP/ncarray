@@ -432,6 +432,32 @@ namespace ncarray {
     return result;
   }
 
+  template<ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto sub(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto sub_operation = [&]<typename T>() {
+      auto sub_op_internal = [](const std::uint8_t* lhs,
+                                const std::uint8_t* rhs,
+                                T* output) {
+        *output = *reinterpret_cast<const T*>(lhs) - *reinterpret_cast<const T*>(rhs);
+      };
+
+      ssize_t starting_axis { 0 };
+      T* result_ptr = reinterpret_cast<T*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(sub_op_internal), T>(left,
+                                                                     right,
+                                                                     left.data(),
+                                                                     right.data(),
+                                                                     starting_axis,
+                                                                     sub_op_internal,
+                                                                     result_ptr);
+    };
+
+    dispatch(left.dtype(), sub_operation);
+    return result;
+  }
+
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
   auto mul(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
@@ -534,6 +560,34 @@ namespace ncarray {
     };
 
     dispatch(left.dtype(), add_operation);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  ResultType sub_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto sub_operation = [&]<typename T>() {
+      auto sub_op_internal = [](const std::uint8_t* lhs, const T rhs, T* output) {
+        *output = *reinterpret_cast<const T*>(lhs) - rhs;
+      };
+
+      ssize_t starting_axis { 0 };
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+      T scalar_val = std::visit(cast_op, right);
+      T* result_ptr = reinterpret_cast<T*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       sub_op_internal,
+                                       result_ptr);
+    };
+
+    dispatch(left.dtype(), sub_operation);
     return result;
   }
 
