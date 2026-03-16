@@ -2,10 +2,6 @@
 
 #include "ncarrayview.hh"
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <cstdint>
 #include <iostream>
 #include <numeric>
@@ -14,14 +10,14 @@
 #include <variant>
 #include <vector>
 
-namespace py = pybind11;
-
 namespace ncarray {
   NCArrayRef::NCArrayRef(std::vector<void*>& data_,
                          std::vector<ssize_t>& shape_,
                          std::vector<ssize_t>& strides_,
-                         py::dtype dtype_)
-    : NCArrayView(nullptr, shape_, strides_, dtype_)
+                         DType dtype_,
+                         ssize_t ptr_axis,
+                         bool read_only)
+    : NCArrayView(nullptr, shape_, strides_, dtype_, ptr_axis, read_only)
     , m_ref_ptrs(data_)
   {
     m_data = m_ref_ptrs.data();
@@ -34,12 +30,14 @@ namespace ncarray {
   {
     m_data = m_ref_ptrs.data();
   }
+
   NCArrayRef::NCArrayRef(NCArrayRef&& other) noexcept
     : NCArrayView(std::move(other))
     , m_ref_ptrs(std::move(other.m_ref_ptrs))
   {
     m_data = m_ref_ptrs.data();
   }
+
   NCArrayRef& NCArrayRef::operator=(const NCArrayRef& other) {
     if (this != &other) {
       NCArrayView::operator=(other);
@@ -48,6 +46,7 @@ namespace ncarray {
     }
     return *this;
   }
+
   NCArrayRef& NCArrayRef::operator=(NCArrayRef&& other) noexcept {
     if (this != &other) {
       NCArrayView::operator=(std::move(other));
@@ -61,7 +60,8 @@ namespace ncarray {
                                        std::vector<ssize_t>& shape,
                                        std::vector<ssize_t>& strides,
                                        std::vector<ssize_t>& offsets,
-                                       py::dtype dtype) const {
-    return NCArrayView(data, shape, strides, offsets, dtype);
+                                       DType dtype,
+                                       ssize_t ptr_axis) const {
+    return NCArrayView(data, shape, strides, offsets, dtype, ptr_axis, m_read_only);
   }
 } // namespace ncarray

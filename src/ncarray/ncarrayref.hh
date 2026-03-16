@@ -3,10 +3,6 @@
 
 #include "ncarrayview.hh"
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -17,15 +13,15 @@
 #include <variant>
 #include <vector>
 
-namespace py = pybind11;
-
 namespace ncarray {
   class NCArrayRef : public NCArrayView {
   public:
     NCArrayRef(std::vector<void*>& data_,
                std::vector<ssize_t>& shape_,
                std::vector<ssize_t>& strides_,
-               py::dtype dtype_);
+               DType dtype_,
+               ssize_t ptr_axis = 0,
+               bool read_only = true);
 
     NCArrayRef(const NCArrayRef& other);
     NCArrayRef(NCArrayRef&& other) noexcept;
@@ -39,7 +35,8 @@ namespace ncarray {
                                      std::vector<ssize_t>& shape,
                                      std::vector<ssize_t>& strides,
                                      std::vector<ssize_t>& offsets,
-                                     py::dtype dtype) const override;
+                                     DType dtype,
+                                     ssize_t ptr_axis = 0) const override;
 
   private:
     std::vector<void*> m_ref_ptrs;
