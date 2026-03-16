@@ -4,12 +4,77 @@ build-backend = "mesonpy"
 
 [project]
 name = "ncarray"
-description="NumPy compatible non-contiguous arrays including PEP3118 support and specializations."
+description="NumPy compatible non-contiguous arrays."
 requires-python = ">=3.8"
-dynamic = ["version"]
+authors = [
+    { name = "Gabriel Dorlhiac", email = "gabriel@dorlhiac.com" },
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+]
 
 [tool.meson-python.args]
-# Need to do this.... I couldn't for the life of me figure out how to get meson
-# meson-python and the subprojects to work well together for installing the
-# shared library...
 install = ['--skip-subprojects']
+
+[tool.cibuildwheel]
+# pp* (PyPy)
+# cp36-* (Python 3.6)
+# cp37-* (Python 3.7)
+# *i686 (32-bit builds)
+# Once code updated, will need to exclude: *-win32
+skip = ["pp*", "cp36-*", "cp37-*", "*i686", "*-win32",]
+
+# Try to set things up to cache what's possible to make things faster
+build-frontend = { name = "pip", args = ["--no-build-isolation"] }
+
+before-build = [
+    "pip install -U pip",
+    "pip install 'meson>=1.10.1' meson-python ninja pybind11 setuptools",
+]
+[tool.cibuildwheel.linux]
+before-all = [
+    """
+    if command -v apt-get >/dev/null; then
+        apt-get update && apt-get install -y ccache
+    elif command -v dnf >/dev/null; then
+        dnf install -y ccache
+    elif command -v yum >/dev/null; then
+        yum install -y ccache
+    elif command -v apk >/dev/null; then
+        apk add ccache
+    fi
+    ccache -z
+    """,
+]
+[tool.cibuildwheel.macos]
+before-all = "brew install ccache && ccache -z"
+[tool.cibuildwheel.windows]
+before-all = "choco install sccache"
+
+[tool.cibuildwheel.linux.environment]
+CC = "ccache gcc"
+CXX = "ccache g++"
+CCACHE_DIR = "/project/.ccache"
+
+[tool.cibuildwheel.macos.environment]
+CC = "ccache clang"
+CXX = "ccache clang++"
+CCACHE_DIR = "/project/.ccache"
+
+[tool.cibuildwheel.windows.environment]
+CC = "sccache cl"
+CXX = "sccache cl"
+SCCACHE_DIR = "C:\\.ccache"
+

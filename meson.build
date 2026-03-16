@@ -9,8 +9,6 @@ project(
 )
 
 add_project_arguments('-frtti', language: 'cpp')
-add_project_arguments('-fopenmp', language: 'cpp')
-add_project_arguments('-march=native', language: 'cpp')
 
 #### Main Python Setup ####
 ###########################

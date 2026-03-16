@@ -11,7 +11,12 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
 #include <sys/types.h>
+#endif
 #include <type_traits>
 #include <variant>
 #include <vector>
