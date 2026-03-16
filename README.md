@@ -1,5 +1,5 @@
 # ncarray
-[![Release build](https://github.com/XFELPP/ncarray/actions/workflows/release.yml/badge.svg)](https://github.com/XFELPP/ncarray/actions/workflows/release.yml)
+[![Release build](https://github.com/XFELPP/ncarray/actions/workflows/release.yml/badge.svg)](https://github.com/XFELPP/ncarray/actions/workflows/release.yml)[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
 ## Status
 This is an early alpha release. The project is still in the very early stages of development.
