@@ -203,6 +203,7 @@ namespace ncarray {
     ResultType add(const OtherType& other) const {
       return ncarray::add<NCArrayView, OtherType, ResultType>(*this, other);
     }
+
     template <ArrayLike OtherType,
               typename R = void,
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
@@ -216,6 +217,7 @@ namespace ncarray {
     ResultType mul(const OtherType& other) const {
       return ncarray::mul<NCArrayView, OtherType, ResultType>(*this, other);
     }
+
     template <ArrayLike OtherType,
               typename R = void,
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
@@ -229,6 +231,7 @@ namespace ncarray {
     ResultType truediv(const OtherType& other) const {
       return ncarray::truediv<NCArrayView, OtherType, ResultType>(*this, other);
     }
+
     template <ArrayLike OtherType,
               typename R = void,
               OwningArrayLike ResultType = typename impl::default_owner<R>::type>
@@ -236,7 +239,43 @@ namespace ncarray {
       return ncarray::truediv<NCArrayView, OtherType, ResultType>(*this, other);
     }
 
-    //NCArray div(const py::object& other) const;
+    // --- Binary Operations Overloads for Scalar Broadcasts --- //
+
+    template <typename R = void, // Added so compiler evaluates after NCArray defined
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType add(const Scalar& other) const {
+      return ncarray::add_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator+(const Scalar& other) const {
+      return ncarray::add_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType mul(const Scalar& other) const {
+      return ncarray::mul_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator*(const Scalar& other) const {
+      return ncarray::mul_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType truediv(const Scalar& other) const {
+      return ncarray::truediv_scalar<NCArrayView, ResultType>(*this, other);
+    }
+
+    template <typename R = void,
+              OwningArrayLike ResultType = typename impl::default_owner<R>::type>
+    ResultType operator/(const Scalar& other) const {
+      return ncarray::truediv_scalar<NCArrayView, ResultType>(*this, other);
+    }
 
     template <ViewLike VT>
     class IteratorImpl {
@@ -365,7 +404,7 @@ namespace ncarray {
             } else {
               oss << ",\n" << std::string(indent + 1, ' ');
               // Extra newline for higher dimensions
-              ssize_t ndim{static_cast<ssize_t>(m_shape.size())};
+              ssize_t ndim { static_cast<ssize_t>(m_shape.size()) };
               for (ssize_t j = 0; j < ndim - axis - 2; ++j) {
                 oss << "\n" << std::string(indent + 1, ' ');
               }

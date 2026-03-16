@@ -211,6 +211,10 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     .def("__r" PYMETHOD "__", [](const ncarray::NCArrayView& self, const py::array& other) {           \
       return py::cast(pyarray_to_view(other) OP self);                                                 \
     },                                                                                                 \
+      py::is_operator())                                                                               \
+    .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const ncarray::Scalar& other) {      \
+      return py::cast(self OP other);                                                                  \
+    },                                                                                                 \
       py::is_operator())
 
   py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")

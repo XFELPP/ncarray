@@ -212,6 +212,40 @@ namespace ncarray {
         }
       }
     }
+
+    template <typename T, typename ScalarT, typename Op, typename ResultT, ArrayLike A>
+    void binary_scalar_recursive(const A& arr,
+                                 const void* current_data,
+                                 const ScalarT scalar_val,
+                                 ssize_t axis,
+                                 Op op,
+                                 ResultT*& res) {
+      ssize_t dim = arr.shape()[axis];
+      bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
+
+      for (ssize_t i = 0; i < dim; ++i) {
+        if (get_is_pointer_axis(arr, axis)) {
+          const void* next_ptr = reinterpret_cast<const void* const*>(current_data)[i];
+          if (is_last_axis) {
+            op(reinterpret_cast<const uint8_t*>(next_ptr), scalar_val, res);
+            res++;
+          } else {
+            binary_scalar_recursive<T>(arr, next_ptr, scalar_val, axis + 1, op, res);
+          }
+        } else {
+          const ssize_t* strides = arr.strides();
+          const ssize_t* offsets = arr.offsets();
+          const uint8_t* ptr =
+              reinterpret_cast<const uint8_t*>(current_data) + i * strides[axis] + offsets[axis];
+          if (is_last_axis) {
+            op(reinterpret_cast<const uint8_t*>(ptr), scalar_val, res);
+            res++;
+          } else {
+            binary_scalar_recursive<T>(arr, ptr, scalar_val, axis + 1, op, res);
+          }
+        }
+      }
+    }
   } // namespace impl
 
   class index_error : public std::invalid_argument {
@@ -467,6 +501,116 @@ namespace ncarray {
                                                                                starting_axis,
                                                                                truediv_op_internal,
                                                                                result_ptr);
+    };
+
+    dispatch(left.dtype(), truediv_operation);
+    return result;
+  }
+
+  // --- Binary operations with a scalar broadcast --- //
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  ResultType add_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto add_operation = [&]<typename T>() {
+      auto add_op_internal = [](const std::uint8_t* lhs, const T rhs, T* output) {
+        *output = *reinterpret_cast<const T*>(lhs) + rhs;
+      };
+
+      ssize_t starting_axis { 0 };
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+      T scalar_val = std::visit(cast_op, right);
+      T* result_ptr = reinterpret_cast<T*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       add_op_internal,
+                                       result_ptr);
+    };
+
+    dispatch(left.dtype(), add_operation);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto mul_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto mul_operation = [&]<typename T>() {
+      auto mul_op_internal = [](const std::uint8_t* lhs, const T rhs, T* output) {
+        if constexpr (std::is_same_v<T, bool>) {
+          *output = *reinterpret_cast<const bool*>(lhs) && rhs;
+        } else {
+          *output = *reinterpret_cast<const T*>(lhs) * rhs;
+        }
+      };
+
+      ssize_t starting_axis { 0 };
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+      T scalar_val = std::visit(cast_op, right);
+      T* result_ptr = reinterpret_cast<T*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       mul_op_internal,
+                                       result_ptr);
+    };
+
+    dispatch(left.dtype(), mul_operation);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto truediv_scalar(const Left& left, const Scalar& right) {
+    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
+        using ResultT = typename op_traits<T>::truediv_type;
+        return dtype_traits<ResultT>::value;
+      });
+
+    ResultType result(left.ndim(), left.shape(), result_dtype);
+
+    auto truediv_operation = [&]<typename T>() {
+      using ResultT = typename op_traits<T>::truediv_type;
+      auto truediv_op_internal = [](const std::uint8_t* lhs,
+                                    const T rhs,
+                                    ResultT* output) {
+        const T lhs_val = *reinterpret_cast<const T*>(lhs);
+
+        if (rhs == T(0)) {
+          bool is_finite { false };
+          if constexpr (requires { lhs_val.real(); }) {
+            is_finite = std::isfinite(lhs_val.real()) && std::isfinite(lhs_val.imag());
+          } else {
+            is_finite = std::isfinite(lhs_val);
+          }
+          *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
+        } else {
+          *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs);
+        }
+      };
+
+      ssize_t starting_axis { 0 };
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+      T scalar_val = std::visit(cast_op, right);
+      ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       truediv_op_internal,
+                                       result_ptr);
     };
 
     dispatch(left.dtype(), truediv_operation);

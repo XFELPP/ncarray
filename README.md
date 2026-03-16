@@ -41,16 +41,30 @@ subarray_list: List[npt.NDArray[np.uint32]] = [
 # Create a wrapped reference
 ncarr: ncarray.NCArrayRef = ncarray.NCArrayRef(subarray_list)
 
-# index it
+# Index it
 first_two_ptrs: ncarray.NCArrayView = ncarr[:2]
 
 # Down to scalar if you'd like
 my_int: int = ncarr[2, 1, 2]
 
-# Perform operations on it
+# Scalar broadcasts -- This creates a new OWNING array! (NCArray)
+scalar_bcast_res: ncarray.NCArray = ncarr + 2
+
+# Perform operations on it -- also create new OWNING arrays
 result: ncarray.NCArray = np.sin(ncarr)
 other_res: ncarray.NCArray = ncarr + ncarr
 ```
+
+## Terminology
+
+Coming soon... but to provide the most important point.
+
+There are 3 types of classes:
+- "Views"
+- "Refs"
+- Arrays (Owning)
+
+A view is most similar to a span in C++. It owns nothing - it is useful if working in C++, or you will receive views when doing operations like indexing in Python. A ref, as was initially constructed above, holds pointers to each of the individual arrays. Finally, there is an owning array type. This holds the actual buffer/memory.
 
 
 ## Roadmap
