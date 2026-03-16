@@ -6,6 +6,7 @@ build-backend = "mesonpy"
 name = "ncarray"
 description="NumPy compatible non-contiguous arrays."
 requires-python = ">=3.8"
+dynamic = ["version"]
 authors = [
     { name = "Gabriel Dorlhiac", email = "gabriel@dorlhiac.com" },
 ]
