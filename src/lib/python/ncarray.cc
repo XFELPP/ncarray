@@ -160,13 +160,13 @@ namespace {
     } else if (py::isinstance<py::tuple>(pyindices)) {
       ncarray::ArrayIndices indices;
       ssize_t axis { 0 };
-      for (auto& item : pyindices.cast<py::tuple>()) {
+      for (const auto& item : pyindices.cast<py::tuple>()) {
         if (py::isinstance<py::int_>(item)) {
           indices.emplace_back(item.cast<ssize_t>());
         } else if (py::isinstance<py::slice>(item)) {
           indices.emplace_back(pyslice_to_slice(shape[axis],
                                                 item.cast<py::slice>()));
-        } else if (item.is(py::ellipsis())) {
+        } else if (py::isinstance<py::ellipsis>(item)) {
           indices.emplace_back(ncarray::Ellipsis{});
         } else {
           throw py::type_error("Invalid indexing argument!");
@@ -283,13 +283,13 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
            } else if (py::isinstance<py::tuple>(idx)) {
              ncarray::ArrayIndices indices;
              ssize_t axis { 0 };
-             for (auto& item : idx.cast<py::tuple>()) {
+             for (const auto& item : idx.cast<py::tuple>()) {
                if (py::isinstance<py::int_>(item)) {
                  indices.emplace_back(item.cast<ssize_t>());
                } else if (py::isinstance<py::slice>(item)) {
                  indices.emplace_back(pyslice_to_slice(self.shape(axis),
                                                        item.cast<py::slice>()));
-               } else if (item.is(py::ellipsis())) {
+               } else if (py::isinstance<py::ellipsis>(item)) {
                  indices.emplace_back(ncarray::Ellipsis{});
                } else {
                  throw py::type_error("Invalid indexing argument!");
@@ -358,7 +358,7 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
       // For now, just convert to NumPy
       // TODO: Optimize this with NCArray* directly
       py::list new_args;
-      for (auto& arg : args) {
+      for (const auto& arg : args) {
         if (py::isinstance<ncarray::NCArrayView>(arg)) {
           new_args.append(ncarr_to_numpy(arg.cast<ncarray::NCArrayView>()));
         } else {

@@ -18,18 +18,32 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      max-parallel: 1
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["cp38-*", "cp39-*", "cp310-*", "cp311-*", "cp312-*", "cp313-*"]
 
     steps:
       - uses: actions/checkout@v4
+
+        # MANUALLY try and pull this down. So Windows doesn't break.... every time
+      - name: PRE-DOWNLOAD
+        shell: bash
+        run: |
+          mkdir -p .cibw_cache
+          for i in {1..5}; do
+            curl -L -o .cibw_cache/virtualenv-20.27.1.pyz https://raw.githubusercontent.com/pypa/get-virtualenv/20.27.1/public/virtualenv.pyz && break || sleep 15
+          done
 
       # Cache pip (for speedup)
       - name: Cache pip
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ matrix.python }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -42,12 +56,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ccache-
 
+      # interpreter caching (to avoid running into HTTP request rate limiting)
+      - name: Cache cibuildwheel
+        uses: actions/cache@v4
+        with:
+          path: .cibw_cache
+          key: ${{ runner.os }}-cibw-${{ matrix.python }}-v1
+          restore-keys: |
+            ${{ runner.os }}-cibw-${{ matrix.python }}-
 
       - name: Build wheels
         # Check pyproject.toml for supported versions and additional config
         uses: pypa/cibuildwheel@v2.22.0
         env:
+          CIBW_BUILD: ${{ matrix.python }}
           CIBW_AFTER_BUILD: "ccache -s"
+          CIBW_ENVIRONMENT: "PIP_RETRIES=20"
+          CIBW_CACHE_PATH: ".cibw_cache"
 
       - uses: actions/upload-artifact@v4
         with:
