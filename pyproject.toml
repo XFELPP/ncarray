@@ -10,7 +10,7 @@ dynamic = ["version"]
 authors = [
     { name = "Gabriel Dorlhiac", email = "gabriel@dorlhiac.com" },
 ]
-
+readme = "README.md"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
