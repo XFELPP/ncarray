@@ -41,7 +41,7 @@ build-frontend = { name = "pip", args = ["--no-build-isolation"] }
 
 before-build = [
     "python -m pip install -U pip",
-    "python -m pip install 'meson>=1.10.1' meson-python ninja pybind11 setuptools",
+    "python -m pip install \"meson>=1.10.1\" meson-python ninja pybind11 setuptools",
 ]
 
 # For C++23 need a newer GCC coming from manylinux_2_28 (GCC 13) and later
