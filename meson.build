@@ -60,7 +60,7 @@ abs_lib_rpath = py_install_dir / py_to_lib_path
 # Setup RPATH for various platforms, for any executables that may need it
 if host_machine.system() == 'darwin'
     exe_install_rpath = '@executable_path' + ':' + ('@executable_path' / exe_to_libncarray) + ':' + abs_exe_rpath
-    py_to_lib_install_rpath = '@executable_path' + ':' + ('@executable_path' / py_to_lib_path)  + ':' + abs_lib_rpath
+    py_to_lib_install_rpath = '@loader_path' + ':' + ('@loader_path' / py_to_lib_path)  + ':' + abs_lib_rpath
 else
     exe_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / exe_to_libncarray)  + ':' + abs_exe_rpath
     py_to_lib_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / py_to_lib_path) + ':' + abs_lib_rpath
