@@ -283,19 +283,19 @@ namespace ncarray {
     NCA_HD ViewType operator[](Args&&... idx_args) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
 
-      build_new_axes(axes, 0, std::forward<Args>(idx_args)...);
+      build_new_axes<sizeof...(Args)>(axes, 0, std::forward<Args>(idx_args)...);
 
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
-    template <ssize_t Axis = 0, ssize_t TotalArgs = 0>
+    template <ssize_t TotalArgs = 0>
     NCA_HD void build_new_axes(AxisDescr* new_axes, ssize_t axis) const {
       for (ssize_t a = axis; a < this->ndim(); ++a) {
         new_axes[a] = { this->shape(a), 0, this->stride(a) };
       }
     }
 
-    template <ssize_t Axis = 0, ssize_t TotalArgs = 0, typename Arg, typename... RemainingArgs>
+    template <ssize_t TotalArgs = 0, typename Arg, typename... RemainingArgs>
     NCA_HD void build_new_axes(AxisDescr* new_axes,
                                ssize_t axis,
                                Arg&& arg,

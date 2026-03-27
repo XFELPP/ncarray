@@ -6,7 +6,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "cartesian.hh"
+#include "cartesian.hh" // Cartesian products/indexing logic for operator[]
+
 #include "ncarray/ncarrays.hh"
 #include "ncarray/soarrays.hh"
 
@@ -26,6 +27,12 @@
 namespace py = pybind11;
 
 namespace {
+  /**
+   * Cast a pybind11 array dtype to a ncarray::DType.
+   *
+   * @param[in] dtype The pybind11 datatype.
+   * @returns The ncarray datatype.
+   */
   ncarray::DType pydtype_to_dtype(py::dtype dtype) {
     if (dtype.is(py::dtype::of<std::uint8_t>())) {
       return ncarray::dtype_traits<std::uint8_t>::value;
@@ -55,6 +62,13 @@ namespace {
     throw py::type_error(oss.str());
   }
 
+  /**
+   * Construct a view over a NumPy array.
+   *
+   * @tparam ViewType The kind of view to construct. E.g. NCArrayView, SOArrayView.
+   * @param[in] arr An input NumPy array to convert.
+   * @returns A view of ViewType over the data from the NumPy array.
+   */
   template <class ViewType>
   auto pyarray_to_view(const py::array& arr) {
     py::buffer_info info = arr.request();
@@ -72,6 +86,18 @@ namespace {
                     read_only);
   }
 
+  /**
+   * Construct a reference type array from an array of arrays.
+   *
+   * NOTE: This function assumes the arrays in the array all have the same shape
+   * and strides.
+   *
+   * @tparam LayoutT The layout specifier for the returned reference type.
+   *         E.g., NCOffsetsPolicy or SOArrayPolicy (PEP3118).
+   * @param[in] arr The input array of arrays.
+   * @param[in] read_only_ Whether this reference should be read only.
+   * @returns The constructed reference type.
+   */
   template <class LayoutT>
   ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>
   pyarray_to_ref(const py::array& arr, const bool read_only_ = false) {
@@ -99,6 +125,18 @@ namespace {
                                                            read_only);
   }
 
+  /**
+   * Construct a reference type array from a list of arrays.
+   *
+   * NOTE: This function assumes the arrays in the list all have the same shape
+   * and strides.
+   *
+   * @tparam LayoutT The layout specifier for the returned reference type.
+   *         E.g., NCOffsetsPolicy or SOArrayPolicy (PEP3118).
+   * @param[in] list The input list of arrays.
+   * @param[in] read_only_ Whether this reference should be read only.
+   * @returns The constructed reference type.
+   */
   template <class LayoutT>
   ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>
   pylist_to_ref(const py::list& list, const bool read_only_ = false) {
@@ -139,6 +177,16 @@ namespace {
                                                            read_only);
   }
 
+  /**
+   * Construct a NumPy array from an input nc/soarray type object.
+   *
+   * @tparam ArrayT The kind of array being used. This is a full array specifier,
+   *         including storage+layout specifier.
+   * @param[in] ncarr The input array to convert.
+   * @param[in] dtype The datatype for the converted NumPy array. I.e., if provided
+   *          a cast will be performed. Otherwise, the input array dtype will be used.
+   * @returns A NumPy array of specified dtype over the input data.
+   */
   template <class ArrayT>
   py::array ncarr_to_numpy(const ArrayT& ncarr,
                            std::optional<ncarray::DType> dtype = std::nullopt) {
@@ -158,10 +206,13 @@ namespace {
     return ncarray::dispatch(out_dtype, dispatched_copy);
   }
 
-
-// TODO: It would be nice to not need the view conversion when dealing with array
-// Arrays don't currently satisfy the concepts though due to py::dtype.
-// Minor thing to improve
+  /**
+   * @def REGISTER_OPERATION(PYMETHOD, OP)
+   * @brief A helper to attach a dunder to a class binding for operator overloads.
+   * @example REGISTER_OPERATION("add", +) binds operator+(...) to __add__
+   * @todo We currently need to convert arrays to view, because the C++ lib cannot
+   *       take the array directly.
+   */
 #define REGISTER_OPERATION(PYMETHOD, OP)                                            \
     .def("__" PYMETHOD "__", [](const ArrayT& self, const ArrayT& other) {          \
       return py::cast(self OP other);                                               \
@@ -180,6 +231,18 @@ namespace {
     },                                                                              \
       py::is_operator())
 
+  /**
+   * Helper function to attach common methods to a Python binding for an array
+   * specialization.
+   *
+   * All array specializations generally have the same functions in C++ and in
+   * their Python bindings (plus/minus some speciality features). This function
+   * just attaches those all.
+   *
+   * @tparam ArrayT The kind of array being used. This is a full array specifier,
+   *         including storage+layout specifier.
+   * @param[in] arr_cl The class of the Python binding.
+   */
   template <typename ArrayT>
   void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
     using ViewType = typename ArrayT::ViewType;
@@ -244,9 +307,10 @@ namespace {
            if (py::isinstance<py::int_>(idx)) {
              view = self[idx.cast<ssize_t>()];
            } else if (py::isinstance<py::slice>(idx)) {
-             return
-               view = self[pyncarray::pyslice_to_slice(self.shape(0),
-                                                       idx.cast<py::slice>())];
+             view = self[pyncarray::pyslice_to_slice(self.shape(0),
+                                                     idx.cast<py::slice>())];
+           } else if (py::isinstance<py::ellipsis>(idx)) {
+             view = self[ncarray::Ellipsis{}];
            } else if (py::isinstance<py::tuple>(idx)) {
              view = pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
                                                   self,
@@ -270,6 +334,8 @@ namespace {
            } else if (py::isinstance<py::slice>(idx)) {
              view = self[pyncarray::pyslice_to_slice(self.shape(0),
                                                      idx.cast<py::slice>())];
+           } else if (py::isinstance<py::ellipsis>(idx)) {
+             view = self[ncarray::Ellipsis{}];
            } else if (py::isinstance<py::tuple>(idx)) {
              view =
                pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
