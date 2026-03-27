@@ -22,6 +22,18 @@
 namespace ncarray {
 
   namespace impl {
+    /**
+     * Recursively fill an array with with a scalar value.
+     *
+     * This function can cast the value as it is assigned.
+     *
+     * @tparam T The type of the value to fill into the array.
+     * @tparam A The type of the array being operated on (ArrayLike constrained.)
+     * @param[in] arr The array.
+     * @param[out] current_data The pointer to the current data in the array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] value The value to fill into the array.
+     */
     template <typename T, ArrayLike A>
     void fill_recursive(const A& arr, void* current_data, ssize_t axis, T value) {
       ssize_t dim = arr.shape()[axis];
@@ -37,6 +49,21 @@ namespace ncarray {
       }
     }
 
+    /**
+     * Recursively assign one array to another. The shapes MUST match.
+     *
+     * This function can cast the values as they are assigned.
+     *
+     * @tparam DestT The dtype of the destination array.
+     * @tparam SrcT The dtype of the source array.
+     * @tparam Dest The type of array to assign to. (ArrayLike constrained.)
+     * @tparam Src The type of array to pull values from. (ArrayLike constrained.)
+     * @param[out] dest The array to assign to.
+     * @param[in] src The array to pull values from.
+     * @param[in] dest_data The pointer to the current data in the destination.
+     * @param[in] src_data The pointer to the current data in the source.
+     * @param[in] axis The current axis being traversed.
+     */
     template <typename DestT, typename SrcT, ArrayLike Dest, ArrayLike Src>
     void assign_recursive(Dest& dest,
                           const Src& src,
@@ -60,6 +87,18 @@ namespace ncarray {
       }
     }
 
+    /**
+     * Recursively copy an array into an output location.
+     *
+     * This function can cast the value as it is assigned.
+     *
+     * @tparam T The dtype for the source array.
+     * @tparam OutputType The dtype for the destination array.
+     * @param[in] arr The array.
+     * @param[in] current_src The pointer to the current data in the source array.
+     * @param[in] axis The current axis being traversed.
+     * @param[out] dest Reference to pointer for the destination array.
+     */
     template <typename T, typename OutputType, ArrayLike A>
     void copy_into_recursive(const A& arr,
                              const void* current_src,
@@ -82,9 +121,19 @@ namespace ncarray {
     }
 
     /**
-     * Internal recursive engine for reductions.
-     * T: The element type (deduced via dispatch)
-     * A: The array-like type (View, Ref, etc.)
+     * Recursively reduce an array to a scalar.
+     *
+     * This function can cast the value as it is assigned.
+     *
+     * @tparam T The dtype for the source array.
+     * @tparam Op The type of the reduction function.
+     * @tparam AccumT The type of the value being accumulated into.
+     * @tparam A The type of the array object.
+     * @param[in] arr The array.
+     * @param[in] current_data The pointer to the current data in the source array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] op The reduction operation.
+     * @param[in] acc The identity value for the reduction. (on recursion it accumulates)
      */
     template <typename T, typename Op, typename AccumT, ArrayLike A>
     AccumT reduce_recursive(const A& arr,
@@ -107,6 +156,26 @@ namespace ncarray {
       return acc;
     }
 
+    /**
+     * Recursively operate on two arrays.
+     *
+     * E.g. this function can do binary add/subtract/multiply and so on.
+     *
+     * This function can cast the value as it is assigned.
+     *
+     * @tparam T The dtype for the source array.
+     * @tparam Op The type of the reduction function.
+     * @tparam AccumT The type of the value being accumulated into.
+     * @tparam A The type of the left hand side array.
+     * @tparam B The type of the right hand side array.
+     * @param[in] left_arr The left hand side array.
+     * @param[in] right_arr The right hand side array.
+     * @param[in] lhs_data The pointer to the current data in the left hand side array.
+     * @param[in] right_data The pointer to the current right hand side's data.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] op The reduction operation.
+     * @param[out] res The output array's data.
+     */
     template <typename T, typename Op, typename ResultTOrAccumT, ArrayLike A, ArrayLike B>
     void binary_reduce_recursive(const A& left_arr,
                                  const B& right_arr,
@@ -133,6 +202,25 @@ namespace ncarray {
       }
     }
 
+    /**
+     * Recursively operate on an array, broadcasting a scalar.
+     *
+     * E.g. this function can do binary add/subtract/multiply and so on.
+     *
+     * This function can cast the value as it is assigned.
+     *
+     * @tparam T The dtype for the source array.
+     * @tparam ScalarT The type of the scalar.
+     * @tparam Op The type of the reduction function.
+     * @tparam ResultT The type of the output array.
+     * @tparam A The type of the left hand side array.
+     * @param[in] arr The array.
+     * @param[in] current_data The pointer to the current data in the source array.
+     * @param[in] scalar_val The scalar to broadcast.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] op The reduction operation.
+     * @param[out] res The output array.
+     */
     template <typename T, typename ScalarT, typename Op, typename ResultT, ArrayLike A>
     void binary_scalar_recursive(const A& arr,
                                  const void* current_data,
@@ -227,7 +315,7 @@ namespace ncarray {
         *output += static_cast<AccumT>(*reinterpret_cast<const T*>(data));
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       AccumT result =
           impl::reduce_recursive<T>(arr, arr.data(), starting_axis, sum_op_internal, AccumT{0});
       return Scalar{result};
@@ -246,7 +334,7 @@ namespace ncarray {
         *output += static_cast<AccumT>(*reinterpret_cast<const T*>(data));
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       AccumT result =
           impl::reduce_recursive<T>(arr,
                                     arr.data(),
@@ -270,7 +358,7 @@ namespace ncarray {
           *output = val;
         }
       };
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       T result = impl::reduce_recursive<T>(arr,
                                            arr.data(),
                                            starting_axis,
@@ -292,7 +380,7 @@ namespace ncarray {
           *output = val;
         }
       };
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       T result = impl::reduce_recursive<T>(arr,
                                            arr.data(),
                                            starting_axis,
@@ -347,7 +435,7 @@ namespace ncarray {
             *reinterpret_cast<const T*>(rhs);
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
       impl::binary_reduce_recursive<T, decltype(add_op_internal), AccumT>(left,
                                                                           right,
@@ -378,7 +466,7 @@ namespace ncarray {
             static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - *reinterpret_cast<const T*>(rhs);
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
       impl::binary_reduce_recursive<T, decltype(sub_op_internal), DiffT>(left,
                                                                          right,
@@ -408,7 +496,7 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       T* result_ptr = reinterpret_cast<T*>(result.data());
       impl::binary_reduce_recursive<T, decltype(mul_op_internal), T>(left,
                                                                      right,
@@ -453,7 +541,7 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
       impl::binary_reduce_recursive<T, decltype(truediv_op_internal), ResultT>(left,
                                                                                right,
@@ -547,7 +635,7 @@ namespace ncarray {
         *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) + rhs;
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -578,7 +666,7 @@ namespace ncarray {
         *output = static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - rhs;
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -606,7 +694,7 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -648,7 +736,7 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis{0};
+      ssize_t starting_axis { 0 };
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
