@@ -174,6 +174,10 @@ namespace {
 
   template <typename ArrayT>
   void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
+    using ViewType = typename ArrayT::ViewType;
+
+    using ViewOrScalar = std::variant<ViewType, ncarray::Scalar>;
+
     arr_cl.def("__repr__", &ArrayT::repr)
     .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
       auto* shape = self.shape();
@@ -224,24 +228,34 @@ namespace {
          py::arg("dtype"),
          "Convert an NCArray* to the specified data type.")
     .def("__getitem__",
-         [](const ArrayT& self, py::object idx) {
+         [](const ArrayT& self, py::object idx) -> ViewOrScalar {
+           // NOTE: The Python bindings diverge from the C++ library on scalars.
+           //       For simplicity, in Python, scalars are returned as scalars.
+           //       In C++, they remain as an object tied to the array class.
+           ViewType view;
            if (py::isinstance<py::int_>(idx)) {
-             return py::cast(self[idx.cast<ssize_t>()]);
+             view = self[idx.cast<ssize_t>()];
            } else if (py::isinstance<py::slice>(idx)) {
              return
-               py::cast(self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())]);
+               view = self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())];
            } else if (py::isinstance<py::tuple>(idx)) {
-             return pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
+             view = pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
                                                   self,
                                                   pyncarray::All{});
            } else {
              throw py::type_error("Invalid indexing argument!");
            }
+           // For convenience convert scalars to... scalars
+           if (view.ndim() == 0) {
+             return view.template get_scalar(view.data());
+           }
+
+           return view;
          },
          py::is_operator())
     .def("__setitem__",
          [](const ArrayT& self, py::object idx, py::object val) {
-           typename ArrayT::ViewType view;
+           ViewType view;
            if (py::isinstance<py::int_>(idx)) {
              view = self[idx.cast<ssize_t>()];
            } else if (py::isinstance<py::slice>(idx)) {
@@ -250,7 +264,7 @@ namespace {
              view =
                pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
                                              self,
-                                             pyncarray::All{}).template cast<ArrayT>();
+                                             pyncarray::All{});
            } else {
              throw py::type_error("Invalid indexing argument!");
            }

@@ -56,6 +56,14 @@ namespace ncarray {
 
     NCA_HD inline bool read_only() const { return m_read_only; }
 
+    /**
+     * The repr functions return a string to identify the storage policy when
+     * writing out string representations of the array.
+     */
+    NCA_HD inline const char* storage_repr() const {
+      return static_cast<Derived*>(this)->storage_repr();
+    }
+
   protected:
     DType m_dtype;
     void* m_data { nullptr };
@@ -65,13 +73,21 @@ namespace ncarray {
   /**
    * The ViewPolicy dictates arrays that have only a view of the data.
    */
-  struct ViewPolicy : public StoragePolicy<ViewPolicy> {};
+  struct ViewPolicy : public StoragePolicy<ViewPolicy> {
+  public:
+    NCA_HD inline const char* storage_repr() const {
+      return "View";
+    }
+  };
 
   /**
    * The RefPolicy dictates arrays which hold pointers to the individual
    * components of the array.
    */
   struct RefPolicy : public StoragePolicy<RefPolicy> {
+  public:
+    NCA_HD inline const char* storage_repr() const { return "Ref"; }
+
   protected:
     void* m_ref_ptrs[NCARRAY_MAX_NDIM];
   };
@@ -81,6 +97,9 @@ namespace ncarray {
    * memory that backs the array.
    */
   struct OwnerPolicy : public StoragePolicy<OwnerPolicy> {
+  public:
+    NCA_HD inline const char* storage_repr() const { return "Owner"; }
+
     NCA_HD inline void allocate(ssize_t nbytes) {
       m_storage = std::make_unique<std::uint8_t[]>(nbytes);
     }

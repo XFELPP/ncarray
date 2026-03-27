@@ -807,8 +807,8 @@ namespace ncarray {
   }
 
   // --- Copy and Modification --- //
-
-  template <ArrayLike A> void fill(A& arr, Scalar val) {
+  template <ArrayLike A>
+  void fill(A& arr, Scalar val) {
     auto fill_op = [&]<typename T>() {
       auto fill_op_internal = [](auto&& arg) -> T {
         using FromT = std::decay_t<decltype(arg)>;
@@ -821,8 +821,8 @@ namespace ncarray {
     dispatch(arr.dtype(), fill_op);
   }
 
-  template <ArrayLike A, typename OutputType> void copy_into(const A& arr,
-                                                             OutputType*& dest) {
+  template <ArrayLike A, typename OutputType>
+  void copy_into(const A& arr, OutputType*& dest) {
     auto copy_op = [&]<typename T>() {
       ssize_t starting_axis { 0 };
       impl::copy_into_recursive<T, OutputType>(arr, arr.data(), starting_axis, dest);
@@ -830,8 +830,8 @@ namespace ncarray {
     dispatch(arr.dtype(), copy_op);
   }
 
-  template <ArrayLike Dest, ArrayLike Src> void assign(Dest dest,
-                                                       const Src src) {
+  template <ArrayLike Dest, ArrayLike Src>
+  void assign(Dest dest, const Src src) {
     // Only deal with identical shapes for now
     if (dest.ndim() != src.ndim()) {
       throw type_error("Shapes must match for assignment");

@@ -114,16 +114,16 @@ namespace pyncarray {
   using All = typename AllCombos<IndexTypes, 4>::type;
 
   template <class ArrayT, typename... Tuples>
-  py::object dispatch_cartesian(const py::tuple& t,
-                                const ArrayT& self,
-                                TypeList<Tuples...>) {
-    py::object result = py::none();
+  typename ArrayT::ViewType dispatch_cartesian(const py::tuple& t,
+                                               const ArrayT& self,
+                                               TypeList<Tuples...>) {
+    typename ArrayT::ViewType result;
     bool matched = false;
     (
         [&] {
           if (!matched) {
             matched = try_tuple_invoke<Tuples>(t, [&](auto&&... args) {
-              result = py::cast(self[std::forward<decltype(args)>(args)...]);
+              result = self[std::forward<decltype(args)>(args)...];
             });
           }
         }(),
