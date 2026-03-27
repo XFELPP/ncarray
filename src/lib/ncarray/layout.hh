@@ -98,8 +98,8 @@ namespace ncarray {
      * depending on the specialization.
      */
     NCA_HD inline bool is_pointer_axis(ssize_t axis) const {
-      if constexpr (requires { static_cast<Derived*>(this)->is_pointer_impl(axis); }) {
-        return static_cast<Derived*>(this)->is_pointer_impl(axis);
+      if constexpr (requires { static_cast<const Derived*>(this)->is_pointer_impl(axis); }) {
+        return static_cast<const Derived*>(this)->is_pointer_impl(axis);
       }
       return false;
     }
@@ -173,6 +173,14 @@ namespace ncarray {
       return m_strides[dim];
     }
 
+    /**
+     * The repr functions return a string to identify the storage policy when
+     * writing out string representations of the array.
+     */
+    NCA_HD inline const char* layout_repr() const {
+      return static_cast<Derived*>(this)->layout_repr();
+    }
+
   protected:
     Metadata m_shape;
     Metadata m_strides;
@@ -222,6 +230,8 @@ namespace ncarray {
       return axis == this->m_pointer_axis;
     }
 
+    NCA_HD inline const char* layout_repr() const { return "NCArray"; }
+
   protected:
     Metadata m_offsets;
   };
@@ -232,6 +242,12 @@ namespace ncarray {
    */
   struct SOArrayPolicy : public LayoutPolicy<SOArrayPolicy> {
   public:
+    /**
+     * Via the revised buffer protocol specification in PEP3118, a "suboffset"
+     * greater than or equal to 0 indicates that the value on that axis is a pointer.
+     * The specific value dictates how many bytes to add to it AFTER dereferencing.
+     * Negative suboffsets mean no-pointer axis, and no special dereferencing
+     */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
       std::uint8_t* next = reinterpret_cast<std::uint8_t*>(data) + index * m_strides[axis];
       if (m_suboffsets[axis] >= 0) {
@@ -262,6 +278,8 @@ namespace ncarray {
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
       return m_suboffsets[axis] >= 0;
     }
+
+    NCA_HD inline const char* layout_repr() const { return "SOArray"; }
 
   protected:
     Metadata m_suboffsets;
