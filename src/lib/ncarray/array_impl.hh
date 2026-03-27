@@ -68,6 +68,16 @@ namespace {
 
 namespace ncarray {
   // --- Array Implementations --- //
+  /**
+   * The ArrayImpl provides the mean entry point for all array types.
+   * It is a templated class inheriting from Layout and Storage classes, allowing
+   * it to be customized to different kinds of array setups. E.g. suboffsets and
+   * NCArray style classes are both accessed via the ArrayImpl.
+   *
+   * The class provides indexing operations as well as utilities such as repr.
+   * Class member functions are implemented in `array_operations` and the two
+   * headers must be combined, in the include order, array_impl then array_operations.
+   */
   template <typename Layout, typename Storage>
   class ArrayImpl : public Layout, public Storage {
   public:
@@ -110,7 +120,6 @@ namespace ncarray {
     {
       // Owner needs to move buffer
       if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
-        this->m_storage = std::move(other.m_storage);
         this->m_data = reinterpret_cast<void*>(this->m_storage.get());
       } else if constexpr (std::is_same_v<Storage, RefPolicy>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
@@ -152,7 +161,6 @@ namespace ncarray {
         Storage::operator=(std::move(static_cast<Storage&>(other)));
 
         if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
-          this->m_storage = std::move(other.m_storage);
           this->m_data = this->m_storage.get();
         } else if constexpr (std::is_same_v<Storage, RefPolicy>) {
           for (ssize_t i = 0; i < this->ndim(); ++i) {
@@ -334,12 +342,9 @@ namespace ncarray {
             idx += this->m_shape[axis];
           }
 
-          if (is_pointer) {
-            offset = idx;
-          } else {
-            // TODO: Suboffsets support
-            offset = this->m_offsets[axis] + idx * this->m_strides[axis];
-          }
+          // The advance function for the layout will handle strides and offsets
+          // This allows different layouts to adjust appropriately.
+          offset = idx;
         } else if constexpr (std::is_same_v<std::decay_t<Arg>, Slice>) {
           ssize_t start = arg.start;
           ssize_t stop = arg.stop;
@@ -356,6 +361,8 @@ namespace ncarray {
           stride *= step;
           if constexpr (requires { this->m_offsets; }) {
             offset = this->m_offsets[axis] + start * this->m_strides[axis];
+          } else if constexpr (requires { this->m_suboffsets; }) {
+            offset = this->m_suboffsets[axis];
           }
         }
 
@@ -404,12 +411,11 @@ namespace ncarray {
       ssize_t n_dim { 0 };
       ssize_t pointer_axis { -1 };
 
+      // NOTE: Passing a length 1 slice does NOT collapse/remove the axis.
+      // E.g. A 3-D NCArray* ncarr indexed as ncarr[:1] will have shape (1, ...)
+      // The `squeeze` function can be used to remove this extra length 1 axis.
       for (ssize_t i = 0; i < this->ndim(); ++i) {
         const auto& d = axes[i];
-
-        // NOTE: This call is critical! It makes that correct dereferncing and
-        // offset accumulation occurs, regardless of subtype
-        data_ptr = this->advance(data_ptr, i, d.offset);
 
         if (!d.collapsed) {
           if (d.is_pointer) {
@@ -417,9 +423,12 @@ namespace ncarray {
           }
           new_shape[n_dim] = d.length;
           new_strides[n_dim] = d.stride;
-          // Because the advance function is called, offsets are already baked in
-          new_offsets[n_dim] = 0;
+          new_offsets[n_dim] = d.offset;
           n_dim++;
+        } else {
+          // NOTE: This call is critical! It makes that correct dereferncing and
+          // offset accumulation occurs, regardless of subtype
+          data_ptr = this->advance(data_ptr, i, d.offset);
         }
       }
 
@@ -606,8 +615,8 @@ namespace ncarray {
     }
 
   protected:
-    virtual std::string class_name() const {
-      return std::string("NCArrayView");
+    std::string class_name() const {
+      return std::string(this->layout_repr()) + std::string(this->storage_repr());
     }
 
     /**
