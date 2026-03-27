@@ -16,12 +16,18 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <sstream>
-#include <sys/types.h>
 #include <vector>
 
 namespace py = pybind11;
