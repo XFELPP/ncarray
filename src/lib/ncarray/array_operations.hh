@@ -9,8 +9,9 @@
 #ifndef NCARRAY_ARRAY_OPERATIONS_HH
 #define NCARRAY_ARRAY_OPERATIONS_HH
 
-#include "array_traits.hh"
-#include "dtype.hh"
+#include "ncarray/array_traits.hh"
+#include "ncarray/dtype.hh"
+#include "ncarray/array_impl.hh"
 
 #include <cmath>
 #include <complex>
@@ -27,13 +28,7 @@ namespace ncarray {
       bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
 
       for (ssize_t i = 0; i < dim; ++i) {
-        void* next_ptr;
-        if (get_is_pointer_axis(arr, axis)) {
-          next_ptr = reinterpret_cast<void**>(current_data)[i];
-        } else {
-          next_ptr = reinterpret_cast<uint8_t*>(current_data) + i * arr.strides()[axis] +
-              arr.offsets()[axis];
-        }
+        void* next_ptr = arr.advance(current_data, axis, i);
         if (is_last_axis) {
           *reinterpret_cast<T*>(next_ptr) = value;
         } else {
@@ -52,24 +47,9 @@ namespace ncarray {
       bool is_last_axis = (axis == static_cast<ssize_t>(dest.ndim()) - 1);
 
       for (ssize_t i = 0; i < dim; ++i) {
-        void* next_dest;
-        if (get_is_pointer_axis(dest, axis)) {
-          next_dest = reinterpret_cast<void**>(dest_data)[i];
-        } else {
-          next_dest = reinterpret_cast<uint8_t*>(dest_data) + i * dest.strides()[axis] +
-              dest.offsets()[axis];
-        }
+        void* next_dest = dest.advance(dest_data, axis, i);
 
-        const void* next_src = [&]() {
-          if (get_is_pointer_axis(src, axis)) {
-            return reinterpret_cast<const void* const *>(src_data)[i];
-          } else {
-            auto* data =
-              reinterpret_cast<const uint8_t*>(src_data) + i * src.strides()[axis] +
-              src.offsets()[axis];
-            return reinterpret_cast<const void*>(data);
-          }
-        }();
+        const void* next_src = const_cast<const void*>(src.advance(src_data, axis, i));
 
         if (is_last_axis) {
           SrcT val = *reinterpret_cast<const SrcT*>(next_src);
@@ -88,32 +68,15 @@ namespace ncarray {
       ssize_t dim = arr.shape()[axis];
       bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
 
-      const ssize_t* strides = arr.strides();
-      const ssize_t* offsets = if_has_get_offsets(arr);
-
       for (ssize_t i = 0; i < dim; ++i) {
-        if (get_is_pointer_axis(arr, axis)) {
-          const void* next_ptr = reinterpret_cast<const void* const*>(current_src)[i];
-          if (is_last_axis) {
-            T val = *reinterpret_cast<const T*>(next_ptr);
-            *dest = op_traits<T>::template cast<OutputType>(val);
-            dest++;
-          } else {
-            copy_into_recursive<T, OutputType>(arr, next_ptr, axis + 1, dest);
-          }
-        } else {
-          const ssize_t offset = offsets ? offsets[axis] : 0;
-          const ssize_t stride = strides[axis];
-          const uint8_t* next_ptr =
-              reinterpret_cast<const uint8_t*>(current_src) + i * stride + offset;
+        const void* next_ptr = const_cast<const void*>(arr.advance(current_src, axis, i));
 
-          if (is_last_axis) {
-            T val = *reinterpret_cast<const T*>(next_ptr);
-            *dest = op_traits<T>::template cast<OutputType>(val);
-            dest++;
-          } else {
-            copy_into_recursive<T, OutputType>(arr, next_ptr, axis + 1, dest);
-          }
+        if (is_last_axis) {
+          T val = *reinterpret_cast<const T*>(next_ptr);
+          *dest = op_traits<T>::template cast<OutputType>(val);
+          dest++;
+        } else {
+          copy_into_recursive<T, OutputType>(arr, next_ptr, axis + 1, dest);
         }
       }
     }
@@ -133,23 +96,12 @@ namespace ncarray {
       bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
 
       for (ssize_t i = 0; i < dim; ++i) {
-        if (get_is_pointer_axis(arr, axis)) {
-          const void* next_ptr = reinterpret_cast<const void* const*>(current_data)[i];
-          if (is_last_axis) {
-            op(reinterpret_cast<const uint8_t*>(next_ptr), &acc);
-          } else {
-            acc = reduce_recursive<T>(arr, next_ptr, axis + 1, op, acc);
-          }
+        const void* next_ptr = const_cast<const void*>(arr.advance(current_data, axis, i));
+
+        if (is_last_axis) {
+          op(reinterpret_cast<const std::uint8_t*>(next_ptr), &acc);
         } else {
-          const ssize_t* strides = arr.strides();
-          const ssize_t* offsets = arr.offsets();
-          const uint8_t* ptr =
-            reinterpret_cast<const uint8_t*>(current_data) + i * strides[axis] + offsets[axis];
-          if (is_last_axis) {
-            op(ptr, &acc);
-          } else {
-            acc = reduce_recursive<T>(arr, ptr, axis + 1, op, acc);
-          }
+          acc = reduce_recursive<T>(arr, next_ptr, axis + 1, op, acc);
         }
       }
       return acc;
@@ -167,56 +119,16 @@ namespace ncarray {
       ssize_t dim = left_arr.shape()[axis];
       bool is_last_axis = (axis == static_cast<ssize_t>(left_arr.ndim()) - 1);
 
-      const ssize_t* strides_l = left_arr.strides();
-      const ssize_t* strides_r = right_arr.strides();
-
-      const ssize_t* offsets_l = if_has_get_offsets(left_arr);
-      const ssize_t* offsets_r = if_has_get_offsets(right_arr);
-
       for (ssize_t i = 0; i < dim; ++i) {
-        if (get_is_pointer_axis(left_arr, axis)) {
-          const void* lhs_next = reinterpret_cast<const void* const*>(lhs_data)[i * strides_l[axis]];
-          const void* rhs_next = [&]() {
-            if (get_is_pointer_axis(right_arr, axis)) {
-              return reinterpret_cast<const void* const*>(rhs_data)[i * strides_r[axis]];
-            } else {
-              size_t offset = offsets_r ? offsets_r[axis] : 0;
-              auto* data =
-                reinterpret_cast<const std::uint8_t*>(rhs_data) + i * strides_r[axis] + offset;
-              return reinterpret_cast<const void*>(data);
-            }
-          }();
+        const void* lhs_next = const_cast<const void*>(left_arr.advance(lhs_data, axis, i));
+        const void* rhs_next = const_cast<const void*>(right_arr.advance(rhs_data, axis, i));
 
-          if (is_last_axis) {
-            op(reinterpret_cast<const std::uint8_t*>(lhs_next),
-               reinterpret_cast<const std::uint8_t*>(rhs_next),
-               res);
-            res++;
-          } else {
-            binary_reduce_recursive<T>(left_arr, right_arr, lhs_next, rhs_next, axis + 1, op, res);
-          }
+        if (is_last_axis) {
+          op(reinterpret_cast<const std::uint8_t*>(lhs_next),
+             reinterpret_cast<const std::uint8_t*>(rhs_next), res);
+          res++;
         } else {
-          size_t offset_l = offsets_l ? offsets_l[axis] : 0;
-          const std::uint8_t* lhs_ptr =
-            reinterpret_cast<const std::uint8_t*>(lhs_data) + i * strides_l[axis] + offset_l;
-
-          const void* rhs_ptr = [&]() {
-            if (get_is_pointer_axis(right_arr, axis)) {
-              return reinterpret_cast<const void* const*>(rhs_data)[i * strides_r[axis]];
-            } else {
-              size_t offset = offsets_r ? offsets_r[axis] : 0;
-              auto* data =
-                  reinterpret_cast<const std::uint8_t*>(rhs_data) + i * strides_r[axis] + offset;
-              return reinterpret_cast<const void*>(data);
-            }
-          }();
-
-          if (is_last_axis) {
-            op(lhs_ptr, reinterpret_cast<const std::uint8_t*>(rhs_ptr), res);
-            res++;
-          } else {
-            binary_reduce_recursive<T>(left_arr, right_arr, lhs_ptr, rhs_ptr, axis + 1, op, res);
-          }
+          binary_reduce_recursive<T>(left_arr, right_arr, lhs_next, rhs_next, axis + 1, op, res);
         }
       }
     }
@@ -232,25 +144,12 @@ namespace ncarray {
       bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
 
       for (ssize_t i = 0; i < dim; ++i) {
-        if (get_is_pointer_axis(arr, axis)) {
-          const void* next_ptr = reinterpret_cast<const void* const*>(current_data)[i];
-          if (is_last_axis) {
-            op(reinterpret_cast<const uint8_t*>(next_ptr), scalar_val, res);
-            res++;
-          } else {
-            binary_scalar_recursive<T>(arr, next_ptr, scalar_val, axis + 1, op, res);
-          }
+        const void* next_ptr = const_cast<const void*>(arr.advance(current_data, axis, i));
+        if (is_last_axis) {
+          op(reinterpret_cast<const uint8_t*>(next_ptr), scalar_val, res);
+          res++;
         } else {
-          const ssize_t* strides = arr.strides();
-          const ssize_t* offsets = arr.offsets();
-          const uint8_t* ptr =
-              reinterpret_cast<const uint8_t*>(current_data) + i * strides[axis] + offsets[axis];
-          if (is_last_axis) {
-            op(reinterpret_cast<const uint8_t*>(ptr), scalar_val, res);
-            res++;
-          } else {
-            binary_scalar_recursive<T>(arr, ptr, scalar_val, axis + 1, op, res);
-          }
+          binary_scalar_recursive<T>(arr, next_ptr, scalar_val, axis + 1, op, res);
         }
       }
     }
@@ -261,8 +160,7 @@ namespace ncarray {
     using std::invalid_argument::invalid_argument;
   };
 
-  template <typename Visitor>
-  auto dispatch(DType type, Visitor&& visitor) {
+  template <typename Visitor> auto dispatch(DType type, Visitor&& visitor) {
     switch (type) {
     case DType::bool_: {
       return visitor.template operator()<bool>();
@@ -271,7 +169,7 @@ namespace ncarray {
       return visitor.template operator()<char>();
     }
     // Stuck becuase of std::uint8_t
-    //case DType::uchar: {
+    // case DType::uchar: {
     //  return visitor.template operator()<unsigned char>();
     //}
     case DType::uint8: {
@@ -329,13 +227,10 @@ namespace ncarray {
         *output += static_cast<AccumT>(*reinterpret_cast<const T*>(data));
       };
 
-      ssize_t starting_axis { 0 };
-      AccumT result = impl::reduce_recursive<T>(arr,
-                                                arr.data(),
-                                                starting_axis,
-                                                sum_op_internal,
-                                                AccumT {0});
-      return Scalar {result};
+      ssize_t starting_axis{0};
+      AccumT result =
+          impl::reduce_recursive<T>(arr, arr.data(), starting_axis, sum_op_internal, AccumT{0});
+      return Scalar{result};
     };
 
     return dispatch(arr.dtype(), sum_operation);
@@ -352,13 +247,14 @@ namespace ncarray {
       };
 
       ssize_t starting_axis{0};
-      AccumT result = impl::reduce_recursive<T>(arr,
-                                                arr.data(),
-                                                starting_axis,
-                                                sum_op_internal,
-                                                AccumT{0});
+      AccumT result =
+          impl::reduce_recursive<T>(arr,
+                                    arr.data(),
+                                    starting_axis,
+                                    sum_op_internal,
+                                    AccumT{0});
       ResultT mean = static_cast<ResultT>(result) / static_cast<double>(arr.size());
-      return Scalar {mean};
+      return Scalar{mean};
     };
 
     return dispatch(arr.dtype(), sum_operation);
@@ -374,7 +270,7 @@ namespace ncarray {
           *output = val;
         }
       };
-      ssize_t starting_axis {0};
+      ssize_t starting_axis{0};
       T result = impl::reduce_recursive<T>(arr,
                                            arr.data(),
                                            starting_axis,
@@ -396,16 +292,36 @@ namespace ncarray {
           *output = val;
         }
       };
-      ssize_t starting_axis {0};
+      ssize_t starting_axis{0};
       T result = impl::reduce_recursive<T>(arr,
                                            arr.data(),
                                            starting_axis,
                                            min_op_internal,
                                            op_traits<T>::max());
-      return Scalar {result};
+      return Scalar{result};
     };
 
     return dispatch(arr.dtype(), min_operation);
+  }
+
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::sum() const {
+    return ncarray::sum(*this);
+  }
+
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::max() const {
+    return ncarray::max(*this);
+  }
+
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::min() const {
+    return ncarray::min(*this);
+  }
+
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::mean() const {
+    return ncarray::mean(*this);
   }
 
   // Binary non-broadcast operations (same shape)
@@ -414,7 +330,7 @@ namespace ncarray {
   // but this requires supporting user-provided buffer to put result in
   // TODO: Handle different shape, types and so on for left/right. Not dealt with atm
 
-  template<ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
   auto add(const Left& left, const Right& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using AccumT = typename op_traits<T>::sum_type;
@@ -426,13 +342,12 @@ namespace ncarray {
     auto add_operation = [&]<typename T>() {
       using AccumT = typename op_traits<T>::sum_type;
 
-      auto add_op_internal = [](const std::uint8_t* lhs,
-                                const std::uint8_t* rhs,
-                                AccumT* output) {
-        *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) + *reinterpret_cast<const T*>(rhs);
+      auto add_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, AccumT* output) {
+        *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) +
+            *reinterpret_cast<const T*>(rhs);
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
       impl::binary_reduce_recursive<T, decltype(add_op_internal), AccumT>(left,
                                                                           right,
@@ -447,7 +362,7 @@ namespace ncarray {
     return result;
   }
 
-  template<ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
   auto sub(const Left& left, const Right& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using DiffT = typename op_traits<T>::diff_type;
@@ -458,15 +373,12 @@ namespace ncarray {
 
     auto sub_operation = [&]<typename T>() {
       using DiffT = typename op_traits<T>::diff_type;
-      auto sub_op_internal = [](const std::uint8_t* lhs,
-                                const std::uint8_t* rhs,
-                                DiffT* output) {
+      auto sub_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, DiffT* output) {
         *output =
-          static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) -
-          *reinterpret_cast<const T*>(rhs);
+            static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - *reinterpret_cast<const T*>(rhs);
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
       impl::binary_reduce_recursive<T, decltype(sub_op_internal), DiffT>(left,
                                                                          right,
@@ -496,7 +408,7 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       T* result_ptr = reinterpret_cast<T*>(result.data());
       impl::binary_reduce_recursive<T, decltype(mul_op_internal), T>(left,
                                                                      right,
@@ -514,9 +426,9 @@ namespace ncarray {
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
   auto truediv(const Left& left, const Right& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-        using ResultT = typename op_traits<T>::truediv_type;
-        return dtype_traits<ResultT>::value;
-      });
+      using ResultT = typename op_traits<T>::truediv_type;
+      return dtype_traits<ResultT>::value;
+    });
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
@@ -529,7 +441,7 @@ namespace ncarray {
         const T rhs_val = *reinterpret_cast<const T*>(rhs);
 
         if (rhs_val == T(0)) {
-          bool is_finite { false };
+          bool is_finite{false};
           if constexpr (requires { lhs_val.real(); }) {
             is_finite = std::isfinite(lhs_val.real()) && std::isfinite(lhs_val.imag());
           } else {
@@ -541,7 +453,7 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
       impl::binary_reduce_recursive<T, decltype(truediv_op_internal), ResultT>(left,
                                                                                right,
@@ -556,11 +468,71 @@ namespace ncarray {
     return result;
   }
 
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::add(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator+(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::sub(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator-(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::mul(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator*(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::truediv(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator/(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
+  }
+
   // --- Binary operations with a scalar broadcast --- //
 
   template <ArrayLike Left, OwningArrayLike ResultType>
   ResultType add_scalar(const Left& left, const Scalar& right) {
-    DType result_dtype = dispatch(left.dtype(), [] <typename T> () {
+    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using AccumT = typename op_traits<T>::sum_type;
 
       return dtype_traits<AccumT>::value;
@@ -575,19 +547,15 @@ namespace ncarray {
         *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) + rhs;
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
       };
       T scalar_val = std::visit(cast_op, right);
       AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
-      impl::binary_scalar_recursive<T, AccumT>(left,
-                                               left.data(),
-                                               scalar_val,
-                                               starting_axis,
-                                               add_op_internal,
-                                               result_ptr);
+      impl::binary_scalar_recursive<T, AccumT>(left, left.data(), scalar_val, starting_axis,
+                                               add_op_internal, result_ptr);
     };
 
     dispatch(left.dtype(), add_operation);
@@ -610,19 +578,15 @@ namespace ncarray {
         *output = static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - rhs;
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
       };
       T scalar_val = std::visit(cast_op, right);
       DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
-      impl::binary_scalar_recursive<T, DiffT>(left,
-                                              left.data(),
-                                              scalar_val,
-                                              starting_axis,
-                                              sub_op_internal,
-                                              result_ptr);
+      impl::binary_scalar_recursive<T, DiffT>(left, left.data(), scalar_val, starting_axis,
+                                              sub_op_internal, result_ptr);
     };
 
     dispatch(left.dtype(), sub_operation);
@@ -642,19 +606,15 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
       };
       T scalar_val = std::visit(cast_op, right);
       T* result_ptr = reinterpret_cast<T*>(result.data());
-      impl::binary_scalar_recursive<T>(left,
-                                       left.data(),
-                                       scalar_val,
-                                       starting_axis,
-                                       mul_op_internal,
-                                       result_ptr);
+      impl::binary_scalar_recursive<T>(left, left.data(), scalar_val, starting_axis,
+                                       mul_op_internal, result_ptr);
     };
 
     dispatch(left.dtype(), mul_operation);
@@ -664,21 +624,19 @@ namespace ncarray {
   template <ArrayLike Left, OwningArrayLike ResultType>
   auto truediv_scalar(const Left& left, const Scalar& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-        using ResultT = typename op_traits<T>::truediv_type;
-        return dtype_traits<ResultT>::value;
-      });
+      using ResultT = typename op_traits<T>::truediv_type;
+      return dtype_traits<ResultT>::value;
+    });
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto truediv_operation = [&]<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
-      auto truediv_op_internal = [](const std::uint8_t* lhs,
-                                    const T rhs,
-                                    ResultT* output) {
+      auto truediv_op_internal = [](const std::uint8_t* lhs, const T rhs, ResultT* output) {
         const T lhs_val = *reinterpret_cast<const T*>(lhs);
 
         if (rhs == T(0)) {
-          bool is_finite { false };
+          bool is_finite{false};
           if constexpr (requires { lhs_val.real(); }) {
             is_finite = std::isfinite(lhs_val.real()) && std::isfinite(lhs_val.imag());
           } else {
@@ -690,30 +648,168 @@ namespace ncarray {
         }
       };
 
-      ssize_t starting_axis { 0 };
+      ssize_t starting_axis{0};
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
       };
       T scalar_val = std::visit(cast_op, right);
       ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
-      impl::binary_scalar_recursive<T>(left,
-                                       left.data(),
-                                       scalar_val,
-                                       starting_axis,
-                                       truediv_op_internal,
-                                       result_ptr);
+      impl::binary_scalar_recursive<T>(left, left.data(), scalar_val, starting_axis,
+                                       truediv_op_internal, result_ptr);
     };
 
     dispatch(left.dtype(), truediv_operation);
     return result;
   }
 
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::add(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::add_scalar<ViewType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator+(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::add_scalar<ViewType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::sub(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::sub_scalar<ViewType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator-(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::sub_scalar<ViewType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::mul(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::mul_scalar<ViewType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator*(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::mul_scalar<ViewType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::truediv(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::truediv_scalar<ViewType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator/(const Scalar& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+    return ncarray::truediv_scalar<ViewType, OwnerType>(*this, other);
+  }
+
+  // --- Iterators --- //
+  template <typename L, typename S>
+  typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::begin() {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using Iterator = typename ArrayImpl<L, S>::Iterator;
+
+    Metadata offset_type;
+    if constexpr (requires { this->m_offsets; }) {
+      offset_type = this->m_offsets;
+    } else {
+      offset_type = this->m_suboffsets;
+    }
+
+    return Iterator(ViewType(this->m_data,
+                             this->m_shape,
+                             this->m_strides,
+                             offset_type,
+                             this->m_dtype,
+                             this->m_pointer_axis,
+                             this->m_read_only),
+                    0);
+  }
+
+  template <typename L, typename S>
+  typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::end() {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using Iterator = typename ArrayImpl<L, S>::Iterator;
+
+    Metadata offset_type;
+    if constexpr (requires { this->m_offsets; }) {
+      offset_type = this->m_offsets;
+    } else {
+      offset_type = this->m_suboffsets;
+    }
+
+    ssize_t len = this->ndim() > 0 ? this->m_shape[0] : 0;
+    return Iterator(ViewType(this->m_data,
+                             this->m_shape,
+                             this->m_strides,
+                             offset_type,
+                             this->m_dtype,
+                             this->m_pointer_axis,
+                             this->m_read_only),
+                    len);
+  }
+
+  template <typename L, typename S>
+  typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::begin() const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using ConstIterator = typename ArrayImpl<L, S>::ConstIterator;
+
+    Metadata offset_type;
+    if constexpr (requires { this->m_offsets; }) {
+      offset_type = this->m_offsets;
+    } else {
+      offset_type = this->m_suboffsets;
+    }
+
+    return ConstIterator(ViewType(const_cast<void*>(this->m_data),
+                                  this->m_shape,
+                                  this->m_strides,
+                                  offset_type,
+                                  this->m_dtype,
+                                  this->m_pointer_axis,
+                                  this->m_read_only),
+                         0);
+  }
+
+  template <typename L, typename S>
+  typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::end() const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using ConstIterator = typename ArrayImpl<L, S>::ConstIterator;
+
+    Metadata offset_type;
+    if constexpr (requires { this->m_offsets; }) {
+      offset_type = this->m_offsets;
+    } else {
+      offset_type = this->m_suboffsets;
+    }
+
+    ssize_t len = this->ndim() > 0 ? this->m_shape[0] : 0;
+    return ConstIterator(ViewType(const_cast<void*>(this->m_data),
+                                  this->m_shape,
+                                  this->m_strides,
+                                  offset_type,
+                                  this->m_dtype,
+                                  this->m_pointer_axis,
+                                  this->m_read_only),
+                         len);
+  }
+
   // --- Copy and Modification --- //
 
-  template <ArrayLike A>
-  void fill(A& arr, Scalar val) {
-    auto fill_op = [&] <typename T> () {
+  template <ArrayLike A> void fill(A& arr, Scalar val) {
+    auto fill_op = [&]<typename T>() {
       auto fill_op_internal = [](auto&& arg) -> T {
         using FromT = std::decay_t<decltype(arg)>;
         return ncarray::op_traits<FromT>::template cast<T>(arg);
@@ -725,17 +821,17 @@ namespace ncarray {
     dispatch(arr.dtype(), fill_op);
   }
 
-  template <ArrayLike A, typename OutputType>
-  void copy_into(const A& arr, OutputType*& dest) {
-    auto copy_op = [&] <typename T> () {
+  template <ArrayLike A, typename OutputType> void copy_into(const A& arr,
+                                                             OutputType*& dest) {
+    auto copy_op = [&]<typename T>() {
       ssize_t starting_axis { 0 };
       impl::copy_into_recursive<T, OutputType>(arr, arr.data(), starting_axis, dest);
     };
     dispatch(arr.dtype(), copy_op);
   }
 
-  template <ArrayLike Dest, ArrayLike Src>
-  void assign(Dest dest, const Src src) {
+  template <ArrayLike Dest, ArrayLike Src> void assign(Dest dest,
+                                                       const Src src) {
     // Only deal with identical shapes for now
     if (dest.ndim() != src.ndim()) {
       throw type_error("Shapes must match for assignment");
@@ -745,9 +841,8 @@ namespace ncarray {
         throw type_error("Shapes must match for assignment");
       }
     }
-    auto assign_op = [&] <typename DestT> () {
-      auto assign_op_internal = [&] <typename SrcT> () {
-
+    auto assign_op = [&]<typename DestT>() {
+      auto assign_op_internal = [&]<typename SrcT>() {
         ssize_t starting_axis { 0 };
         impl::assign_recursive<DestT, SrcT>(dest, src, dest.data(), src.data(), starting_axis);
       };
@@ -755,6 +850,72 @@ namespace ncarray {
       dispatch(src.dtype(), assign_op_internal);
     };
     dispatch(dest.dtype(), assign_op);
+  }
+
+  template <class L, class S>
+  void ArrayImpl<L, S>::copy_into(void* dest_buffer) const {
+    auto copy_op = [&]<typename T>() {
+      T* dest_ptr = reinterpret_cast<T*>(dest_buffer);
+      ncarray::copy_into(*this, dest_ptr);
+    };
+
+    dispatch(this->m_dtype, copy_op);
+  }
+
+  template <class L, class S>
+  template <typename OutT>
+  void ArrayImpl<L, S>::copy_into_astype(OutT* dest_buffer) const {
+    ncarray::copy_into(*this, dest_buffer);
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::to_contiguous() const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    OwnerType result(this->m_shape, this->m_dtype);
+
+    auto copy_op = [&]<typename T>() {
+      T* dest_ptr = reinterpret_cast<T*>(result.data());
+      ncarray::copy_into(*this, dest_ptr);
+    };
+
+    dispatch(this->m_dtype, copy_op);
+
+    return result;
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::astype(DType& dtype_out) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    OwnerType result(this->m_shape, this->m_dtype);
+
+    auto copy_op = [&]<typename OutT>() {
+      OutT* dest_ptr = reinterpret_cast<OutT*>(result.data());
+      ncarray::copy_into(*this, dest_ptr);
+    };
+
+    dispatch(dtype_out, copy_op);
+
+    return result;
+  }
+
+  template <class L, class S>
+  void ArrayImpl<L, S>::assign(ArrayLike auto arr) {
+    if (this->m_read_only) {
+      throw type_error("Cannot modify a read-only view!");
+    }
+
+    ncarray::assign(*this, arr);
+  }
+
+  template <class L, class S>
+  void ArrayImpl<L, S>::fill(Scalar val) {
+    if (this->m_read_only) {
+      throw type_error("Cannot modify a read-only view!");
+    }
+
+    ncarray::fill(*this, val);
   }
 
 } // namespace ncarray

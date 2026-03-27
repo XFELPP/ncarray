@@ -6,11 +6,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "dtype.hh"
-#include "indexing.hh"
-#include "ncarrayref.hh"
-#include "ncarrayview.hh"
-#include "ncarray.hh"
+#include "cartesian.hh"
+#include "ncarray/ncarrays.hh"
 
 #include <pybind11/native_enum.h>
 #include <pybind11/numpy.h>
@@ -22,6 +19,7 @@
 #include <iostream>
 #include <optional>
 #include <sstream>
+#include <sys/types.h>
 #include <vector>
 
 namespace py = pybind11;
@@ -71,7 +69,7 @@ namespace {
     // This is temporary!! Careful how you use it!
     ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
     // When you have no pointer axis, just pass the raw pointer
-    return ncarray::NCArrayView(reinterpret_cast<void**>(buf_ptr),
+    return ncarray::NCArrayView(buf_ptr,//reinterpret_cast<void**>(buf_ptr),
                                 arr.ndim(),
                                 arr.shape(),
                                 arr.strides(),
@@ -133,7 +131,8 @@ namespace {
     return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype, ptr_axis, read_only);
   }
 
-  py::array ncarr_to_numpy(const ncarray::NCArrayView& ncarr,
+  template <class ArrayT>
+  py::array ncarr_to_numpy(const ArrayT& ncarr,
                            std::optional<ncarray::DType> dtype = std::nullopt) {
     ncarray::DType out_dtype = dtype.value_or(ncarr.dtype());
 
@@ -143,7 +142,7 @@ namespace {
       py::array_t<OutT> out_arr(shape_vec);
 
       auto* out_ptr  = reinterpret_cast<OutT*>(out_arr.mutable_data());
-      ncarr.copy_into_astype<OutT>(out_ptr);
+      ncarr.template copy_into_astype<OutT>(out_ptr);
 
       return py::array(out_arr);
     };
@@ -151,30 +150,165 @@ namespace {
     return ncarray::dispatch(out_dtype, dispatched_copy);
   }
 
-  std::variant<ssize_t, ncarray::Slice,ncarray::ArrayIndices>
-  pyindices_to_indices(const py::object& pyindices, const ssize_t* shape) {
-    if (py::isinstance<py::int_>(pyindices)) {
-      return pyindices.cast<ssize_t>();
-    } else if (py::isinstance<py::slice>(pyindices)) {
-      return pyslice_to_slice(shape[0], pyindices.cast<py::slice>());
-    } else if (py::isinstance<py::tuple>(pyindices)) {
-      ncarray::ArrayIndices indices;
-      ssize_t axis { 0 };
-      for (const auto& item : pyindices.cast<py::tuple>()) {
-        if (py::isinstance<py::int_>(item)) {
-          indices.emplace_back(item.cast<ssize_t>());
-        } else if (py::isinstance<py::slice>(item)) {
-          indices.emplace_back(pyslice_to_slice(shape[axis],
-                                                item.cast<py::slice>()));
-        } else if (py::isinstance<py::ellipsis>(item)) {
-          indices.emplace_back(ncarray::Ellipsis{});
+
+// TODO: It would be nice to not need the view conversion when dealing with array
+// Arrays don't currently satisfy the concepts though due to py::dtype.
+// Minor thing to improve
+#define REGISTER_OPERATION(PYMETHOD, OP)                                            \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const ArrayT& other) {          \
+      return py::cast(self OP other);                                               \
+    },                                                                              \
+      py::is_operator())                                                            \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
+      return py::cast(self OP pyarray_to_view(other));                              \
+    },                                                                              \
+      py::is_operator())                                                            \
+    .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
+      return py::cast(pyarray_to_view(other) OP self);                              \
+    },                                                                              \
+      py::is_operator())                                                            \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) { \
+      return py::cast(self OP other);                                               \
+    },                                                                              \
+      py::is_operator())
+
+  template <typename ArrayT>
+  void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
+    arr_cl.def("__repr__", &ArrayT::repr)
+    .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
+      auto* shape = self.shape();
+      py::list l;
+      for (ssize_t i = 0; i < self.ndim(); ++i) {
+        l.append(shape[i]);
+      }
+      return l;
+    })
+    .def_property_readonly("strides", [](const ArrayT& self) -> py::tuple {
+      auto* strides = self.strides();
+      py::list l;
+      for (ssize_t i = 0; i < self.ndim(); ++i) {
+        l.append(strides[i]);
+      }
+      return l;
+    })
+    // --- Standard Container Methods --- //
+    .def("__len__", [](const ArrayT& self) {
+      if (self.ndim() > 0) {
+        return self.shape(0);
+      }
+      return ssize_t(0);
+    })
+    .def("__iter__", [](const ArrayT& self) {
+        return py::make_iterator(self.begin(), self.end());
+    })
+    // --- Array-Like Methods (indexing, size, shape, dtype, etc) --- //
+    .def_property_readonly("size",
+                           &ArrayT::size,
+                           "The number of items in the NCArray*.")
+    .def_property_readonly("ndim",
+                           &ArrayT::ndim,
+                           "The number of dimensions in the NCArray*.")
+    .def_property_readonly("itemsize",
+                           &ArrayT::itemsize,
+                           "The size in bytes of a single item in the NCArray*.")
+    .def_property_readonly("nbytes",
+                           &ArrayT::nbytes,
+                           "The total size in bytes of all items in the NCArray*.")
+    .def("squeeze",
+         &ArrayT::squeeze,
+         "Collapse and remove all axes of length 1.")
+    .def("astype",
+         [](const ArrayT& self, ncarray::DType& dtype_out) {
+           return self.astype(dtype_out);
+         },
+         py::arg("dtype"),
+         "Convert an NCArray* to the specified data type.")
+    .def("__getitem__",
+         [](const ArrayT& self, py::object idx) {
+           if (py::isinstance<py::int_>(idx)) {
+             return py::cast(self[idx.cast<ssize_t>()]);
+           } else if (py::isinstance<py::slice>(idx)) {
+             return
+               py::cast(self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())]);
+           } else if (py::isinstance<py::tuple>(idx)) {
+             return pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
+                                                  self,
+                                                  pyncarray::All{});
+           } else {
+             throw py::type_error("Invalid indexing argument!");
+           }
+         },
+         py::is_operator())
+    .def("__setitem__",
+         [](const ArrayT& self, py::object idx, py::object val) {
+           typename ArrayT::ViewType view;
+           if (py::isinstance<py::int_>(idx)) {
+             view = self[idx.cast<ssize_t>()];
+           } else if (py::isinstance<py::slice>(idx)) {
+             view = self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())];
+           } else if (py::isinstance<py::tuple>(idx)) {
+             view =
+               pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
+                                             self,
+                                             pyncarray::All{}).template cast<ArrayT>();
+           } else {
+             throw py::type_error("Invalid indexing argument!");
+           }
+
+           if (py::isinstance<py::array>(val)) {
+             // ... //
+           } else if (py::isinstance<ArrayT>(val)) {
+             view.assign(val.cast<ArrayT&>());
+           } else {
+             // Convertible to scalar
+             // Use the algorithm directly to avoid the variant gets
+             view.fill(val.cast<ncarray::Scalar>());
+           }
+         },
+         py::is_operator())
+    // --- Array Reduction Methods (Reduce to scalar) --- //
+    .def("sum", &ArrayT::sum)
+    .def("max", &ArrayT::max)
+    .def("min", &ArrayT::min)
+    .def("mean", &ArrayT::mean)
+    // --- Binary Array Methods --- //
+    REGISTER_OPERATION("add", +)
+    REGISTER_OPERATION("sub", -)
+    REGISTER_OPERATION("mul", *)
+    REGISTER_OPERATION("truediv", /)
+    // NumPy protocol compatibility
+    // __array__(self, dtype=None, copy=None)
+    .def("__array__", [](const ArrayT& self,
+                         py::object& dtype,
+                         py::object& copy) {
+      return ncarr_to_numpy(self);
+    })
+    // __array_priority__ attribute - set high so NCArray* funcs used, and is returned
+    .def_property_readonly_static("__array_priority__", [](const py::object&) {
+      return 100.0;
+    })
+    .def("__array_ufunc__", [](const ArrayT& self,
+                               py::handle ufunc,
+                               py::str method,
+                               py::args args,
+                               py::kwargs kwargs) {
+      if (method.cast<std::string>() != "__call__") {
+        return py::none().cast<py::object>();
+      }
+
+      // For now, just convert to NumPy
+      // TODO: Optimize this with NCArray* directly
+      py::list new_args;
+      for (const auto& arg : args) {
+        if (py::isinstance<ArrayT>(arg)) {
+          new_args.append(ncarr_to_numpy(arg.cast<ArrayT>()));
         } else {
-          throw py::type_error("Invalid indexing argument!");
+          new_args.append(arg);
         }
       }
-      return indices;
-    }
-    throw py::type_error("Invalid indexing argument!");
+      return ufunc(*new_args, **kwargs);
+    });
+#undef REGISTER_OPERATION
   }
 } // anonymous namespace
 
@@ -203,173 +337,11 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     .export_values()
     .finalize();
 
-// TODO: It would be nice to not need the view conversion when dealing with array
-// Arrays don't currently satisfy the concepts though due to py::dtype.
-// Minor thing to improve
-#define REGISTER_OPERATION(PYMETHOD, OP)                                                               \
-    .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const ncarray::NCArrayView& other) { \
-      return py::cast(self OP other);                                                                  \
-    },                                                                                                 \
-      py::is_operator())                                                                               \
-    .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const py::array& other) {            \
-      return py::cast(self OP pyarray_to_view(other));                                                 \
-    },                                                                                                 \
-      py::is_operator())                                                                               \
-    .def("__r" PYMETHOD "__", [](const ncarray::NCArrayView& self, const py::array& other) {           \
-      return py::cast(pyarray_to_view(other) OP self);                                                 \
-    },                                                                                                 \
-      py::is_operator())                                                                               \
-    .def("__" PYMETHOD "__", [](const ncarray::NCArrayView& self, const ncarray::Scalar& other) {      \
-      return py::cast(self OP other);                                                                  \
-    },                                                                                                 \
-      py::is_operator())
+  // --- Namesake NCArray* array classes --- //
+  auto ncview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView");
+  register_common_array_methods(ncview_cls);
 
-  py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")
-    .def("__repr__", &ncarray::NCArrayView::repr)
-    .def_property_readonly("shape", [](const ncarray::NCArrayView& self) -> py::tuple {
-      auto* shape = self.shape();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(shape[i]);
-      }
-      return l;
-    })
-    .def_property_readonly("strides", [](const ncarray::NCArrayView& self) -> py::tuple {
-      auto* strides = self.strides();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(strides[i]);
-      }
-      return l;
-    })
-    // --- Standard Container Methods --- //
-    .def("__len__", [](const ncarray::NCArrayView& self) {
-      if (self.ndim() > 0) {
-        return self.shape(0);
-      }
-      return ssize_t(0);
-    })
-    .def("__iter__", [](const ncarray::NCArrayView& self) {
-        return py::make_iterator(self.begin(), self.end());
-    })
-    // --- Array-Like Methods (indexing, size, shape, dtype, etc) --- //
-    .def_property_readonly("size",
-                           &ncarray::NCArrayView::size,
-                           "The number of items in the NCArray*.")
-    .def_property_readonly("ndim",
-                           &ncarray::NCArrayView::ndim,
-                           "The number of dimensions in the NCArray*.")
-    .def_property_readonly("itemsize",
-                           &ncarray::NCArrayView::itemsize,
-                           "The size in bytes of a single item in the NCArray*.")
-    .def_property_readonly("nbytes",
-                           &ncarray::NCArrayView::nbytes,
-                           "The total size in bytes of all items in the NCArray*.")
-    .def("squeeze",
-         &ncarray::NCArrayView::squeeze,
-         "Collapse and remove all axes of length 1.")
-    .def("astype",
-         [](const ncarray::NCArrayView& self, ncarray::DType& dtype_out) {
-           return self.astype(dtype_out);
-         },
-         py::arg("dtype"),
-         "Convert an NCArray* to the specified data type.")
-    .def("__getitem__",
-         [](const ncarray::NCArrayView& self, py::object idx) {
-           if (py::isinstance<py::int_>(idx)) {
-             return py::cast(self[idx.cast<ssize_t>()]);
-           } else if (py::isinstance<py::slice>(idx)) {
-             return py::cast(self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())]);
-           } else if (py::isinstance<py::tuple>(idx)) {
-             ncarray::ArrayIndices indices;
-             ssize_t axis { 0 };
-             for (const auto& item : idx.cast<py::tuple>()) {
-               if (py::isinstance<py::int_>(item)) {
-                 indices.emplace_back(item.cast<ssize_t>());
-               } else if (py::isinstance<py::slice>(item)) {
-                 indices.emplace_back(pyslice_to_slice(self.shape(axis),
-                                                       item.cast<py::slice>()));
-               } else if (py::isinstance<py::ellipsis>(item)) {
-                 indices.emplace_back(ncarray::Ellipsis{});
-               } else {
-                 throw py::type_error("Invalid indexing argument!");
-               }
-             }
-             return py::cast(self[indices]);
-           } else {
-             throw py::type_error("Invalid indexing argument!");
-           }
-         },
-         py::is_operator())
-    .def("__setitem__",
-         [](const ncarray::NCArrayView& self, py::object idx, py::object val) {
-           auto indices = pyindices_to_indices(idx, self.shape());
-           ncarray::ViewOrScalar sub_view_or_scalar;
-           if (std::holds_alternative<ssize_t>(indices)) {
-             sub_view_or_scalar = self[std::get<ssize_t>(indices)];
-           } else if (std::holds_alternative<ncarray::Slice>(indices)) {
-             sub_view_or_scalar = self[std::get<ncarray::Slice>(indices)];
-           } else {
-             sub_view_or_scalar = self[std::get<ncarray::ArrayIndices>(indices)];
-           }
-
-           auto& view = std::get<ncarray::NCArrayView>(sub_view_or_scalar);
-           if (py::isinstance<py::array>(val)) {
-             // ... //
-           } else if (py::isinstance<ncarray::NCArrayView>(val)) {
-             view.assign(val.cast<ncarray::NCArrayView&>());
-           } else {
-             // Convertible to scalar
-             // Use the algorithm directly to avoid the variant gets
-             view.fill(val.cast<ncarray::Scalar>());
-           }
-         },
-         py::is_operator())
-    // --- Array Reduction Methods (Reduce to scalar) --- //
-    .def("sum", &ncarray::NCArrayView::sum)
-    .def("max", &ncarray::NCArrayView::max)
-    .def("min", &ncarray::NCArrayView::min)
-    .def("mean", &ncarray::NCArrayView::mean)
-    // --- Binary Array Methods --- //
-    REGISTER_OPERATION("add", +)
-    REGISTER_OPERATION("sub", -)
-    REGISTER_OPERATION("mul", *)
-    REGISTER_OPERATION("truediv", /)
-    // NumPy protocol compatibility
-    // __array__(self, dtype=None, copy=None)
-    .def("__array__", [](const ncarray::NCArrayView& self,
-                         py::object& dtype,
-                         py::object& copy) {
-      return ncarr_to_numpy(self);
-    })
-    // __array_priority__ attribute - set high so NCArray* funcs used, and is returned
-    .def_property_readonly_static("__array_priority__", [](const py::object&) {
-      return 100.0;
-    })
-    .def("__array_ufunc__", [](const ncarray::NCArrayView& self,
-                               py::handle ufunc,
-                               py::str method,
-                               py::args args,
-                               py::kwargs kwargs) {
-      if (method.cast<std::string>() != "__call__") {
-        return py::none().cast<py::object>();
-      }
-
-      // For now, just convert to NumPy
-      // TODO: Optimize this with NCArray* directly
-      py::list new_args;
-      for (const auto& arg : args) {
-        if (py::isinstance<ncarray::NCArrayView>(arg)) {
-          new_args.append(ncarr_to_numpy(arg.cast<ncarray::NCArrayView>()));
-        } else {
-          new_args.append(arg);
-        }
-      }
-      return ufunc(*new_args, **kwargs);
-    });
-#undef REGISTER_OPERATION
-
-  py::classh<ncarray::NCArrayRef, ncarray::NCArrayView>(ncarray_module, "NCArrayRef")
+  auto ncref_cls = py::classh<ncarray::NCArrayRef>(ncarray_module, "NCArrayRef")
     .def(py::init([](const py::array& arr, const bool read_only = false) {
       return pyarray_to_ref(arr, read_only);
     }),
@@ -380,11 +352,13 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     }),
       py::arg("data"),
       py::arg("read_only") = py::cast(false));
+  register_common_array_methods(ncref_cls);
 
-  py::classh<ncarray::NCArray, ncarray::NCArrayView>(ncarray_module, "NCArray")
+  auto ncowner_cls = py::classh<ncarray::NCArray>(ncarray_module, "NCArray")
     .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
       return new ncarray::NCArray(shape, dtype);
     }),
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
+  register_common_array_methods(ncowner_cls);
 } // ncarray_module
