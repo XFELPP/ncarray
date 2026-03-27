@@ -8,6 +8,7 @@
 
 #include "cartesian.hh"
 #include "ncarray/ncarrays.hh"
+#include "ncarray/soarrays.hh"
 
 #include <pybind11/native_enum.h>
 #include <pybind11/numpy.h>
@@ -62,6 +63,7 @@ namespace {
     return ncarray::Slice(start, stop, step);
   }
 
+  template <class ViewType>
   auto pyarray_to_view(const py::array& arr) {
     py::buffer_info info = arr.request();
     auto buf_ptr = info.ptr;
@@ -69,16 +71,18 @@ namespace {
     // This is temporary!! Careful how you use it!
     ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
     // When you have no pointer axis, just pass the raw pointer
-    return ncarray::NCArrayView(buf_ptr,//reinterpret_cast<void**>(buf_ptr),
-                                arr.ndim(),
-                                arr.shape(),
-                                arr.strides(),
-                                pydtype_to_dtype(arr.dtype()),
-                                ptr_axis,
-                                read_only);
+    return ViewType(buf_ptr,
+                    arr.ndim(),
+                    arr.shape(),
+                    arr.strides(),
+                    pydtype_to_dtype(arr.dtype()),
+                    ptr_axis,
+                    read_only);
   }
 
-  ncarray::NCArrayRef pyarray_to_ref(const py::array& arr, const bool read_only_ = false) {
+  template <class LayoutT>
+  ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>
+  pyarray_to_ref(const py::array& arr, const bool read_only_ = false) {
     py::buffer_info arr_info = arr.request();
     ssize_t ndim { arr.ndim() };
     std::vector<ssize_t> shape(arr.shape(), arr.shape() + ndim);
@@ -95,10 +99,17 @@ namespace {
     }
     // A single array will have no pointer axis
     ssize_t ptr_axis { -1 };
-    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype, ptr_axis, read_only);
+    return ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>(data_ptrs,
+                                                           shape,
+                                                           strides,
+                                                           dtype,
+                                                           ptr_axis,
+                                                           read_only);
   }
 
-  ncarray::NCArrayRef pylist_to_ref(const py::list& list, const bool read_only_ = false) {
+  template <class LayoutT>
+  ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>
+  pylist_to_ref(const py::list& list, const bool read_only_ = false) {
     ssize_t len_ptr_axis = list.size();
     std::vector<ssize_t> strides { 1 };
     std::vector<ssize_t> shape { len_ptr_axis };
@@ -113,7 +124,7 @@ namespace {
       py::buffer_info arr_info = data.request();
       data_ptrs.push_back(arr_info.ptr);
       if (!data.writeable()) {
-        // If any array from the list is read_only, all of them in the NCArrayRef
+        // If any array from the list is read_only, all of them in the *ArrayRef
         // will therefore be marked read only
         read_only = true;
       }
@@ -128,7 +139,12 @@ namespace {
     }
     ncarray::DType dtype = pydtype_to_dtype(pydtype);
     ssize_t ptr_axis { 0 };
-    return ncarray::NCArrayRef(data_ptrs, shape, strides, dtype, ptr_axis, read_only);
+    return ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>(data_ptrs,
+                                                           shape,
+                                                           strides,
+                                                           dtype,
+                                                           ptr_axis,
+                                                           read_only);
   }
 
   template <class ArrayT>
@@ -160,11 +176,11 @@ namespace {
     },                                                                              \
       py::is_operator())                                                            \
     .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
-      return py::cast(self OP pyarray_to_view(other));                              \
+      return py::cast(self OP pyarray_to_view<typename ArrayT::ViewType>(other));   \
     },                                                                              \
       py::is_operator())                                                            \
     .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
-      return py::cast(pyarray_to_view(other) OP self);                              \
+      return py::cast(pyarray_to_view<typename ArrayT::ViewType>(other) OP self);   \
     },                                                                              \
       py::is_operator())                                                            \
     .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) { \
@@ -357,12 +373,12 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
 
   auto ncref_cls = py::classh<ncarray::NCArrayRef>(ncarray_module, "NCArrayRef")
     .def(py::init([](const py::array& arr, const bool read_only = false) {
-      return pyarray_to_ref(arr, read_only);
+      return pyarray_to_ref<ncarray::NCOffsetsPolicy>(arr, read_only);
     }),
       py::arg("data"),
       py::arg("read_only") = py::cast(false))
     .def(py::init([](const py::list& list, const bool read_only = false) {
-      return pylist_to_ref(list, read_only);
+      return pylist_to_ref<ncarray::NCOffsetsPolicy>(list, read_only);
     }),
       py::arg("data"),
       py::arg("read_only") = py::cast(false));
@@ -375,4 +391,29 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
   register_common_array_methods(ncowner_cls);
+
+  // --- Suboffsets support --- //
+  auto soview_cls = py::classh<ncarray::SOArrayView>(ncarray_module, "SOArrayView");
+  register_common_array_methods(soview_cls);
+
+  auto soref_cls = py::classh<ncarray::SOArrayRef>(ncarray_module, "SOArrayRef")
+    .def(py::init([](const py::array& arr, const bool read_only = false) {
+      return pyarray_to_ref<ncarray::SOArrayPolicy>(arr, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false))
+    .def(py::init([](const py::list& list, const bool read_only = false) {
+      return pylist_to_ref<ncarray::SOArrayPolicy>(list, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false));
+  register_common_array_methods(soref_cls);
+
+  auto soowner_cls = py::classh<ncarray::SOArray>(ncarray_module, "SOArray")
+    .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
+      return new ncarray::SOArray(shape, dtype);
+    }),
+      py::arg("shape"),
+      py::arg("dtype") = py::cast(ncarray::DType::float32));
+  register_common_array_methods(soowner_cls);
 } // ncarray_module
