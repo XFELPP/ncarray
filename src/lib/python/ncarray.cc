@@ -55,14 +55,6 @@ namespace {
     throw py::type_error(oss.str());
   }
 
-  ncarray::Slice pyslice_to_slice(ssize_t axis_shape, py::slice slice) {
-    ssize_t start, stop, step, length;
-    if (!slice.compute(axis_shape, &start, &stop, &step, &length)) {
-      throw py::error_already_set();
-    }
-    return ncarray::Slice(start, stop, step);
-  }
-
   template <class ViewType>
   auto pyarray_to_view(const py::array& arr) {
     py::buffer_info info = arr.request();
@@ -253,7 +245,8 @@ namespace {
              view = self[idx.cast<ssize_t>()];
            } else if (py::isinstance<py::slice>(idx)) {
              return
-               view = self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())];
+               view = self[pyncarray::pyslice_to_slice(self.shape(0),
+                                                       idx.cast<py::slice>())];
            } else if (py::isinstance<py::tuple>(idx)) {
              view = pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
                                                   self,
@@ -275,7 +268,8 @@ namespace {
            if (py::isinstance<py::int_>(idx)) {
              view = self[idx.cast<ssize_t>()];
            } else if (py::isinstance<py::slice>(idx)) {
-             view = self[pyslice_to_slice(self.shape(0), idx.cast<py::slice>())];
+             view = self[pyncarray::pyslice_to_slice(self.shape(0),
+                                                     idx.cast<py::slice>())];
            } else if (py::isinstance<py::tuple>(idx)) {
              view =
                pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
