@@ -305,7 +305,11 @@ namespace {
            //       In C++, they remain as an object tied to the array class.
            ViewType view;
            if (py::isinstance<py::int_>(idx)) {
-             view = self[idx.cast<ssize_t>()];
+             auto idx_val = idx.cast<ssize_t>();
+             if (idx_val < -self.shape(0) || idx_val >= self.shape(0)) {
+               throw py::index_error("Index out of bounds!");
+             }
+             view = self[idx_val];
            } else if (py::isinstance<py::slice>(idx)) {
              view = self[pyncarray::pyslice_to_slice(self.shape(0),
                                                      idx.cast<py::slice>())];
@@ -330,7 +334,11 @@ namespace {
          [](const ArrayT& self, py::object idx, py::object val) {
            ViewType view;
            if (py::isinstance<py::int_>(idx)) {
-             view = self[idx.cast<ssize_t>()];
+             auto idx_val = idx.cast<ssize_t>();
+             if (idx_val < -self.shape(0) || idx_val >= self.shape(0)) {
+               throw py::index_error("Index out of bounds!");
+             }
+             view = self[idx_val];
            } else if (py::isinstance<py::slice>(idx)) {
              view = self[pyncarray::pyslice_to_slice(self.shape(0),
                                                      idx.cast<py::slice>())];

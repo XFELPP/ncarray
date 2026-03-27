@@ -114,9 +114,9 @@ namespace pyncarray {
   }
 
   template <class TargetT, class ArrayT>
-  auto extract_or_convert(const ArrayT& self, std::size_t axis, const py::handle& obj) {
-    // The metaprogramming below fails on Slices when relying on pybind11 casters
-    // Likewise, ellipsis handling needs a helper. pybind11 will handle ints.
+  auto convert_to_ncarray_type(const ArrayT& self,
+                               std::size_t axis,
+                               const py::handle& obj) {
     if constexpr (std::is_same_v<TargetT, ncarray::Slice>) {
       if (!py::isinstance<py::slice>(obj)) {
         // Cast errors are handled below, so trap non-slices and throw as cast_error
@@ -124,14 +124,26 @@ namespace pyncarray {
         // exceptions, we convert everything to 1 kind.
         throw py::cast_error();
       }
+      if (axis >= static_cast<size_t>(self.ndim())) {
+        throw py::index_error("Too many indices for array!");
+      }
       return pyslice_to_slice(self.shape(axis), obj.cast<py::slice>());
     } else if constexpr (std::is_same_v<TargetT, ncarray::Ellipsis>) {
       if (!py::isinstance<py::ellipsis>(obj)) {
         throw py::cast_error();
       }
       return ncarray::Ellipsis{};
+    } else if constexpr (std::is_same_v<TargetT, ssize_t>) {
+      ssize_t i = obj.cast<ssize_t>();
+      // Add protection against out of bounds axes as well is indices
+      if (axis >= static_cast<size_t>(self.ndim()) ||
+          i < -self.shape(axis) ||
+          i >= self.shape(axis)) {
+        throw py::index_error("Index out of bounds!");
+      }
+      return i;
     } else {
-      return obj.cast<TargetT>();
+      throw py::index_error("Invalid indexing argument!");
     }
   }
 
@@ -141,7 +153,7 @@ namespace pyncarray {
                              F&& f,
                              std::index_sequence<Is...>) {
     try {
-      f(extract_or_convert<std::tuple_element_t<Is, Tuple>>(self, Is, t[Is])...);
+      f(convert_to_ncarray_type<std::tuple_element_t<Is, Tuple>>(self, Is, t[Is])...);
       return true;
     } catch (const py::cast_error&) {
       return false;
