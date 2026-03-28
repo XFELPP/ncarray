@@ -434,6 +434,8 @@ namespace ncarray {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
         GPUEngine::execute_add(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
       } else {
         using AccumT = typename op_traits<T>::sum_type;
@@ -472,6 +474,8 @@ namespace ncarray {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
         GPUEngine::execute_sub(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
       } else {
         using DiffT = typename op_traits<T>::diff_type;
@@ -504,6 +508,8 @@ namespace ncarray {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
         GPUEngine::execute_mul(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
       } else {
         auto mul_op_internal = [](const std::uint8_t* lhs,

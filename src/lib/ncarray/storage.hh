@@ -3,6 +3,10 @@
 
 #include "ncarray/dtype.hh"
 
+#ifdef NCA_HAS_CUDA
+#include "cuda_runtime_api.h"
+#endif
+
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
@@ -135,7 +139,7 @@ namespace ncarray {
 
   struct DevDeleter {
     void operator()(std::uint8_t* ptr) {
-#ifdef __CUDACC__
+#ifdef NCA_HAS_CUDA
       cudaFree(ptr);
 #endif
     }
@@ -147,7 +151,7 @@ namespace ncarray {
     }
   };
 
-#ifdef __CUDACC__
+#ifdef NCA_HAS_CUDA
 #define CHECK_CUDA_ERROR(val) check((val), #val, __FILE__, __LINE__)
   inline void check(cudaError_t err, const char* const func, const char* const file,
                     const int line) {
@@ -201,16 +205,15 @@ namespace ncarray {
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 
     NCA_H inline void allocate(ssize_t nbytes) {
-#ifdef __CUDACC__
+#ifdef NCA_HAS_CUDA
       std::uint8_t* devPtr { nullptr };
-      CHECK_CUDA_ERROR(cudaMallocManaged(&devPtr, nbytes));
+      CHECK_CUDA_ERROR(cudaMallocManaged(reinterpret_cast<void**>(&devPtr), nbytes));
       m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
 #endif
     }
 
     NCA_H inline void copy(void* src, ssize_t nbytes) {
-#ifdef __CUDACC__
-      // cudaMemcpyDefault will require UVA
+#ifdef NCA_HAS_CUDA
       CHECK_CUDA_ERROR(cudaMemcpy(this->m_storage.get(),
                                   src,
                                   nbytes,

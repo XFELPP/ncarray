@@ -10,6 +10,12 @@
 
 #include "ncarray/ncarrays.hh"
 #include "ncarray/soarrays.hh"
+#ifdef NCA_HAS_CUDA
+// This code doesn't actually have anything GPU-specific (__device__ or kernels)
+// They are the specializations for GPU arrays
+#include "ncarray/ncdevarrays.cuh"
+#include "ncarray/sodevarrays.cuh"
+#endif
 
 #include <pybind11/native_enum.h>
 #include <pybind11/numpy.h>
@@ -100,12 +106,13 @@ namespace {
    *
    * @tparam LayoutT The layout specifier for the returned reference type.
    *         E.g., NCOffsetsPolicy or SOArrayPolicy (PEP3118).
+   * @tparam RefT The reference storage specifier. E.g. RefPolicy or DevRefPolicy.
    * @param[in] arr The input array of arrays.
    * @param[in] read_only_ Whether this reference should be read only.
    * @returns The constructed reference type.
    */
-  template <class LayoutT>
-  ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>
+  template <class LayoutT, class RefT = ncarray::RefPolicy>
+  ncarray::ArrayImpl<LayoutT, RefT>
   pyarray_to_ref(const py::array& arr, const bool read_only_ = false) {
     py::buffer_info arr_info = arr.request();
     ssize_t ndim { arr.ndim() };
@@ -123,12 +130,12 @@ namespace {
     }
     // A single array will have no pointer axis
     ssize_t ptr_axis { -1 };
-    return ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>(data_ptrs,
-                                                           shape,
-                                                           strides,
-                                                           dtype,
-                                                           ptr_axis,
-                                                           read_only);
+    return ncarray::ArrayImpl<LayoutT, RefT>(data_ptrs,
+                                             shape,
+                                             strides,
+                                             dtype,
+                                             ptr_axis,
+                                             read_only);
   }
 
   /**
@@ -139,12 +146,13 @@ namespace {
    *
    * @tparam LayoutT The layout specifier for the returned reference type.
    *         E.g., NCOffsetsPolicy or SOArrayPolicy (PEP3118).
+   * @tparam RefT The reference storage specifier. E.g. RefPolicy or DevRefPolicy.
    * @param[in] list The input list of arrays.
    * @param[in] read_only_ Whether this reference should be read only.
    * @returns The constructed reference type.
    */
-  template <class LayoutT>
-  ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>
+  template <class LayoutT, class RefT = ncarray::RefPolicy>
+  ncarray::ArrayImpl<LayoutT, RefT>
   pylist_to_ref(const py::list& list, const bool read_only_ = false) {
     ssize_t len_ptr_axis = list.size();
     std::vector<ssize_t> strides { 1 };
@@ -175,12 +183,12 @@ namespace {
     }
     ncarray::DType dtype = pydtype_to_dtype(pydtype);
     ssize_t ptr_axis { 0 };
-    return ncarray::ArrayImpl<LayoutT, ncarray::RefPolicy>(data_ptrs,
-                                                           shape,
-                                                           strides,
-                                                           dtype,
-                                                           ptr_axis,
-                                                           read_only);
+    return ncarray::ArrayImpl<LayoutT, RefT>(data_ptrs,
+                                             shape,
+                                             strides,
+                                             dtype,
+                                             ptr_axis,
+                                             read_only);
   }
 
   /**
@@ -490,4 +498,63 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
   register_common_array_methods(soowner_cls);
+
+#ifdef NCA_HAS_CUDA
+  // --- Namesake NCArray* array classes over GPU memory --- //
+  auto ncdevview_cls = py::classh<ncarray::NCDevArrayView>(ncarray_module,
+                                                           "NCDevArrayView");
+  register_common_array_methods(ncdevview_cls);
+
+  auto ncdevref_cls = py::classh<ncarray::NCDevArrayRef>(ncarray_module,
+                                                         "NCDevArrayRef")
+    .def(py::init([](const py::array& arr, const bool read_only = false) {
+      return
+        pyarray_to_ref<ncarray::NCOffsetsPolicy, ncarray::DevRefPolicy>(arr, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false))
+    .def(py::init([](const py::list& list, const bool read_only = false) {
+      return
+        pylist_to_ref<ncarray::NCOffsetsPolicy, ncarray::DevRefPolicy>(list, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false));
+  register_common_array_methods(ncdevref_cls);
+
+  auto ncdevowner_cls = py::classh<ncarray::NCDevArray>(ncarray_module, "NCDevArray")
+    .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
+      return new ncarray::NCDevArray(shape, dtype);
+    }),
+      py::arg("shape"),
+      py::arg("dtype") = py::cast(ncarray::DType::float32));
+  register_common_array_methods(ncdevowner_cls);
+
+  // --- Suboffsets support over GPU memory --- //
+  auto sodevview_cls = py::classh<ncarray::SODevArrayView>(ncarray_module,
+                                                           "SODevArrayView");
+  register_common_array_methods(sodevview_cls);
+
+  auto sodevref_cls = py::classh<ncarray::SODevArrayRef>(ncarray_module, "SODevArrayRef")
+    .def(py::init([](const py::array& arr, const bool read_only = false) {
+      return
+        pyarray_to_ref<ncarray::SOArrayPolicy, ncarray::DevRefPolicy>(arr, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false))
+    .def(py::init([](const py::list& list, const bool read_only = false) {
+      return
+        pylist_to_ref<ncarray::SOArrayPolicy, ncarray::DevRefPolicy>(list, read_only);
+    }),
+      py::arg("data"),
+      py::arg("read_only") = py::cast(false));
+  register_common_array_methods(sodevref_cls);
+
+  auto sodevowner_cls = py::classh<ncarray::SODevArray>(ncarray_module, "SODevArray")
+    .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
+      return new ncarray::SODevArray(shape, dtype);
+    }),
+      py::arg("shape"),
+      py::arg("dtype") = py::cast(ncarray::DType::float32));
+  register_common_array_methods(sodevowner_cls);
+#endif
 } // ncarray_module

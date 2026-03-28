@@ -9,7 +9,11 @@ project(
     ],
 )
 add_languages('cpp', native: true, required: true)
-add_languages('cuda', required: true)
+nca_has_cuda = add_languages('cuda', required: false)
+if nca_has_cuda
+    # Source code guards CUDA specific features behind NCA_HAS_CUDA
+    add_project_arguments('-DNCA_HAS_CUDA', language: ['cpp', 'cuda'])
+endif
 
 add_project_arguments('-frtti', language: 'cpp')
 
@@ -71,8 +75,11 @@ endif
 
 #### Dependencies ####
 ######################
-cuda_dep = dependency('cuda')
-
+deps_for_ncarray = []
+if nca_has_cuda
+    cuda_dep = dependency('cuda', modules: ['cudart'])
+    deps_for_ncarray += cuda_dep
+endif
 
 #### ncarray ####
 #################
@@ -86,6 +93,7 @@ libncarray = shared_library(
         'src/lib/ncarray/ncarrays.cc',
         'src/lib/ncarray/soarrays.cc',
     ],
+    dependencies: deps_for_ncarray,
     include_directories: ncarray_headers,
     install: true,
     install_dir: libncarray_install_dir,
@@ -97,33 +105,6 @@ libncarray = shared_library(
 ncarray_dep = declare_dependency(
     link_with: [
         libncarray,
-    ],
-    include_directories: ncarray_headers,
-)
-
-libncdevarray = shared_library(
-    'ncdevarray',
-    [
-        'src/lib/ncarray/ncdevarrays.cu',
-        'src/lib/ncarray/sodevarrays.cu',
-    ],
-    cuda_args: [
-        '--extended-lambda',
-        '--expt-relaxed-constexpr',
-        '-Xcudafe',
-        '--diag_suppress=445',
-    ],
-    include_directories: ncarray_headers,
-    install: true,
-    install_dir: libncarray_install_dir,
-    install_rpath: lib_install_rpath,
-    version: '1',
-    soversion: '1',
-)
-
-ncdevarray_dep = declare_dependency(
-    link_with: [
-        libncdevarray,
     ],
     include_directories: ncarray_headers,
 )
@@ -147,31 +128,70 @@ py3.install_sources(
     subdir: 'ncarray/include/ncarray',
 )
 
-# The following headers are for integration with device code on host side
-installed_device_compat_headers = [
-    'src/lib/ncarray/engines.hh',
-    'src/lib/ncarray/ncdevarrays.cuh',
-    'src/lib/ncarray/sodevarrays.cuh',
-]
 
-py3.install_sources(
-    installed_device_compat_headers,
-    pure: false,
-    subdir: 'ncarray/include/ncarray',
-)
+if nca_has_cuda
+    # We also only build this lib at all if CUDA is available
+    libncdevarray = shared_library(
+        'ncdevarray',
+        [
+            'src/lib/ncarray/ncdevarrays.cu',
+            'src/lib/ncarray/sodevarrays.cu',
+        ],
+        cuda_args: [
+            '--extended-lambda',
+            '--expt-relaxed-constexpr',
+            '-Xcudafe',
+            '--diag_suppress=445',
+        ],
+        include_directories: ncarray_headers,
+        install: true,
+        install_dir: libncarray_install_dir,
+        install_rpath: lib_install_rpath,
+        version: '1',
+        soversion: '1',
+    )
 
-# The following headers are device only as well as host-called kernels
-installed_device_headers = [
-    'src/lib/ncarray/device/elementwise.cuh',
-    'src/lib/ncarray/device/kernels.cuh',
-    'src/lib/ncarray/device/reductions.cuh',
-]
+    ncdevarray_dep = declare_dependency(
+        link_with: [
+            libncdevarray,
+        ],
+        dependencies: cuda_dep,
+        include_directories: ncarray_headers,
+    )
 
-py3.install_sources(
-    installed_device_headers,
-    pure: false,
-    subdir: 'ncarray/include/ncarray/device',
-)
+    # The following headers are for integration with device code on host side
+    installed_device_compat_headers = [
+        'src/lib/ncarray/engines.hh',
+        'src/lib/ncarray/ncdevarrays.cuh',
+        'src/lib/ncarray/sodevarrays.cuh',
+    ]
+
+    py3.install_sources(
+        installed_device_compat_headers,
+        pure: false,
+        subdir: 'ncarray/include/ncarray',
+    )
+
+    # The following headers are device only as well as host-called kernels
+    installed_device_headers = [
+        'src/lib/ncarray/device/elementwise.cuh',
+        'src/lib/ncarray/device/kernels.cuh',
+        'src/lib/ncarray/device/reductions.cuh',
+    ]
+
+    py3.install_sources(
+        installed_device_headers,
+        pure: false,
+        subdir: 'ncarray/include/ncarray/device',
+    )
+endif # end nca_has_cuda
+
+# Figure out dependencies
+deps_for_py_mod = [ncarray_dep, pybind11_dep]
+
+if nca_has_cuda
+    deps_for_py_mod += ncdevarray_dep
+endif
 
 py_mod = py3.extension_module(
     '_pyncarray',
@@ -181,10 +201,7 @@ py_mod = py3.extension_module(
     install: true,
     install_dir: pyncarray_install_dir,
     include_directories: ncarray_headers,
-    dependencies : [
-        ncarray_dep,
-        pybind11_dep,
-    ],
+    dependencies : deps_for_py_mod,
     install_rpath: py_to_lib_install_rpath,
     build_rpath: py_to_lib_install_rpath,
 )
