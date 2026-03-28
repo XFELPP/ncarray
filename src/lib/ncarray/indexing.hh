@@ -15,6 +15,8 @@ typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 #endif
+
+#include <concepts>
 #include <variant>
 #include <vector>
 
@@ -41,6 +43,12 @@ namespace ncarray {
     ssize_t step;
     ssize_t length;
   };
+
+  // Indexing is allowed by integer, slice or ellipsis
+  template <typename IdxT>
+  concept IndexArg = std::integral<std::decay_t<IdxT>> ||
+    std::same_as<std::decay_t<IdxT>, Slice> ||
+    std::same_as<std::decay_t<IdxT>, Ellipsis>;
 
   using IndexVariant = std::variant<ssize_t, Slice, Ellipsis>;
   using ArrayIndices = std::vector<IndexVariant>;

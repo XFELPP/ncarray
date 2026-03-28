@@ -76,9 +76,8 @@ ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 libncarray = shared_library(
     'ncarray',
     [
-        'src/lib/ncarray/ncarrayview.cc',
-        'src/lib/ncarray/ncarray.cc',
-        'src/lib/ncarray/ncarrayref.cc',
+        'src/lib/ncarray/ncarrays.hh',
+        'src/lib/ncarray/soarrays.hh',
     ],
     include_directories: ncarray_headers,
     install: true,
@@ -97,13 +96,15 @@ ncarray_dep = declare_dependency(
 
 # Install headers into the package for easy bundling
 installed_headers = [
+    'src/lib/ncarray/array_impl.hh',
     'src/lib/ncarray/array_operations.hh',
     'src/lib/ncarray/array_traits.hh',
     'src/lib/ncarray/dtype.hh',
     'src/lib/ncarray/indexing.hh',
-    'src/lib/ncarray/ncarray.hh',
-    'src/lib/ncarray/ncarrayref.hh',
-    'src/lib/ncarray/ncarrayview.hh',
+    'src/lib/ncarray/layout.hh',
+    'src/lib/ncarray/ncarrays.hh',
+    'src/lib/ncarray/soarrays.hh',
+    'src/lib/ncarray/storage.hh',
 ]
 py3.install_sources(
     installed_headers,
