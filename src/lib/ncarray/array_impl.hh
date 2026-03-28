@@ -98,11 +98,33 @@ namespace ncarray {
     ArrayImpl() = default;
 
     // Standard copy and move semantics - views are shallow copies, owners deep
+    // NOTE: Copys can only be done for Owner types on the host.
     // NOTE: The Storage(Storage&) constructor cannot be used since some
     // policies (e.g. Owner) have no default - it cannot be defined since
     // knowing how much memory to allocate relies on information from Layout
     // This means that these constructors MUST be correct and initialize everything
+    // --- Host-only copy constructor for owner types --- //
+    ArrayImpl(const ArrayImpl& other) requires std::is_base_of_v<OwnerTag, Storage>
+      : Layout(static_cast<const Layout&>(other))
+    {
+      this->m_dtype = other.dtype();
+      this->m_read_only = other.read_only();
+
+      this->allocate(this->nbytes());
+      this->copy(other.data(), this->nbytes());
+      this->m_data = reinterpret_cast<void*>(this->m_storage.get());
+    }
+
+    ArrayImpl(ArrayImpl&& other) noexcept requires std::is_base_of_v<OwnerTag, Storage>
+        : Layout(std::move(static_cast<Layout&>(other))),
+          Storage(std::move(static_cast<Storage&>(other))) {
+      // After move make sure to reset the data pointer
+      this->m_data = reinterpret_cast<void*>(this->m_storage.get());
+    }
+
+    // --- View/Ref copy/move can be done on host or device --- //
     NCA_HD ArrayImpl(const ArrayImpl& other)
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
       : Layout(static_cast<const Layout&>(other))
     {
       // Handle the attributes coming from Storage
@@ -116,23 +138,15 @@ namespace ncarray {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
         this->m_data = &(this->m_ref_ptrs[0]);
-      } else if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
-        this->allocate(this->nbytes());
-        std::copy(reinterpret_cast<std::uint8_t*>(other.data()),
-                  reinterpret_cast<std::uint8_t*>(other.data()) + this->nbytes(),
-                  this->m_storage.get());
-        this->m_data = reinterpret_cast<void*>(this->m_storage.get());
       }
     }
 
     NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
       : Layout(std::move(static_cast<Layout&>(other)))
       , Storage(std::move(static_cast<Storage&>(other)))
     {
-      // Owner needs to move buffer
-      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
-        this->m_data = reinterpret_cast<void*>(this->m_storage.get());
-      } else if constexpr (std::is_base_of_v<RefTag, Storage>) {
+      if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -157,8 +171,33 @@ namespace ncarray {
       , Storage()
     {}
 
-    // Assignment operators just re-use above
-    NCA_HD ArrayImpl& operator=(const ArrayImpl& other) {
+    // --- Host only move/copy assignment for owner types --- //
+    ArrayImpl& operator=(const ArrayImpl& other)
+      requires std::is_base_of_v<OwnerTag, Storage>
+    {
+      if (this != &other) {
+        *this = ArrayImpl(other);
+      }
+      return *this;
+    }
+
+    ArrayImpl& operator=(ArrayImpl&& other) noexcept
+      requires std::is_base_of_v<OwnerTag, Storage>
+    {
+      if (this != &other) {
+        Layout::operator=(std::move(static_cast<Layout&>(other)));
+        Storage::operator=(std::move(static_cast<Storage&>(other)));
+
+        this->m_data = this->m_storage.get();
+      }
+
+      return *this;
+    }
+
+    // --- View/Ref copy/move assignment can be done on host or device --- //
+    NCA_HD ArrayImpl& operator=(const ArrayImpl& other)
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
+    {
       if (this != &other) {
         *this = ArrayImpl(other);
       }
@@ -166,14 +205,14 @@ namespace ncarray {
       return *this;
     }
 
-    NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept {
+    NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
+    {
       if (this != &other) {
         Layout::operator=(std::move(static_cast<Layout&>(other)));
         Storage::operator=(std::move(static_cast<Storage&>(other)));
 
-        if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
-          this->m_data = this->m_storage.get();
-        } else if constexpr (std::is_base_of_v<RefTag, Storage>) {
+        if constexpr (std::is_base_of_v<RefTag, Storage>) {
           for (ssize_t i = 0; i < this->ndim(); ++i) {
             this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
           }

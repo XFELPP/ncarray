@@ -10,6 +10,7 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -178,9 +179,15 @@ namespace ncarray {
 
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 
-    NCA_HD inline void allocate(ssize_t nbytes) {
+    NCA_H inline void allocate(ssize_t nbytes) {
       m_storage =
           std::unique_ptr<std::uint8_t[], HostDeleter>(new std::uint8_t[nbytes], HostDeleter());
+    }
+
+    NCA_H inline void copy(void* src, ssize_t nbytes) {
+      std::copy(reinterpret_cast<std::uint8_t*>(src),
+                reinterpret_cast<std::uint8_t*>(src) + nbytes,
+                this->m_storage.get());
     }
 
   protected:
@@ -195,9 +202,19 @@ namespace ncarray {
 
     NCA_H inline void allocate(ssize_t nbytes) {
 #ifdef __CUDACC__
-      std::uint8_t* devPtr{nullptr};
+      std::uint8_t* devPtr { nullptr };
       CHECK_CUDA_ERROR(cudaMallocManaged(&devPtr, nbytes));
       m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
+#endif
+    }
+
+    NCA_H inline void copy(void* src, ssize_t nbytes) {
+#ifdef __CUDACC__
+      // cudaMemcpyDefault will require UVA
+      CHECK_CUDA_ERROR(cudaMemcpy(this->m_storage.get(),
+                                  src,
+                                  nbytes,
+                                  cudaMemcpyDefault));
 #endif
     }
 
