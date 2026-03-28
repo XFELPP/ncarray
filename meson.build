@@ -141,12 +141,26 @@ installed_headers = [
     'src/lib/ncarray/storage.hh',
 ]
 
-installed_device_compat_headers [
+py3.install_sources(
+    installed_headers,
+    pure: false,
+    subdir: 'ncarray/include/ncarray',
+)
+
+# The following headers are for integration with device code on host side
+installed_device_compat_headers = [
     'src/lib/ncarray/engines.hh',
     'src/lib/ncarray/ncdevarrays.cuh',
     'src/lib/ncarray/sodevarrays.cuh',
 ]
 
+py3.install_sources(
+    installed_device_compat_headers,
+    pure: false,
+    subdir: 'ncarray/include/ncarray',
+)
+
+# The following headers are device only as well as host-called kernels
 installed_device_headers = [
     'src/lib/ncarray/device/elementwise.cuh',
     'src/lib/ncarray/device/kernels.cuh',
@@ -154,9 +168,9 @@ installed_device_headers = [
 ]
 
 py3.install_sources(
-    installed_headers,
+    installed_device_headers,
     pure: false,
-    subdir: 'ncarray/include',
+    subdir: 'ncarray/include/ncarray/device',
 )
 
 py_mod = py3.extension_module(
