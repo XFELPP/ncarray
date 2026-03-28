@@ -4,9 +4,12 @@ project(
     version: '0.1.1',
     default_options: [
         'cpp_std=c++23',
+        'cuda_std=c++20',
         'optimization=3',
     ],
 )
+add_languages('cpp', native: true, required: true)
+add_languages('cuda', required: true)
 
 add_project_arguments('-frtti', language: 'cpp')
 
@@ -66,6 +69,10 @@ else
     py_to_lib_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / py_to_lib_path) + ':' + abs_lib_rpath
 endif
 
+#### Dependencies ####
+######################
+cuda_dep = dependency('cuda')
+
 
 #### ncarray ####
 #################
@@ -76,8 +83,8 @@ ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 libncarray = shared_library(
     'ncarray',
     [
-        'src/lib/ncarray/ncarrays.hh',
-        'src/lib/ncarray/soarrays.hh',
+        'src/lib/ncarray/ncarrays.cc',
+        'src/lib/ncarray/soarrays.cc',
     ],
     include_directories: ncarray_headers,
     install: true,
@@ -94,6 +101,33 @@ ncarray_dep = declare_dependency(
     include_directories: ncarray_headers,
 )
 
+libncdevarray = shared_library(
+    'ncdevarray',
+    [
+        'src/lib/ncarray/ncdevarrays.cu',
+        'src/lib/ncarray/sodevarrays.cu',
+    ],
+    cuda_args: [
+        '--extended-lambda',
+        '--expt-relaxed-constexpr',
+        '-Xcudafe',
+        '--diag_suppress=445',
+    ],
+    include_directories: ncarray_headers,
+    install: true,
+    install_dir: libncarray_install_dir,
+    install_rpath: lib_install_rpath,
+    version: '1',
+    soversion: '1',
+)
+
+ncdevarray_dep = declare_dependency(
+    link_with: [
+        libncdevarray,
+    ],
+    include_directories: ncarray_headers,
+)
+
 # Install headers into the package for easy bundling
 installed_headers = [
     'src/lib/ncarray/array_impl.hh',
@@ -106,6 +140,19 @@ installed_headers = [
     'src/lib/ncarray/soarrays.hh',
     'src/lib/ncarray/storage.hh',
 ]
+
+installed_device_compat_headers [
+    'src/lib/ncarray/engines.hh',
+    'src/lib/ncarray/ncdevarrays.cuh',
+    'src/lib/ncarray/sodevarrays.cuh',
+]
+
+installed_device_headers = [
+    'src/lib/ncarray/device/elementwise.cuh',
+    'src/lib/ncarray/device/kernels.cuh',
+    'src/lib/ncarray/device/reductions.cuh',
+]
+
 py3.install_sources(
     installed_headers,
     pure: false,

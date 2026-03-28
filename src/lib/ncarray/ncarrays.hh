@@ -14,9 +14,12 @@
 
 namespace ncarray {
   using NCArrayView = ArrayImpl<NCOffsetsPolicy, ViewPolicy>;
-
   using NCArrayRef = ArrayImpl<NCOffsetsPolicy, RefPolicy>;
   using NCArray = ArrayImpl<NCOffsetsPolicy, OwnerPolicy>;
+
+  extern template class ArrayImpl<NCOffsetsPolicy, ViewPolicy>;
+  extern template class ArrayImpl<NCOffsetsPolicy, RefPolicy>;
+  extern template class ArrayImpl<NCOffsetsPolicy, OwnerPolicy>;
 } // namespace ncarray
 
 #endif // NCARRAY_NCARRAYS_HH

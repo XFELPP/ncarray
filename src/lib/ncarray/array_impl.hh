@@ -81,10 +81,14 @@ namespace ncarray {
   template <typename Layout, typename Storage>
   class ArrayImpl : public Layout, public Storage {
   public:
-    using ViewType = ArrayImpl<Layout, ViewPolicy>;
-    using OwnerType = ArrayImpl<Layout, OwnerPolicy>;
+    using MemType = typename Storage::MemType;
+    using VPolicy = typename StoragePolicyTraits<MemType>::View;
+    using OPolicy = typename StoragePolicyTraits<MemType>::Owner;
 
-    NCA_HD ArrayImpl() = default;
+    using ViewType = ArrayImpl<Layout, VPolicy>;
+    using OwnerType = ArrayImpl<Layout, OPolicy>;
+
+    ArrayImpl() = default;
 
     // Standard copy and move semantics - views are shallow copies, owners deep
     // NOTE: The Storage(Storage&) constructor cannot be used since some
@@ -100,13 +104,13 @@ namespace ncarray {
       this->m_read_only = other.read_only();
 
       // Specializations for the Reference and Owning classes
-      if constexpr (std::is_same_v<Storage, RefPolicy>) {
+      if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
         this->m_data = &(this->m_ref_ptrs[0]);
-      } else if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
-        this->m_storage = std::make_unique<std::uint8_t[]>(this->nbytes());
+      } else if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
+        this->allocate(this->nbytes());
         std::copy(reinterpret_cast<std::uint8_t*>(other.data()),
                   reinterpret_cast<std::uint8_t*>(other.data()) + this->nbytes(),
                   this->m_storage.get());
@@ -119,9 +123,9 @@ namespace ncarray {
       , Storage(std::move(static_cast<Storage&>(other)))
     {
       // Owner needs to move buffer
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_data = reinterpret_cast<void*>(this->m_storage.get());
-      } else if constexpr (std::is_same_v<Storage, RefPolicy>) {
+      } else if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -131,19 +135,19 @@ namespace ncarray {
 
     // Universal interconversion - any storage type can become a view
     template <class OtherStorage>
-    requires std::is_same_v<Storage, ViewPolicy>
-    ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
+    requires std::is_base_of_v<ViewTag, Storage>
+    NCA_HD ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
       : Layout(static_cast<const Layout&>(other))
-      , Storage(static_cast<const OtherStorage&>(other))
+      , Storage()
     {
       this->m_data = other.data();
     }
 
     template <class OtherStorage>
-    requires std::is_same_v<Storage, ViewPolicy>
-    NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
+    requires std::is_base_of_v<ViewTag, Storage>
+    NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
       : Layout(std::move(static_cast<const Layout&>(other)))
-      , Storage(std::move(static_cast<Storage&>(other)))
+      , Storage()
     {}
 
     // Assignment operators just re-use above
@@ -160,9 +164,9 @@ namespace ncarray {
         Layout::operator=(std::move(static_cast<Layout&>(other)));
         Storage::operator=(std::move(static_cast<Storage&>(other)));
 
-        if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+        if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
           this->m_data = this->m_storage.get();
-        } else if constexpr (std::is_same_v<Storage, RefPolicy>) {
+        } else if constexpr (std::is_base_of_v<RefTag, Storage>) {
           for (ssize_t i = 0; i < this->ndim(); ++i) {
             this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
           }
@@ -218,7 +222,7 @@ namespace ncarray {
                      DType dtype_,
                      Metadata::value_type pointer_axis_,
                      bool read_only_) {
-      if constexpr (std::is_same_v<Storage, RefPolicy>) {
+      if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (std::size_t i = 0; i < data_ptrs.size(); ++i) {
           this->m_ref_ptrs[i] = data_ptrs[i];
         }
@@ -234,7 +238,7 @@ namespace ncarray {
     // --- Owner classes.... --- //
     NCA_HD ArrayImpl(const std::vector<ssize_t>& shape_,
                      DType dtype_) {
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.set(shape_.data(), shape_.size());
@@ -247,7 +251,7 @@ namespace ncarray {
     }
 
     NCA_HD ArrayImpl(const Metadata& shape_, DType dtype_) {
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_shape.set(shape_.data, shape_.ndim);
         this->m_dtype = dtype_;
@@ -261,7 +265,7 @@ namespace ncarray {
     }
 
     NCA_HD ArrayImpl(ssize_t ndim, const ssize_t* shape_, DType dtype_) {
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.set(shape_, ndim);
