@@ -10,6 +10,7 @@
 #define NCARRAY_ARRAY_TRAITS_HH
 
 #include "ncarray/dtype.hh"
+#include "ncarray/storage.hh"
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -68,6 +69,10 @@ namespace ncarray {
   concept MutableArrayLike = ArrayLike<T> && requires(T arr) {
     { arr.data() } -> std::same_as<void*>;
   };
+
+  template <class T>
+  concept ViewArrayLike = ArrayLike<T> &&
+    std::is_base_of_v<ViewTag, typename std::remove_cvref_t<T>::StoragePolicy>;
 
   // ArrayLikes that own the data should be constructable from just the shape and type
   // This indicates they can control data buffer

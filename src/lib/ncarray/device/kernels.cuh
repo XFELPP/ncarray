@@ -22,28 +22,28 @@ typedef SSIZE_T ssize_t;
 
 namespace ncarray {
   // --- Binary operations --- //
-  template <class LeftT, class RightT, class OutT>
+  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void add_kernel(const LeftT left, const RightT right, OutT out) {
     ncarray::device::block_add(left, right, out);
   }
 
-  template <class LeftT, class RightT, class OutT>
+  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void sub_kernel(const LeftT left, const RightT right, OutT out) {
     ncarray::device::block_sub(left, right, out);
   }
 
-  template <class LeftT, class RightT, class OutT>
+  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void mul_kernel(const LeftT left, const RightT right, OutT out) {
     ncarray::device::block_mul(left, right, out);
   }
 
-  template <class LeftT, class RightT, class OutT>
+  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void truediv_kernel(const LeftT left, const RightT right, OutT out) {
     ncarray::device::block_truediv(left, right, out);
   }
 
   // --- Reductions --- //
-  template <int BlockSize, class ArrayT, typename T>
+  template <int BlockSize, ViewArrayLike ArrayT, typename T>
   __global__ void sum_kernel(const ArrayT arr,
                              typename op_traits<T>::sum_type* res) {
     using AccumT = typename op_traits<T>::sum_type;
@@ -54,7 +54,7 @@ namespace ncarray {
     }
   }
 
-  template <int BlockSize, class ArrayT, typename T>
+  template <int BlockSize, ViewArrayLike ArrayT, typename T>
   __global__ void max_kernel(const ArrayT arr, T* res) {
     T block_res_max = ncarray::device::block_max<BlockSize, ArrayT, T>(arr);
 
@@ -63,7 +63,7 @@ namespace ncarray {
     }
   }
 
-  template <int BlockSize, class ArrayT, typename T>
+  template <int BlockSize, ViewArrayLike ArrayT, typename T>
   __global__ void min_kernel(const ArrayT arr, T* res) {
     T block_res_min = ncarray::device::block_min<BlockSize, ArrayT, T>(arr);
 
@@ -73,7 +73,7 @@ namespace ncarray {
   }
 
   /*
-  template <int BlockSize, class ArrayT, typename T>
+  template <int BlockSize, ViewArrayLike ArrayT, typename T>
   __global__ void mean_kernel(const ArrayT arr,
                               typename op_traits<T>::truediv_type* res) {
     using ResultT = typename op_traits<T>::truediv_type;

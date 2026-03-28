@@ -81,6 +81,13 @@ namespace ncarray {
   template <typename Layout, typename Storage>
   class ArrayImpl : public Layout, public Storage {
   public:
+    // Exposed for concepts and traits
+    using StoragePolicy = Storage;
+    using LayoutPolicy = Layout;
+
+    // --- Global type aliases --- //
+    // The following are used so that for a given Layout, you can access what
+    // the appropriate ViewType and OwnerType would be.
     using MemType = typename Storage::MemType;
     using VPolicy = typename StoragePolicyTraits<MemType>::View;
     using OPolicy = typename StoragePolicyTraits<MemType>::Owner;
@@ -236,8 +243,21 @@ namespace ncarray {
     }
 
     // --- Owner classes.... --- //
-    NCA_HD ArrayImpl(const std::vector<ssize_t>& shape_,
-                     DType dtype_) {
+    /**
+     * Construct a new array given a shape and datatype. This will generally be
+     * used for Owner type arrays.
+     *
+     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * called from device code! A storage policy may allocate device memory for an
+     * owner-type array; however, it must be constructed host-side, using host APIs.
+     * This avoids complications with managing concurrent allocation in device code,
+     * or kernels, the small heap for device-side malloc, lack of STL compatibility
+     * device-side, and so on.
+     *
+     * @param[in] shape_ The shape of the new array (using a std::vector).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     */
+    ArrayImpl(const std::vector<ssize_t>& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
@@ -250,7 +270,21 @@ namespace ncarray {
       }
     }
 
-    NCA_HD ArrayImpl(const Metadata& shape_, DType dtype_) {
+    /**
+     * Construct a new array given a shape and datatype. This will generally be
+     * used for Owner type arrays.
+     *
+     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * called from device code! A storage policy may allocate device memory for an
+     * owner-type array; however, it must be constructed host-side, using host APIs.
+     * This avoids complications with managing concurrent allocation in device code,
+     * or kernels, the small heap for device-side malloc, lack of STL compatibility
+     * device-side, and so on.
+     *
+     * @param[in] shape_ The shape of the new array (using the metadata struct).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     */
+    ArrayImpl(const Metadata& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_shape.set(shape_.data, shape_.ndim);
@@ -264,7 +298,22 @@ namespace ncarray {
       }
     }
 
-    NCA_HD ArrayImpl(ssize_t ndim, const ssize_t* shape_, DType dtype_) {
+    /**
+     * Construct a new array given a shape and datatype. This will generally be
+     * used for Owner type arrays.
+     *
+     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * called from device code! A storage policy may allocate device memory for an
+     * owner-type array; however, it must be constructed host-side, using host APIs.
+     * This avoids complications with managing concurrent allocation in device code,
+     * or kernels, the small heap for device-side malloc, lack of STL compatibility
+     * device-side, and so on.
+     *
+     * @param[in] ndim The number of dimensions (to properly increment the pointer).
+     * @param[in] shape_ The shape of the new array (using a raw pointer).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     */
+    ArrayImpl(ssize_t ndim, const ssize_t* shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
@@ -450,6 +499,22 @@ namespace ncarray {
     }
 
     // --- Copy, cast, modification and buffer helpers/utilities --- //
+    /**
+     * Construct a view of any array.
+     *
+     * Some functions, and in particular device code, require views only, to
+     * avoid allocations when dealing with OwnerType arrays. This function will
+     * provide a view over the data from any array, so it can be used easily with
+     * all APIs.
+     *
+     * E.g.:
+     *
+     * @code{.cpp}
+     * gpu_kernel<<<blocks, TPB>>>(my_array.view());
+     * @endcode
+     */
+    ViewType view() const { return ViewType(*this); }
+
     void copy_into(void* dest_buffer) const;
 
     template <typename OutT>
