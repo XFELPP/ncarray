@@ -164,7 +164,7 @@ namespace {
     bool assigned { false };
     bool read_only { read_only_ };
     for (py::handle o : list) {
-      py::array data = py::cast<py::array>(o);
+      py::array data = py::reinterpret_borrow<py::array>(o);
       py::buffer_info arr_info = data.request();
       data_ptrs.push_back(arr_info.ptr);
       if (!data.writeable()) {
