@@ -9,19 +9,29 @@
 #ifndef NCARRAY_ARRAY_TRAITS_HH
 #define NCARRAY_ARRAY_TRAITS_HH
 
-#include "dtype.hh"
+#include "ncarray/dtype.hh"
+#include "ncarray/storage.hh"
 
-#include <complex>
-#include <concepts>
-#include <cstdint>
-#include <limits>
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 #endif
+
+#include <complex>
+#include <concepts>
+#include <cstdint>
+#include <limits>
 #include <vector>
+
+#ifndef NCA_HD
+#ifdef __CUDACC__
+#define NCA_HD __host__ __device__
+#else
+#define NCA_HD
+#endif
+#endif
 
 namespace ncarray {
   namespace impl {
@@ -59,6 +69,10 @@ namespace ncarray {
   concept MutableArrayLike = ArrayLike<T> && requires(T arr) {
     { arr.data() } -> std::same_as<void*>;
   };
+
+  template <class T>
+  concept ViewArrayLike = ArrayLike<T> &&
+    std::is_base_of_v<ViewTag, typename std::remove_cvref_t<T>::StoragePolicy>;
 
   // ArrayLikes that own the data should be constructable from just the shape and type
   // This indicates they can control data buffer
@@ -106,13 +120,13 @@ namespace ncarray {
 
     // Comparisons and identities -- needed especially for specializations below
     // on things like complex
-    static bool greater(const T& a, const T& b) { return a > b; }
-    static bool less(const T& a, const T& b) { return a < b; }
-    static T lowest() { return std::numeric_limits<T>::lowest(); }
-    static T max() { return std::numeric_limits<T>::max(); }
+    NCA_HD static bool greater(const T& a, const T& b) { return a > b; }
+    NCA_HD static bool less(const T& a, const T& b) { return a < b; }
+    NCA_HD static T lowest() { return std::numeric_limits<T>::lowest(); }
+    NCA_HD static T max() { return std::numeric_limits<T>::max(); }
 
     template <typename To>
-    static To cast(const T& val) {
+    NCA_HD static To cast(const T& val) {
       if constexpr (std::is_same_v<To, T>) {
         return val;
       } else if constexpr (requires { To().real(); }) {
@@ -134,30 +148,30 @@ namespace ncarray {
     using diff_type = std::complex<T>;
     using truediv_type = std::complex<double>;
 
-    static bool greater(const std::complex<T>& a, const std::complex<T>& b) {
+    NCA_HD static bool greater(const std::complex<T>& a, const std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() > b.real();
       }
       return a.imag() > b.imag();
     }
 
-    static bool less(const std::complex<T>& a, const std::complex<T>& b) {
+    NCA_HD static bool less(const std::complex<T>& a, const std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() < b.real();
       }
       return a.imag() < b.imag();
     }
 
-    static std::complex<T> lowest() {
+    NCA_HD static std::complex<T> lowest() {
       return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::lowest()};
     }
 
-    static std::complex<T> max() {
+    NCA_HD static std::complex<T> max() {
       return {std::numeric_limits<T>::max(), std::numeric_limits<T>::max()};
     }
 
     template <typename To>
-    static To cast(const std::complex<T>& val) {
+    NCA_HD static To cast(const std::complex<T>& val) {
       if constexpr (std::is_same_v<To, std::complex<T>>) {
         return val;
       } else if constexpr (requires { To().real(); }) {

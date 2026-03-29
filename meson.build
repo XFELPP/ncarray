@@ -1,12 +1,19 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.1.1',
+    version: '0.2.0',
     default_options: [
         'cpp_std=c++23',
+        'cuda_std=c++20',
         'optimization=3',
     ],
 )
+add_languages('cpp', native: true, required: true)
+nca_has_cuda = add_languages('cuda', required: false)
+if nca_has_cuda
+    # Source code guards CUDA specific features behind NCA_HAS_CUDA
+    add_project_arguments('-DNCA_HAS_CUDA', language: ['cpp', 'cuda'])
+endif
 
 add_project_arguments('-frtti', language: 'cpp')
 
@@ -66,6 +73,13 @@ else
     py_to_lib_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / py_to_lib_path) + ':' + abs_lib_rpath
 endif
 
+#### Dependencies ####
+######################
+deps_for_ncarray = []
+if nca_has_cuda
+    cuda_dep = dependency('cuda', modules: ['cudart'])
+    deps_for_ncarray += cuda_dep
+endif
 
 #### ncarray ####
 #################
@@ -76,9 +90,10 @@ ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 libncarray = shared_library(
     'ncarray',
     [
-        'src/lib/ncarray/ncarrays.hh',
-        'src/lib/ncarray/soarrays.hh',
+        'src/lib/ncarray/ncarrays.cc',
+        'src/lib/ncarray/soarrays.cc',
     ],
+    dependencies: deps_for_ncarray,
     include_directories: ncarray_headers,
     install: true,
     install_dir: libncarray_install_dir,
@@ -106,11 +121,84 @@ installed_headers = [
     'src/lib/ncarray/soarrays.hh',
     'src/lib/ncarray/storage.hh',
 ]
+
 py3.install_sources(
     installed_headers,
     pure: false,
-    subdir: 'ncarray/include',
+    subdir: 'ncarray/include/ncarray',
 )
+
+
+if nca_has_cuda
+    # We also only build this lib at all if CUDA is available
+    # We make a fat binary for Turing, Ampere, Ada and Hoper
+    libncdevarray = shared_library(
+        'ncdevarray',
+        [
+            'src/lib/ncarray/ncdevarrays.cu',
+            'src/lib/ncarray/sodevarrays.cu',
+        ],
+        cuda_args: [
+            '--extended-lambda',
+            '--expt-relaxed-constexpr',
+            # silence warning: declared but not referenced (e.g. pybind, stl...)
+            '-Xcudafe', '--diag_suppress=445',
+             # silence warning: long double treated as double
+            '-Xcudafe', '--diag_suppress=20208',
+            '-gencode', 'arch=compute_75,code=sm_75',
+            '-gencode', 'arch=compute_80,code=sm_80',
+            '-gencode', 'arch=compute_89,code=sm_89',
+            '-gencode', 'arch=compute_90,code=sm_90',
+        ],
+        include_directories: ncarray_headers,
+        install: true,
+        install_dir: libncarray_install_dir,
+        install_rpath: lib_install_rpath,
+        version: '1',
+        soversion: '1',
+    )
+
+    ncdevarray_dep = declare_dependency(
+        link_with: [
+            libncdevarray,
+        ],
+        dependencies: cuda_dep,
+        include_directories: ncarray_headers,
+    )
+
+    # The following headers are for integration with device code on host side
+    installed_device_compat_headers = [
+        'src/lib/ncarray/engines.hh',
+        'src/lib/ncarray/ncdevarrays.cuh',
+        'src/lib/ncarray/sodevarrays.cuh',
+    ]
+
+    py3.install_sources(
+        installed_device_compat_headers,
+        pure: false,
+        subdir: 'ncarray/include/ncarray',
+    )
+
+    # The following headers are device only as well as host-called kernels
+    installed_device_headers = [
+        'src/lib/ncarray/device/elementwise.cuh',
+        'src/lib/ncarray/device/kernels.cuh',
+        'src/lib/ncarray/device/reductions.cuh',
+    ]
+
+    py3.install_sources(
+        installed_device_headers,
+        pure: false,
+        subdir: 'ncarray/include/ncarray/device',
+    )
+endif # end nca_has_cuda
+
+# Figure out dependencies
+deps_for_py_mod = [ncarray_dep, pybind11_dep]
+
+if nca_has_cuda
+    deps_for_py_mod += ncdevarray_dep
+endif
 
 py_mod = py3.extension_module(
     '_pyncarray',
@@ -120,10 +208,7 @@ py_mod = py3.extension_module(
     install: true,
     install_dir: pyncarray_install_dir,
     include_directories: ncarray_headers,
-    dependencies : [
-        ncarray_dep,
-        pybind11_dep,
-    ],
+    dependencies : deps_for_py_mod,
     install_rpath: py_to_lib_install_rpath,
     build_rpath: py_to_lib_install_rpath,
 )

@@ -15,6 +15,14 @@
 #include <string>
 #include <variant>
 
+#ifndef NCA_HD
+#ifdef __CUDACC__
+#define NCA_HD __host__ __device__
+#else
+#define NCA_HD
+#endif
+#endif
+
 namespace ncarray {
   class type_error : public std::invalid_argument {
   public:
@@ -66,7 +74,7 @@ namespace ncarray {
   REGISTER_NCARRAY_DTYPE(std::complex<long double>, complex256)
 #undef REGISTER_NCARRAY_DTYPE
 
-  inline size_t itemsize(DType type) {
+  NCA_HD inline size_t itemsize(DType type) {
     switch (type) {
     case DType::bool_:
     case DType::char_:

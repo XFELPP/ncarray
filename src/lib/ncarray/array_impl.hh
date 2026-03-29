@@ -81,17 +81,50 @@ namespace ncarray {
   template <typename Layout, typename Storage>
   class ArrayImpl : public Layout, public Storage {
   public:
-    using ViewType = ArrayImpl<Layout, ViewPolicy>;
-    using OwnerType = ArrayImpl<Layout, OwnerPolicy>;
+    // Exposed for concepts and traits
+    using StoragePolicy = Storage;
+    using LayoutPolicy = Layout;
 
-    NCA_HD ArrayImpl() = default;
+    // --- Global type aliases --- //
+    // The following are used so that for a given Layout, you can access what
+    // the appropriate ViewType and OwnerType would be.
+    using MemType = typename Storage::MemType;
+    using VPolicy = typename StoragePolicyTraits<MemType>::View;
+    using OPolicy = typename StoragePolicyTraits<MemType>::Owner;
+
+    using ViewType = ArrayImpl<Layout, VPolicy>;
+    using OwnerType = ArrayImpl<Layout, OPolicy>;
+
+    ArrayImpl() = default;
 
     // Standard copy and move semantics - views are shallow copies, owners deep
+    // NOTE: Copys can only be done for Owner types on the host.
     // NOTE: The Storage(Storage&) constructor cannot be used since some
     // policies (e.g. Owner) have no default - it cannot be defined since
     // knowing how much memory to allocate relies on information from Layout
     // This means that these constructors MUST be correct and initialize everything
+    // --- Host-only copy constructor for owner types --- //
+    ArrayImpl(const ArrayImpl& other) requires std::is_base_of_v<OwnerTag, Storage>
+      : Layout(static_cast<const Layout&>(other))
+    {
+      this->m_dtype = other.dtype();
+      this->m_read_only = other.read_only();
+
+      this->allocate(this->nbytes());
+      this->copy(other.data(), this->nbytes());
+      this->m_data = reinterpret_cast<void*>(this->m_storage.get());
+    }
+
+    ArrayImpl(ArrayImpl&& other) noexcept requires std::is_base_of_v<OwnerTag, Storage>
+        : Layout(std::move(static_cast<Layout&>(other))),
+          Storage(std::move(static_cast<Storage&>(other))) {
+      // After move make sure to reset the data pointer
+      this->m_data = reinterpret_cast<void*>(this->m_storage.get());
+    }
+
+    // --- View/Ref copy/move can be done on host or device --- //
     NCA_HD ArrayImpl(const ArrayImpl& other)
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
       : Layout(static_cast<const Layout&>(other))
     {
       // Handle the attributes coming from Storage
@@ -100,28 +133,20 @@ namespace ncarray {
       this->m_read_only = other.read_only();
 
       // Specializations for the Reference and Owning classes
-      if constexpr (std::is_same_v<Storage, RefPolicy>) {
+      if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
         this->m_data = &(this->m_ref_ptrs[0]);
-      } else if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
-        this->m_storage = std::make_unique<std::uint8_t[]>(this->nbytes());
-        std::copy(reinterpret_cast<std::uint8_t*>(other.data()),
-                  reinterpret_cast<std::uint8_t*>(other.data()) + this->nbytes(),
-                  this->m_storage.get());
-        this->m_data = reinterpret_cast<void*>(this->m_storage.get());
       }
     }
 
     NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
       : Layout(std::move(static_cast<Layout&>(other)))
       , Storage(std::move(static_cast<Storage&>(other)))
     {
-      // Owner needs to move buffer
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
-        this->m_data = reinterpret_cast<void*>(this->m_storage.get());
-      } else if constexpr (std::is_same_v<Storage, RefPolicy>) {
+      if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -131,23 +156,48 @@ namespace ncarray {
 
     // Universal interconversion - any storage type can become a view
     template <class OtherStorage>
-    requires std::is_same_v<Storage, ViewPolicy>
-    ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
+    requires std::is_base_of_v<ViewTag, Storage>
+    NCA_HD ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
       : Layout(static_cast<const Layout&>(other))
-      , Storage(static_cast<const OtherStorage&>(other))
+      , Storage()
     {
       this->m_data = other.data();
     }
 
     template <class OtherStorage>
-    requires std::is_same_v<Storage, ViewPolicy>
-    NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
+    requires std::is_base_of_v<ViewTag, Storage>
+    NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
       : Layout(std::move(static_cast<const Layout&>(other)))
-      , Storage(std::move(static_cast<Storage&>(other)))
+      , Storage()
     {}
 
-    // Assignment operators just re-use above
-    NCA_HD ArrayImpl& operator=(const ArrayImpl& other) {
+    // --- Host only move/copy assignment for owner types --- //
+    ArrayImpl& operator=(const ArrayImpl& other)
+      requires std::is_base_of_v<OwnerTag, Storage>
+    {
+      if (this != &other) {
+        *this = ArrayImpl(other);
+      }
+      return *this;
+    }
+
+    ArrayImpl& operator=(ArrayImpl&& other) noexcept
+      requires std::is_base_of_v<OwnerTag, Storage>
+    {
+      if (this != &other) {
+        Layout::operator=(std::move(static_cast<Layout&>(other)));
+        Storage::operator=(std::move(static_cast<Storage&>(other)));
+
+        this->m_data = this->m_storage.get();
+      }
+
+      return *this;
+    }
+
+    // --- View/Ref copy/move assignment can be done on host or device --- //
+    NCA_HD ArrayImpl& operator=(const ArrayImpl& other)
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
+    {
       if (this != &other) {
         *this = ArrayImpl(other);
       }
@@ -155,14 +205,14 @@ namespace ncarray {
       return *this;
     }
 
-    NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept {
+    NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept
+      requires (!std::is_base_of_v<OwnerTag, Storage>)
+    {
       if (this != &other) {
         Layout::operator=(std::move(static_cast<Layout&>(other)));
         Storage::operator=(std::move(static_cast<Storage&>(other)));
 
-        if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
-          this->m_data = this->m_storage.get();
-        } else if constexpr (std::is_same_v<Storage, RefPolicy>) {
+        if constexpr (std::is_base_of_v<RefTag, Storage>) {
           for (ssize_t i = 0; i < this->ndim(); ++i) {
             this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
           }
@@ -218,7 +268,7 @@ namespace ncarray {
                      DType dtype_,
                      Metadata::value_type pointer_axis_,
                      bool read_only_) {
-      if constexpr (std::is_same_v<Storage, RefPolicy>) {
+      if constexpr (std::is_base_of_v<RefTag, Storage>) {
         for (std::size_t i = 0; i < data_ptrs.size(); ++i) {
           this->m_ref_ptrs[i] = data_ptrs[i];
         }
@@ -232,9 +282,22 @@ namespace ncarray {
     }
 
     // --- Owner classes.... --- //
-    NCA_HD ArrayImpl(const std::vector<ssize_t>& shape_,
-                     DType dtype_) {
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+    /**
+     * Construct a new array given a shape and datatype. This will generally be
+     * used for Owner type arrays.
+     *
+     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * called from device code! A storage policy may allocate device memory for an
+     * owner-type array; however, it must be constructed host-side, using host APIs.
+     * This avoids complications with managing concurrent allocation in device code,
+     * or kernels, the small heap for device-side malloc, lack of STL compatibility
+     * device-side, and so on.
+     *
+     * @param[in] shape_ The shape of the new array (using a std::vector).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     */
+    ArrayImpl(const std::vector<ssize_t>& shape_, DType dtype_) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.set(shape_.data(), shape_.size());
@@ -246,8 +309,22 @@ namespace ncarray {
       }
     }
 
-    NCA_HD ArrayImpl(const Metadata& shape_, DType dtype_) {
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+    /**
+     * Construct a new array given a shape and datatype. This will generally be
+     * used for Owner type arrays.
+     *
+     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * called from device code! A storage policy may allocate device memory for an
+     * owner-type array; however, it must be constructed host-side, using host APIs.
+     * This avoids complications with managing concurrent allocation in device code,
+     * or kernels, the small heap for device-side malloc, lack of STL compatibility
+     * device-side, and so on.
+     *
+     * @param[in] shape_ The shape of the new array (using the metadata struct).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     */
+    ArrayImpl(const Metadata& shape_, DType dtype_) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_shape.set(shape_.data, shape_.ndim);
         this->m_dtype = dtype_;
@@ -260,8 +337,23 @@ namespace ncarray {
       }
     }
 
-    NCA_HD ArrayImpl(ssize_t ndim, const ssize_t* shape_, DType dtype_) {
-      if constexpr (std::is_same_v<Storage, OwnerPolicy>) {
+    /**
+     * Construct a new array given a shape and datatype. This will generally be
+     * used for Owner type arrays.
+     *
+     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * called from device code! A storage policy may allocate device memory for an
+     * owner-type array; however, it must be constructed host-side, using host APIs.
+     * This avoids complications with managing concurrent allocation in device code,
+     * or kernels, the small heap for device-side malloc, lack of STL compatibility
+     * device-side, and so on.
+     *
+     * @param[in] ndim The number of dimensions (to properly increment the pointer).
+     * @param[in] shape_ The shape of the new array (using a raw pointer).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     */
+    ArrayImpl(ssize_t ndim, const ssize_t* shape_, DType dtype_) {
+      if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.set(shape_, ndim);
@@ -446,6 +538,22 @@ namespace ncarray {
     }
 
     // --- Copy, cast, modification and buffer helpers/utilities --- //
+    /**
+     * Construct a view of any array.
+     *
+     * Some functions, and in particular device code, require views only, to
+     * avoid allocations when dealing with OwnerType arrays. This function will
+     * provide a view over the data from any array, so it can be used easily with
+     * all APIs.
+     *
+     * E.g.:
+     *
+     * @code{.cpp}
+     * gpu_kernel<<<blocks, TPB>>>(my_array.view());
+     * @endcode
+     */
+    ViewType view() const { return ViewType(*this); }
+
     void copy_into(void* dest_buffer) const;
 
     template <typename OutT>
@@ -475,14 +583,13 @@ namespace ncarray {
           offset = this->m_suboffsets[dim];
         }
         bool is_pointer { this->is_pointer_axis(dim) };
-        bool collapsed { length == 1 ? true : false };
         new_axes[dim] = {
           dim,
           length,
           stride,
           offset,
           is_pointer,
-          collapsed
+          /*collapsed=*/length == 1
         };
       }
 

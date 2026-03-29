@@ -10,6 +10,8 @@ Documentation is entirely lacking, as are test suites.
 
 `ncarray` provides a number of C++ array classes, compatible with NumPy, for working with non-contiguous data that cannot be described exclusively by strides. Specifically, these classes deal with data described by pointer-to-pointer setups/tables (double pointers, i.e. suboffsets in the Python world).
 
+The library provides views for views of data on the CPU and GPU (Linux/Windows only). When working on the device, array objects can be passed directly into kernels and device functions - if they are views. Owner-type arrays must be worked with from the host, but a view can be created using the `.view()` function.
+
 ## Who is this for?
 
 NumPy is extraordinarily powerful and flexible; however, it is designed for dealing with strided memory layouts. When dealing with disjoint collections of data spread out over, you would typically be forced to copy each section into a contiguous buffer to consider the entire set as a single array. When dealing with a large number of arrays, or under tight performance constraints, this may be prohibitively costly. `ncarray` is intended to provide a wrapper (known as a span, or view in many languages and libraries) over these disjoint arrays, without needing any initial copy.
@@ -22,6 +24,7 @@ NumPy is extraordinarily powerful and flexible; however, it is designed for deal
 - Type and concept system with various traits allowing for automatic type promotion (small int to wide int) when accumulating, or implementations of comparison operators for types like `std::complex<T>`.
 - Multi-dimensional array indexing using integers, slices or placeholder axes (ellipsis in Python).
 - NumPy-compatible Python bindings - implements interface methods like `__array__` and `__array_ufunc__` (**Note:** These operations may incur copies! The initial views are copy free, but not all operations thereafter)
+- Views of GPU memory using `NCDev*` or `SODev*` prefixed arrays.
 
 NOTE: The type and trait system will automatically promote small integers to larger ones. For subtraction, it will convert unsigned to signed. This behaviour may be different than what is done in NumPy.
 
@@ -78,7 +81,7 @@ A view is most similar to a span in C++. It owns nothing - it is useful if worki
 
 ## Roadmap
 
-- Provide `SOArray*` classes with PEP3118 sub-offset support.
+- Formalize documentation.
+- Test suite.
 - Fancy indexing on all array types (boolean masking etc).
 - `DLPack` suppport
-- CUDA/GPU interfaces

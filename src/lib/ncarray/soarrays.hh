@@ -16,6 +16,10 @@ namespace ncarray {
   using SOArrayView = ArrayImpl<SOArrayPolicy, ViewPolicy>;
   using SOArrayRef = ArrayImpl<SOArrayPolicy, RefPolicy>;
   using SOArray = ArrayImpl<SOArrayPolicy, OwnerPolicy>;
+
+  extern template class ArrayImpl<SOArrayPolicy, ViewPolicy>;
+  extern template class ArrayImpl<SOArrayPolicy, RefPolicy>;
+  extern template class ArrayImpl<SOArrayPolicy, OwnerPolicy>;
 } // namespace ncarray
 
 #endif // NCARRAY_SOARRAYS_HH

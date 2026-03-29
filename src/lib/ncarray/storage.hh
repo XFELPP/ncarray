@@ -3,6 +3,10 @@
 
 #include "ncarray/dtype.hh"
 
+#ifdef NCA_HAS_CUDA
+#include "cuda_runtime_api.h"
+#endif
+
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
@@ -10,7 +14,9 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
+#include <algorithm>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 
 #ifndef NCA_HD
@@ -21,11 +27,29 @@ typedef SSIZE_T ssize_t;
 #endif
 #endif
 
+#ifndef NCA_H
+#ifdef __CUDACC__
+#define NCA_H __host__
+#else
+#define NCA_H
+#endif
+#endif
+
 #ifndef NCARRAY_MAX_NDIM
 #define NCARRAY_MAX_NDIM 10
 #endif
 
 namespace ncarray {
+  struct MemTag {};
+  struct HostTag : MemTag {};
+  struct DevTag : MemTag {};
+
+
+  struct ViewTag {};
+  struct RefTag {};
+  struct OwnerTag {};
+
+
   /**
    * The StoragePolicy specifies the storage class for the array in question.
    * E.g., a view type array holds no memory, while an owning type does.
@@ -36,7 +60,9 @@ namespace ncarray {
   template <class Derived>
   struct StoragePolicy {
   public:
-    NCA_HD StoragePolicy() = default;
+    using MemType = HostTag;
+
+    StoragePolicy() = default;
 
     // Allow universal interconversions when doing shallow copies
     template <class OtherDerived>
@@ -73,39 +99,149 @@ namespace ncarray {
   /**
    * The ViewPolicy dictates arrays that have only a view of the data.
    */
-  struct ViewPolicy : public StoragePolicy<ViewPolicy> {
+  struct ViewPolicy : public StoragePolicy<ViewPolicy>, public ViewTag {
   public:
-    NCA_HD inline const char* storage_repr() const {
-      return "View";
-    }
+    using MemType = HostTag;
+
+    NCA_HD inline const char* storage_repr() const { return "View"; }
+  };
+
+  struct DevViewPolicy : public StoragePolicy<DevViewPolicy>, public ViewTag {
+  public:
+    using MemType = DevTag;
+
+    NCA_HD inline const char* storage_repr() const { return "View"; }
   };
 
   /**
    * The RefPolicy dictates arrays which hold pointers to the individual
    * components of the array.
    */
-  struct RefPolicy : public StoragePolicy<RefPolicy> {
+  struct RefPolicy : public StoragePolicy<RefPolicy>, public RefTag {
   public:
+    using MemType = HostTag;
+
     NCA_HD inline const char* storage_repr() const { return "Ref"; }
 
   protected:
     void* m_ref_ptrs[NCARRAY_MAX_NDIM];
   };
 
+  struct DevRefPolicy : public StoragePolicy<DevRefPolicy>, public RefTag {
+  public:
+    using MemType = DevTag;
+
+    NCA_HD inline const char* storage_repr() const { return "Ref"; }
+
+  protected:
+    void* m_ref_ptrs[NCARRAY_MAX_NDIM];
+  };
+
+  struct DevDeleter {
+    void operator()(std::uint8_t* ptr) {
+#ifdef NCA_HAS_CUDA
+      cudaFree(ptr);
+#endif
+    }
+  };
+
+  struct HostDeleter {
+    void operator()(std::uint8_t* ptr) {
+      delete[] ptr;
+    }
+  };
+
+#ifdef NCA_HAS_CUDA
+#define CHECK_CUDA_ERROR(val) check((val), #val, __FILE__, __LINE__)
+  inline void check(cudaError_t err, const char* const func, const char* const file,
+                    const int line) {
+    if (err != cudaSuccess) {
+      std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl;
+      std::cerr << cudaGetErrorString(err) << " " << func << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+#define CHECK_LAST_CUDA_ERROR() checkLast(__FILE__, __LINE__)
+  inline void checkLast(const char* const file, const int line) {
+    cudaError_t const err{cudaGetLastError()};
+    if (err != cudaSuccess) {
+      std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl;
+      std::cerr << cudaGetErrorString(err) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+#endif
+
   /**
    * The OwnerPolicy dictates an array that manages its own buffer for the
    * memory that backs the array.
    */
-  struct OwnerPolicy : public StoragePolicy<OwnerPolicy> {
+  struct OwnerPolicy : public StoragePolicy<OwnerPolicy>, public OwnerTag {
   public:
+    using MemType = HostTag;
+
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 
-    NCA_HD inline void allocate(ssize_t nbytes) {
-      m_storage = std::make_unique<std::uint8_t[]>(nbytes);
+    NCA_H inline void allocate(ssize_t nbytes) {
+      m_storage =
+          std::unique_ptr<std::uint8_t[], HostDeleter>(new std::uint8_t[nbytes], HostDeleter());
     }
+
+    NCA_H inline void copy(void* src, ssize_t nbytes) {
+      std::copy(reinterpret_cast<std::uint8_t*>(src),
+                reinterpret_cast<std::uint8_t*>(src) + nbytes,
+                this->m_storage.get());
+    }
+
   protected:
-    std::unique_ptr<std::uint8_t[]> m_storage;
+    std::unique_ptr<std::uint8_t[], HostDeleter> m_storage;
   };
+
+  struct DevOwnerPolicy : public StoragePolicy<DevOwnerPolicy>, public OwnerTag {
+  public:
+    using MemType = DevTag;
+
+    NCA_HD inline const char* storage_repr() const { return "Owner"; }
+
+    NCA_H inline void allocate(ssize_t nbytes) {
+#ifdef NCA_HAS_CUDA
+      std::uint8_t* devPtr { nullptr };
+      CHECK_CUDA_ERROR(cudaMallocManaged(reinterpret_cast<void**>(&devPtr), nbytes));
+      m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
+#endif
+    }
+
+    NCA_H inline void copy(void* src, ssize_t nbytes) {
+#ifdef NCA_HAS_CUDA
+      CHECK_CUDA_ERROR(cudaMemcpy(this->m_storage.get(),
+                                  src,
+                                  nbytes,
+                                  cudaMemcpyDefault));
+#endif
+    }
+
+  protected:
+    std::unique_ptr<std::uint8_t[], DevDeleter> m_storage;
+  };
+
+  template <class MemTag>
+  struct StoragePolicyTraits;
+
+  template <>
+  struct StoragePolicyTraits<HostTag> {
+    using View = ViewPolicy;
+    using Ref = RefPolicy;
+    using Owner = OwnerPolicy;
+  };
+
+  template <>
+  struct StoragePolicyTraits<DevTag> {
+    using View = DevViewPolicy;
+    using Ref = DevRefPolicy;
+    using Owner = DevOwnerPolicy;
+  };
+
 } // namespace ncarray
 
 #endif // NCARRAY_STORAGE_HH
