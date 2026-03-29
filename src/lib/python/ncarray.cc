@@ -312,6 +312,9 @@ namespace {
          },
          py::arg("dtype"),
          "Convert an NCArray* to the specified data type.")
+    .def("view",
+         &ArrayT::view,
+         "Convert the array to a *View type for use in view-only APIs (like kernels).")
     .def("__getitem__",
          [](const ArrayT& self, py::object idx) -> ViewOrScalar {
            // NOTE: The Python bindings diverge from the C++ library on scalars.

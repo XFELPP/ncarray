@@ -583,14 +583,13 @@ namespace ncarray {
           offset = this->m_suboffsets[dim];
         }
         bool is_pointer { this->is_pointer_axis(dim) };
-        bool collapsed { length == 1 ? true : false };
         new_axes[dim] = {
           dim,
           length,
           stride,
           offset,
           is_pointer,
-          collapsed
+          /*collapsed=*/length == 1
         };
       }
 

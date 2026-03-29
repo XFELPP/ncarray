@@ -141,8 +141,10 @@ if nca_has_cuda
         cuda_args: [
             '--extended-lambda',
             '--expt-relaxed-constexpr',
-            '-Xcudafe',
-            '--diag_suppress=445',
+            # silence warning: declared but not referenced (e.g. pybind, stl...)
+            '-Xcudafe', '--diag_suppress=445',
+             # silence warning: long double treated as double
+            '-Xcudafe', '--diag_suppress=20208',
             '-gencode', 'arch=compute_75,code=sm_75',
             '-gencode', 'arch=compute_80,code=sm_80',
             '-gencode', 'arch=compute_89,code=sm_89',
