@@ -25,6 +25,20 @@ typedef SSIZE_T ssize_t;
 
 namespace py = pybind11;
 
+// I think at least GCC gets lost in these recursive templates and throws
+// false positives - the following pragmas are intended to silence those
+#if defined(__GNUC__) && !defined(__clang__)
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wstringop-overflow"
+  #pragma GCC diagnostic ignored "-Warray-bounds"
+#elif defined(__clang__)
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Warray-bounds"
+#elif defined(_MSC_VER)
+  #pragma warning(push)
+  #pragma warning(disable : 4789)
+#endif
+
 /**
  * The mess of TypeList and related structs below construct a cartesian product
  * of supported indexing objects (integers, slices and ellipses). This template
@@ -193,6 +207,15 @@ namespace pyncarray {
     }
     return result;
   }
-} // pyncarray
+} // namespace pyncarray
+
+// Undo the warning silencing.
+#if defined(__GNUC__) && !defined(__clang__)
+  #pragma GCC diagnostic pop
+#elif defined(__clang__)
+  #pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+  #pragma warning(pop)
+#endif
 
 #endif // PYNCARRAY_CARTESIAN_HH

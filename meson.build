@@ -131,6 +131,7 @@ py3.install_sources(
 
 if nca_has_cuda
     # We also only build this lib at all if CUDA is available
+    # We make a fat binary for Turing, Ampere, Ada and Hoper
     libncdevarray = shared_library(
         'ncdevarray',
         [
@@ -142,6 +143,10 @@ if nca_has_cuda
             '--expt-relaxed-constexpr',
             '-Xcudafe',
             '--diag_suppress=445',
+            '-gencode', 'arch=compute_75,code=sm_75',
+            '-gencode', 'arch=compute_80,code=sm_80',
+            '-gencode', 'arch=compute_89,code=sm_89',
+            '-gencode', 'arch=compute_90,code=sm_90',
         ],
         include_directories: ncarray_headers,
         install: true,

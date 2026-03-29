@@ -22,6 +22,7 @@ NumPy is extraordinarily powerful and flexible; however, it is designed for deal
 - Type and concept system with various traits allowing for automatic type promotion (small int to wide int) when accumulating, or implementations of comparison operators for types like `std::complex<T>`.
 - Multi-dimensional array indexing using integers, slices or placeholder axes (ellipsis in Python).
 - NumPy-compatible Python bindings - implements interface methods like `__array__` and `__array_ufunc__` (**Note:** These operations may incur copies! The initial views are copy free, but not all operations thereafter)
+- Views of GPU memory using `NCDev*` or `SODev*` prefixed arrays.
 
 NOTE: The type and trait system will automatically promote small integers to larger ones. For subtraction, it will convert unsigned to signed. This behaviour may be different than what is done in NumPy.
 
@@ -78,7 +79,5 @@ A view is most similar to a span in C++. It owns nothing - it is useful if worki
 
 ## Roadmap
 
-- Provide `SOArray*` classes with PEP3118 sub-offset support.
 - Fancy indexing on all array types (boolean masking etc).
 - `DLPack` suppport
-- CUDA/GPU interfaces
