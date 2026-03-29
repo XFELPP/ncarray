@@ -279,6 +279,12 @@ namespace ncarray {
         this->m_shape.set(shape_.data(), shape_.size());
         this->m_strides.set(strides_.data(), strides_.size());
       }
+
+      if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        if (this->m_pointer_axis >= 0) {
+          this->m_suboffsets[this->m_pointer_axis] = 0;
+        }
+      }
     }
 
     // --- Owner classes.... --- //

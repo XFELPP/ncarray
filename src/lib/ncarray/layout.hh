@@ -201,7 +201,7 @@ namespace ncarray {
      * appropriately (with an offset, if slicing has selected a sub-view).
      */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
-      if (axis == m_pointer_axis) {
+      if (axis == this->m_pointer_axis) {
         return reinterpret_cast<void**>(data)[index + m_offsets[axis]];
       }
 
@@ -211,7 +211,7 @@ namespace ncarray {
     NCA_HD inline const void* advance(const void* data,
                                       ssize_t axis,
                                       ssize_t index) const {
-      if (axis == m_pointer_axis) {
+      if (axis == this->m_pointer_axis) {
         return reinterpret_cast<const void* const *>(data)[index + m_offsets[axis]];
       }
 
@@ -242,6 +242,22 @@ namespace ncarray {
    */
   struct SOArrayPolicy : public LayoutPolicy<SOArrayPolicy> {
   public:
+    /**
+     * The Metadata struct defaults values to 0 - this works for NCArray.
+     * For suboffsets based classes, we want the value to be -1.
+     * Flipping the suboffset back on requires explicitly setting it.
+     */
+    NCA_HD SOArrayPolicy() {
+      for (ssize_t i = 0; i < NCARRAY_MAX_NDIM; ++i) {
+        this->m_suboffsets[i] = -1;
+      }
+    }
+
+    SOArrayPolicy(const SOArrayPolicy& other) = default;
+    SOArrayPolicy(SOArrayPolicy&& other) noexcept = default;
+    SOArrayPolicy& operator=(const SOArrayPolicy& other) = default;
+    SOArrayPolicy& operator=(SOArrayPolicy&& other) = default;
+
     /**
      * Via the revised buffer protocol specification in PEP3118, a "suboffset"
      * greater than or equal to 0 indicates that the value on that axis is a pointer.
