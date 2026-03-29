@@ -65,6 +65,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cibw-${{ matrix.python }}-
 
+      - name: Grab Windows CUDA
+        uses: Jimver/cuda-toolkit@v0.2.19
+        if: runner.os == 'Windows'
+        id: cuda-toolkit
+        with:
+          cuda: '12.8.0'
+
       - name: Build wheels
         # Check pyproject.toml for supported versions and additional config
         uses: pypa/cibuildwheel@v2.22.0

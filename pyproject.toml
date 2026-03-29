@@ -55,6 +55,12 @@ before-all = [
     if command -v apt-get >/dev/null; then
         apt-get update && apt-get install -y ccache
     elif command -v dnf >/dev/null; then
+        if [ "$(uname -m)" = "aarch64" ]; then
+            NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/sbsa/cuda-rhel8.repo"
+        else
+            NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo"
+        fi
+        dnf config-manager --add-repo $NVIDIA_URL && dnf clean all && dnf -y install cuda-toolkit-12-8
         dnf install -y epel-release && dnf install -y ccache
     elif command -v yum >/dev/null; then
         yum install -y epel-release && yum install -y ccache
