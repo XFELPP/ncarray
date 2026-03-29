@@ -394,10 +394,12 @@ namespace {
     // NumPy protocol compatibility
     // __array__(self, dtype=None, copy=None)
     .def("__array__", [](const ArrayT& self,
-                         py::object& dtype,
-                         py::object& copy) {
+                         const py::object& dtype,
+                         const py::object& copy) {
       return ncarr_to_numpy(self);
-    })
+    },
+         py::arg("dtype") = py::none(),
+         py::arg("copy") = py::none())
     // __array_priority__ attribute - set high so NCArray* funcs used, and is returned
     .def_property_readonly_static("__array_priority__", [](const py::object&) {
       return 100.0;
