@@ -164,6 +164,8 @@ namespace ncarray {
       , Storage()
     {
       this->m_data = other.data();
+      this->m_dtype = other.dtype();
+      this->m_read_only = other.read_only();
     }
 
     template <class OtherStorage>
@@ -171,7 +173,11 @@ namespace ncarray {
     NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
       : Layout(std::move(static_cast<const Layout&>(other)))
       , Storage()
-    {}
+    {
+      this->m_data = other.data();
+      this->m_dtype = other.dtype();
+      this->m_read_only = other.read_only();
+    }
 
     // --- Host only move/copy assignment for owner types --- //
     ArrayImpl& operator=(const ArrayImpl& other)
