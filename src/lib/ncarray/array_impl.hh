@@ -33,10 +33,12 @@ typedef SSIZE_T ssize_t;
 #include <type_traits>
 #include <vector>
 
+#ifndef NCA_HD
 #ifdef __CUDACC__
 #define NCA_HD __host__ __device__
 #else
 #define NCA_HD
+#endif
 #endif
 
 #ifndef NCARRAY_MAX_NDIM
@@ -381,130 +383,22 @@ namespace ncarray {
     NCA_HD ViewType operator[](Args&&... idx_args) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
 
-      build_new_axes<sizeof...(Args)>(axes, 0, std::forward<Args>(idx_args)...);
+      if constexpr (sizeof...(Args) > 0) {
+        IndexItem indices[] = { IndexItem(std::forward<Args>(idx_args))... };
 
+        this->build_new_axes(axes, indices, sizeof...(Args));
+      } else {
+        this->build_new_axes(axes, nullptr, 0);
+      }
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
-    template <ssize_t TotalArgs = 0>
-    NCA_HD void build_new_axes(AxisDescr* new_axes, ssize_t axis) const {
-      for (ssize_t a = axis; a < this->ndim(); ++a) {
-        new_axes[a] = { this->shape(a), 0, this->stride(a) };
-      }
-    }
+    NCA_HD ViewType view_from_indices(const IndexItem* indices,
+                                      ssize_t num_indices) const {
+      AxisDescr axes[NCARRAY_MAX_NDIM];
+      this->build_new_axes(axes, indices, num_indices);
 
-    template <ssize_t TotalArgs = 0, typename Arg, typename... RemainingArgs>
-    NCA_HD void build_new_axes(AxisDescr* new_axes,
-                               ssize_t axis,
-                               Arg&& arg,
-                               RemainingArgs&&... remaining) const {
-      if constexpr (std::is_same_v<std::decay_t<Arg>, Ellipsis>) {
-        ssize_t jump = this->ndim() - TotalArgs + 1;
-
-        for (ssize_t a = 0; a < jump; ++a) {
-          ssize_t dim = axis + a;
-
-          ssize_t off_val { 0 };
-          if constexpr (requires { this->m_offsets; }) {
-            off_val = this->m_offsets[dim];
-          } else if constexpr (requires { this->m_suboffsets; }) {
-            off_val = this->m_suboffsets[dim];
-          }
-
-          new_axes[a] = {
-            dim,
-            this->m_shape[dim],
-            this->m_strides[dim],
-            off_val,
-            this->is_pointer_axis(dim),
-            /*collapsed=*/false,
-            /*data_shift=*/0
-          };
-        }
-
-        if constexpr (sizeof...(RemainingArgs) > 0) {
-          build_new_axes<TotalArgs>(new_axes + jump,
-                                    axis + jump,
-                                    std::forward<RemainingArgs>(remaining)...);
-        }
-      } else {
-        ssize_t length { 1 };
-        ssize_t stride { this->m_strides[axis] };
-        ssize_t offset { 0 };
-        bool is_pointer { this->is_pointer_axis(axis) };
-        bool collapsed { false };
-        ssize_t data_shift { 0 };
-
-        if constexpr (std::is_integral_v<std::decay_t<Arg>>) {
-          collapsed = true;
-          ssize_t idx = arg;
-          if (idx < 0) {
-            idx += this->m_shape[axis];
-          }
-
-          // The advance function for the layout will handle strides and offsets
-          // This allows different layouts to adjust appropriately.
-          offset = idx;
-        } else if constexpr (std::is_same_v<std::decay_t<Arg>, Slice>) {
-          ssize_t start = arg.start;
-          ssize_t stop = arg.stop;
-          ssize_t step = arg.step;
-          length = arg.length;
-
-          if (start < 0) {
-            start += this->m_shape[axis];
-          }
-          if (stop < 0) {
-            stop += this->m_shape[axis];
-          }
-
-          stride *= step;
-
-          if constexpr (requires { this->m_offsets; }) {
-            offset = this->m_offsets[axis] + start * this->m_strides[axis];
-            data_shift = 0;
-          } else if constexpr (requires { this->m_suboffsets; }) {
-            offset = this->m_suboffsets[axis];
-            data_shift = start * this->m_strides[axis];
-          }
-        }
-
-        new_axes[0] = {
-          axis,
-          length,
-          stride,
-          offset,
-          is_pointer,
-          collapsed,
-          data_shift
-        };
-
-        if constexpr (sizeof...(RemainingArgs) > 0) {
-          build_new_axes<TotalArgs>(new_axes + 1,
-                                    axis + 1,
-                                    std::forward<RemainingArgs>(remaining)...);
-        } else if (axis + 1 < static_cast<ssize_t>(NCARRAY_MAX_NDIM)) {
-          ssize_t remaining_dims = this->ndim() - (axis + 1);
-          for (ssize_t a = 0; a < remaining_dims; ++a) {
-            ssize_t dim = axis + 1 + a;
-            ssize_t off_val { 0 };
-            if constexpr (requires { this->m_offsets; }) {
-              off_val = this->m_offsets[dim];
-            } else if constexpr (requires { this->m_suboffsets; }) {
-              off_val = this->m_suboffsets[dim];
-            }
-            new_axes[a + 1] = {
-              dim,
-              this->m_shape[dim],
-              this->m_strides[dim],
-              off_val,
-              this->is_pointer_axis(dim),
-              /*collapsed=*/false,
-              /*data_shift=*/0
-            };
-          }
-        }
-      }
+      return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
     template <class VT>
@@ -515,6 +409,7 @@ namespace ncarray {
 
       ssize_t n_dim { 0 };
       ssize_t pointer_axis { -1 };
+      ssize_t shift_ptr_axis { -1 }; // Track the most recent ptr axis for shift accumulation
 
       // NOTE: Passing a length 1 slice does NOT collapse/remove the axis.
       // E.g. A 3-D NCArray* ncarr indexed as ncarr[:1] will have shape (1, ...)
@@ -523,25 +418,38 @@ namespace ncarray {
         const auto& d = axes[i];
 
         if (!d.collapsed) {
-          if (d.is_pointer) {
-            pointer_axis = n_dim;
-          }
           new_shape[n_dim] = d.length;
           new_strides[n_dim] = d.stride;
           new_offsets[n_dim] = d.offset;
           if (d.data_shift != 0) {
-            if (n_dim == 0) {
+            if (shift_ptr_axis == -1) {
               data_ptr = reinterpret_cast<std::uint8_t*>(data_ptr) + d.data_shift;
             } else {
-              new_offsets[n_dim - 1] += d.data_shift;
+              new_offsets[shift_ptr_axis] += d.data_shift;
             }
+          }
+
+          if (d.is_pointer) {
+            pointer_axis = n_dim;
+            shift_ptr_axis = n_dim;
           }
 
           n_dim++;
         } else {
           // NOTE: This call is critical! It makes that correct dereferncing and
           // offset accumulation occurs, regardless of subtype
-          data_ptr = this->advance(data_ptr, i, d.offset);
+          if (d.is_pointer) {
+            data_ptr = this->advance(data_ptr, i, d.offset);
+
+            // Reset the shift accumulator tracker if the axis was collapsed
+            shift_ptr_axis = -1;
+          } else {
+            if (shift_ptr_axis == -1) {
+              data_ptr = this->advance(data_ptr, i, d.offset);
+            } else {
+              new_offsets[shift_ptr_axis] += d.offset * this->m_strides[i];
+            }
+          }
         }
       }
 

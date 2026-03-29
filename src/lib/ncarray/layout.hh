@@ -9,6 +9,7 @@
 #ifndef NCARRAY_LAYOUT_HH
 #define NCARRAY_LAYOUT_HH
 
+#include "ncarray/indexing.hh"
 #include "ncarray/storage.hh"
 
 #ifdef _WIN32
@@ -181,6 +182,121 @@ namespace ncarray {
       return static_cast<Derived*>(this)->layout_repr();
     }
 
+    /**
+     * Provided a set of indexing arguments construct the description of the new
+     * axes given the layout specification.
+     *
+     * @param[out] new_axes A set of AxisDescr struct length NCARRAY_MAX_NDIM to
+     *             build the descriptions into.
+     * @param[in] indices The indices, consisting of collections of integers, slices and
+     *             ellipsis in any combination.
+     * @param[in] num_indices The total number of indices provided.
+     */
+    NCA_HD void build_new_axes(AxisDescr* new_axes,
+                               const IndexItem* indices,
+                               ssize_t num_indices) const {
+      ssize_t axis { 0 };
+
+      for (ssize_t i = 0; i < num_indices; ++i) {
+        const auto& idx_item = indices[i];
+
+        if (idx_item.type == IndexType::Ellipsis) {
+          ssize_t jump = static_cast<const Derived*>(this)->ndim() - num_indices + 1;
+
+          for (ssize_t a = 0; a < jump; ++a) {
+            ssize_t dim = axis + a;
+
+            ssize_t off_val = static_cast<const Derived*>(this)->get_offset(dim);
+
+            new_axes[dim] = {
+              dim,
+              static_cast<const Derived*>(this)->m_shape[dim],
+              static_cast<const Derived*>(this)->m_strides[dim],
+              off_val,
+              static_cast<const Derived*>(this)->is_pointer_axis(dim),
+              /*collapsed=*/false,
+              /*data_shift=*/0
+            };
+          }
+          axis += jump;
+        } else {
+          ssize_t length { 1 };
+          ssize_t stride { static_cast<const Derived*>(this)->m_strides[axis] };
+          ssize_t offset { 0 };
+          bool is_pointer { static_cast<const Derived*>(this)->is_pointer_axis(axis) };
+          bool collapsed { false };
+          ssize_t data_shift { 0 };
+
+          if (idx_item.type == IndexType::Integer) {
+            collapsed = true;
+            ssize_t idx = idx_item.idx;
+            if (idx < 0) {
+              idx += static_cast<const Derived*>(this)->m_shape[axis];
+            }
+
+            // The advance function for the layout will handle strides and offsets
+            // This allows different layouts to adjust appropriately.
+            offset = idx;
+          } else if (idx_item.type == IndexType::Slice) {
+            ssize_t start = idx_item.slice.start;
+            ssize_t stop = idx_item.slice.stop;
+            ssize_t step = idx_item.slice.step;
+            length = idx_item.slice.length;
+
+            if (start < 0) {
+              start += static_cast<const Derived*>(this)->m_shape[axis];
+            }
+            if (stop < 0) {
+              stop += static_cast<const Derived*>(this)->m_shape[axis];
+            }
+
+            stride *= step;
+
+            if constexpr (requires { static_cast<const Derived*>(this)->offsets(); }) {
+              offset =
+                static_cast<const Derived*>(this)->get_offset(axis) +
+                start * static_cast<const Derived*>(this)->m_strides[axis];
+
+              data_shift = 0;
+            } else if constexpr (requires { static_cast<const Derived*>(this)->suboffsets(); }) {
+              offset = static_cast<const Derived*>(this)->get_offset(axis);
+              data_shift = start * static_cast<const Derived*>(this)->m_strides[axis];
+            }
+          }
+
+          new_axes[axis] = {
+            axis,
+            length,
+            stride,
+            offset,
+            is_pointer,
+            collapsed,
+            data_shift
+          };
+
+          axis++;
+        }
+      }
+
+      for (; axis < static_cast<const Derived*>(this)->ndim(); ++axis) {
+        ssize_t off_val = static_cast<const Derived*>(this)->get_offset(axis);
+
+        new_axes[axis] = {
+          axis,
+          static_cast<const Derived*>(this)->m_shape[axis],
+          static_cast<const Derived*>(this)->m_strides[axis],
+          off_val,
+          static_cast<const Derived*>(this)->is_pointer_axis(axis),
+          /*collapsed=*/false,
+          /*data_shift=*/0
+        };
+      }
+    }
+
+    NCA_HD inline Metadata::value_type get_offset(ssize_t axis) const {
+      return static_cast<const Derived*>(this)->get_offset_impl(axis);
+    }
+
   protected:
     Metadata m_shape;
     Metadata m_strides;
@@ -228,6 +344,10 @@ namespace ncarray {
 
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
       return axis == this->m_pointer_axis;
+    }
+
+    NCA_HD inline Metadata::value_type get_offset_impl(ssize_t axis) const {
+      return this->m_offsets[axis];
     }
 
     NCA_HD inline const char* layout_repr() const { return "NCArray"; }
@@ -293,6 +413,10 @@ namespace ncarray {
 
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
       return m_suboffsets[axis] >= 0;
+    }
+
+    NCA_HD inline Metadata::value_type get_offset_impl(ssize_t axis) const {
+      return this->m_suboffsets[axis];
     }
 
     NCA_HD inline const char* layout_repr() const { return "SOArray"; }

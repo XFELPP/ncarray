@@ -6,8 +6,6 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "cartesian.hh" // Cartesian products/indexing logic for operator[]
-
 #include "ncarray/ncarrays.hh"
 #include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
@@ -120,7 +118,11 @@ namespace {
     std::vector<ssize_t> strides(arr.strides(), arr.strides() + ndim);
 
     shape.insert(shape.begin(), 1);
-    strides.insert(strides.begin(), 1);
+    if constexpr (std::is_same_v<LayoutT, ncarray::SOArrayPolicy>) {
+      strides.insert(strides.begin(), sizeof(void*));
+    } else {
+      strides.insert(strides.begin(), 1);
+    }
 
     std::vector<void*> data_ptrs { arr_info.ptr };
     ncarray::DType dtype = pydtype_to_dtype(arr.dtype());
@@ -155,7 +157,12 @@ namespace {
   ncarray::ArrayImpl<LayoutT, RefT>
   pylist_to_ref(const py::list& list, const bool read_only_ = false) {
     ssize_t len_ptr_axis = list.size();
-    std::vector<ssize_t> strides { 1 };
+    std::vector<ssize_t> strides;
+    if constexpr (std::is_same_v<LayoutT, ncarray::SOArrayPolicy>) {
+      strides.push_back(sizeof(void*));
+    } else {
+      strides.push_back(1);
+    }
     std::vector<ssize_t> shape { len_ptr_axis };
     std::vector<void*> data_ptrs;
 
@@ -218,6 +225,49 @@ namespace {
     };
 
     return ncarray::dispatch(out_dtype, dispatched_copy);
+  }
+
+  ncarray::Slice pyslice_to_slice(ssize_t axis_shape, py::slice slice) {
+    ssize_t start, stop, step, length;
+    if (!slice.compute(axis_shape, &start, &stop, &step, &length)) {
+      throw py::error_already_set();
+    }
+    return ncarray::Slice(start, stop, step);
+  }
+
+  template <class ArrayT>
+  std::vector<ncarray::IndexItem> pytuple_to_indices(const ArrayT& self,
+                                                     py::tuple tup) {
+    std::vector<ncarray::IndexItem> indices;
+
+    if (static_cast<ssize_t>(tup.size()) > self.ndim()) {
+      throw py::index_error("Too many indices for array!");
+    }
+    bool have_ellipsis { false };
+    ssize_t axis = 0;
+    for (ssize_t i = 0; i < static_cast<ssize_t>(tup.size()); ++i) {
+      auto pyidx = tup[i];
+      if (py::isinstance<py::ellipsis>(pyidx)) {
+        if (have_ellipsis) {
+          throw py::index_error("Index arguments can only contain one ellipsis!");
+        }
+        have_ellipsis = true;
+        indices.push_back(ncarray::IndexItem(ncarray::Ellipsis {}));
+        axis += self.ndim() - tup.size() + 1;
+      } else {
+        if (py::isinstance<py::slice>(pyidx)) {
+          indices.push_back(ncarray::IndexItem(pyslice_to_slice(self.shape(axis),
+                                                                pyidx.cast<py::slice>())));
+        } else if (py::isinstance<py::int_>(pyidx)) {
+          indices.push_back(ncarray::IndexItem(pyidx.cast<ssize_t>()));
+        } else {
+          throw py::index_error("Unsupported index type!");
+        }
+        axis++;
+      }
+    }
+
+    return indices;
   }
 
   /**
@@ -320,25 +370,34 @@ namespace {
            // NOTE: The Python bindings diverge from the C++ library on scalars.
            //       For simplicity, in Python, scalars are returned as scalars.
            //       In C++, they remain as an object tied to the array class.
-           ViewType view;
+           ssize_t num_indices { 0 };
+           std::vector<ncarray::IndexItem> indices;
            if (py::isinstance<py::int_>(idx)) {
              auto idx_val = idx.cast<ssize_t>();
              if (idx_val < -self.shape(0) || idx_val >= self.shape(0)) {
                throw py::index_error("Index out of bounds!");
              }
-             view = self[idx_val];
+             indices.push_back(ncarray::IndexItem { idx_val });
+             num_indices++;
            } else if (py::isinstance<py::slice>(idx)) {
-             view = self[pyncarray::pyslice_to_slice(self.shape(0),
-                                                     idx.cast<py::slice>())];
+             auto slice = pyslice_to_slice(self.shape(0), idx.cast<py::slice>());
+             indices.push_back(ncarray::IndexItem { slice });
+             num_indices++;
            } else if (py::isinstance<py::ellipsis>(idx)) {
-             view = self[ncarray::Ellipsis{}];
+             indices.push_back(ncarray::IndexItem { ncarray::Ellipsis {} });
+             num_indices++;
            } else if (py::isinstance<py::tuple>(idx)) {
-             view = pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
-                                                  self,
-                                                  pyncarray::All{});
+             py::tuple tup { idx.cast<py::tuple>() };
+             std::vector<ncarray::IndexItem> tup_indices = pytuple_to_indices(self,
+                                                                              tup);
+
+             indices.insert(indices.end(), tup_indices.begin(), tup_indices.end());
+             num_indices += tup.size();
            } else {
              throw py::type_error("Invalid indexing argument!");
            }
+
+           ViewType view = self.view_from_indices(indices.data(), num_indices);
            // For convenience convert scalars to... scalars
            if (view.ndim() == 0) {
              return view.template get_scalar(view.data());
@@ -349,27 +408,33 @@ namespace {
          py::is_operator())
     .def("__setitem__",
          [](const ArrayT& self, py::object idx, py::object val) {
-           ViewType view;
+           ssize_t num_indices { 0 };
+           std::vector<ncarray::IndexItem> indices;
            if (py::isinstance<py::int_>(idx)) {
              auto idx_val = idx.cast<ssize_t>();
              if (idx_val < -self.shape(0) || idx_val >= self.shape(0)) {
                throw py::index_error("Index out of bounds!");
              }
-             view = self[idx_val];
+             indices.push_back(ncarray::IndexItem { idx_val });
+             num_indices++;
            } else if (py::isinstance<py::slice>(idx)) {
-             view = self[pyncarray::pyslice_to_slice(self.shape(0),
-                                                     idx.cast<py::slice>())];
+             auto slice = pyslice_to_slice(self.shape(0), idx.cast<py::slice>());
+             indices.push_back(ncarray::IndexItem { slice });
+             num_indices++;
            } else if (py::isinstance<py::ellipsis>(idx)) {
-             view = self[ncarray::Ellipsis{}];
+             indices.push_back(ncarray::IndexItem { ncarray::Ellipsis {} });
+             num_indices++;
            } else if (py::isinstance<py::tuple>(idx)) {
-             view =
-               pyncarray::dispatch_cartesian(idx.cast<py::tuple>(),
-                                             self,
-                                             pyncarray::All{});
+             py::tuple tup { idx.cast<py::tuple>() };
+             std::vector<ncarray::IndexItem> tup_indices = pytuple_to_indices(self, tup);
+
+             indices.insert(indices.end(), tup_indices.begin(), tup_indices.end());
+             num_indices += tup.size();
            } else {
              throw py::type_error("Invalid indexing argument!");
            }
 
+           ViewType view = self.view_from_indices(indices.data(), num_indices);
            if (py::isinstance<py::array>(val)) {
              // ... //
            } else if (py::isinstance<ArrayT>(val)) {
