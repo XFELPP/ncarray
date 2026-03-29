@@ -133,7 +133,7 @@ def test_soarray_indexing_arr():
     assert soa[0, 1, 2] == 6
     slc: ncarray.SOArrayView = soa[0, 1:3, 0:2]
     assert slc.shape == (2, 2)
-    assert np.array_equal(np.array(slc), arr[0, 1:3, 0:2])
+    assert np.array_equal(np.array(slc), arr[1:3, 0:2])
 
 
 def test_soarray_indexing_list_of_arrs():

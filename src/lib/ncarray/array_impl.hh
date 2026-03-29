@@ -417,7 +417,8 @@ namespace ncarray {
             this->m_strides[dim],
             off_val,
             this->is_pointer_axis(dim),
-            false
+            /*collapsed=*/false,
+            /*data_shift=*/0
           };
         }
 
@@ -432,6 +433,7 @@ namespace ncarray {
         ssize_t offset { 0 };
         bool is_pointer { this->is_pointer_axis(axis) };
         bool collapsed { false };
+        ssize_t data_shift { 0 };
 
         if constexpr (std::is_integral_v<std::decay_t<Arg>>) {
           collapsed = true;
@@ -457,10 +459,13 @@ namespace ncarray {
           }
 
           stride *= step;
+
           if constexpr (requires { this->m_offsets; }) {
             offset = this->m_offsets[axis] + start * this->m_strides[axis];
+            data_shift = 0;
           } else if constexpr (requires { this->m_suboffsets; }) {
             offset = this->m_suboffsets[axis];
+            data_shift = start * this->m_strides[axis];
           }
         }
 
@@ -470,7 +475,8 @@ namespace ncarray {
           stride,
           offset,
           is_pointer,
-          collapsed
+          collapsed,
+          data_shift
         };
 
         if constexpr (sizeof...(RemainingArgs) > 0) {
@@ -493,7 +499,8 @@ namespace ncarray {
               this->m_strides[dim],
               off_val,
               this->is_pointer_axis(dim),
-              false
+              /*collapsed=*/false,
+              /*data_shift=*/0
             };
           }
         }
@@ -522,6 +529,14 @@ namespace ncarray {
           new_shape[n_dim] = d.length;
           new_strides[n_dim] = d.stride;
           new_offsets[n_dim] = d.offset;
+          if (d.data_shift != 0) {
+            if (n_dim == 0) {
+              data_ptr = reinterpret_cast<std::uint8_t*>(data_ptr) + d.data_shift;
+            } else {
+              new_offsets[n_dim - 1] += d.data_shift;
+            }
+          }
+
           n_dim++;
         } else {
           // NOTE: This call is critical! It makes that correct dereferncing and
