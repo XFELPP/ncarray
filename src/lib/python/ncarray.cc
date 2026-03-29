@@ -128,8 +128,8 @@ namespace {
     if (!arr.writeable()) {
       read_only = true;
     }
-    // A single array will have no pointer axis
-    ssize_t ptr_axis { -1 };
+    // A single array will have no pointer axis - but we created one artificially
+    ssize_t ptr_axis { 0 };
     return ncarray::ArrayImpl<LayoutT, RefT>(data_ptrs,
                                              shape,
                                              strides,
