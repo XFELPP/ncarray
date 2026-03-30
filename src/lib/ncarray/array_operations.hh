@@ -39,6 +39,11 @@ namespace ncarray {
      */
     template <typename T, ArrayLike A>
     void fill_recursive(const A& arr, void* current_data, ssize_t axis, T value) {
+      if (axis == static_cast<ssize_t>(arr.ndim())) {
+        // Base case handles when you index to a scalar (the loop below wouldn't enter)
+        *reinterpret_cast<T*>(current_data) = value;
+        return;
+      }
       ssize_t dim = arr.shape()[axis];
       bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
 
@@ -73,6 +78,12 @@ namespace ncarray {
                           void* dest_data,
                           const void* src_data,
                           ssize_t axis) {
+      if (axis == static_cast<ssize_t>(dest.ndim())) {
+        // Base case handles when you index to a scalar (the loop below wouldn't enter)
+        SrcT val = *reinterpret_cast<const SrcT*>(src_data);
+        *reinterpret_cast<DestT*>(dest_data) = op_traits<SrcT>::template cast<DestT>(val);
+        return;
+      }
       ssize_t dim = dest.shape()[axis];
       bool is_last_axis = (axis == static_cast<ssize_t>(dest.ndim()) - 1);
 
@@ -162,6 +173,10 @@ namespace ncarray {
     /**
      * Recursively operate on two arrays.
      *
+     * This function assumes the arrays are the same shape, except if there are
+     * extra padding dimensions. In that case (i.e., leading dimensions of size 1)
+     * a shape mismatch is tolerated.
+     *
      * E.g. this function can do binary add/subtract/multiply and so on.
      *
      * This function can cast the value as it is assigned.
@@ -193,7 +208,14 @@ namespace ncarray {
 
       for (ssize_t i = 0; i < dim; ++i) {
         const void* lhs_next = const_cast<const void*>(left_arr.advance(lhs_data, axis, i));
-        const void* rhs_next = const_cast<const void*>(right_arr.advance(rhs_data, axis, i));
+
+        // Align dimensions from the right side
+        ssize_t r_axis =
+          axis - (static_cast<ssize_t>(left_arr.ndim()) - static_cast<ssize_t>(right_arr.ndim()));
+
+        const void* rhs_next = (r_axis >= 0)
+          ? right_arr.advance(rhs_data, r_axis, (right_arr.shape(r_axis) == 1 ? 0 : i))
+          : rhs_data;
 
         if (is_last_axis) {
           op(reinterpret_cast<const std::uint8_t*>(lhs_next),
@@ -251,7 +273,8 @@ namespace ncarray {
     using std::invalid_argument::invalid_argument;
   };
 
-  template <typename Visitor> auto dispatch(DType type, Visitor&& visitor) {
+  template <typename Visitor>
+  auto dispatch(DType type, Visitor&& visitor) {
     switch (type) {
     case DType::bool_: {
       return visitor.template operator()<bool>();
@@ -433,7 +456,7 @@ namespace ncarray {
     auto add_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_add(left, right, result);
+        GPUEngine::execute_add(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -473,7 +496,7 @@ namespace ncarray {
     auto sub_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub(left, right, result);
+        GPUEngine::execute_sub(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -507,7 +530,7 @@ namespace ncarray {
     auto mul_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_mul(left, right, result);
+        GPUEngine::execute_mul(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -549,6 +572,13 @@ namespace ncarray {
 
     auto truediv_operation = [&]<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_truediv(left, right, result.view());
+#else
+        throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
+#endif
+      }
       auto truediv_op_internal = [](const std::uint8_t* lhs,
                                     const std::uint8_t* rhs,
                                     ResultT* output) {

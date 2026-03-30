@@ -67,17 +67,56 @@ other_res: ncarray.NCArray = ncarr + ncarr
 result: ncarray.NCArray = np.sin(ncarr)
 ```
 
-## Terminology
+## Concepts and Terminology
 
-Coming soon... but to provide the most important point.
+The `ncarray` library provides a series of array types. These are constructed through the composition of a `Layout` and a `Storage` policy specifier in a base `ArrayImpl` class. At the Python level, the base classes are not made available, and instead, bindings are provided for a number of specializations.
 
-There are 3 types of classes:
-- "Views"
-- "Refs"
-- Arrays (Owning)
+### `Layout` policies
 
-A view is most similar to a span in C++. It owns nothing - it is useful if working in C++, or you will receive views when doing operations like indexing in Python. A ref, as was initially constructed above, holds pointers to each of the individual arrays. Finally, there is an owning array type. This holds the actual buffer/memory.
+There are two types of layouts which define how the memory of the array is distributed, and provide the mechanism to traverse said memory. These layouts (in the C++ source) are:
 
+- `NCOffsetsPolicy`: A layout where there is a single "pointer axis". When traversing this axis, the data is interpreted as a double pointer (alternatively, a pointer table, etc.), and an index is a selection of which pointer to use. Otherwise, the data is traversed using the standard stride mechanism (potential with extra offsets).
+- `SOArrayPolicy`: A layout implementing PEP3118 suboffsets.
+
+The latter policy is more flexible and general. Anything specified by the former can be specified by the latter. The former was implemented first, however, and it is generally simpler to reason about. It maps naturally to the case where you have a collection of othewise strided/contiguous arrays, but want to consider the collection as a single array. The "collection axis" then becomes the first axis of the array, and is the pointer axis.
+
+### `Storage` policies
+
+There are 3 kinds of storage specifiers:
+
+- `ViewPolicy`: Holding only a pointer to the underlying data. This is a pure view (e.g. like a span).
+- `RefPolicy`: A policy which holds the pointers to the underlying components of the data.
+- `OwnerPolicy`: A policy where the array actually owns the memory for the data (and is therefore responsible for allocation and freeing of it).
+
+NOTE: The utility of the second policy becomes apparent when trying to construct a view over a collection of arrays in Python. When passed in a list or array of arrays, something needs to provide a stable pointer to all the various segments. This is what the `RefPolicy` does. As a side effect, however, the construction of a "Ref" type array may have a slightly surprising behaviour on first encounter. Namely, an extra axis is always created, even if the a naked single array is passed in. Once a ref-type array has been created, though, any number of views can be constructed without the extra dimension.
+
+### List of array classes
+
+The combination of the above layouts and storage specifier provides 6 fundamental array constructs (these are all interconvertible to view types):
+- `NCArrayView`
+- `NCArrayRef`
+- `NCArray` (Owner type)
+- `SOArrayView`
+- `SOArrayRef`
+- `SOArray` (Owner type)
+
+### Important Limitations
+
+The main limitation of the array classes as currently implemented is that they only support up to 10 dimensions. This design choice was made to simplify the interface when making it compatible with both CPU and GPU. If it becomes an important limitation it may be refactored in the future.
+
+### GPU support
+
+In addition to the above 6 array classes, there are equivalents for cases where the data lives in GPU memory. These arrays include a `Dev` in the name, after the layout specifier. E.g. `NCDevArrayView` or `SODevArray`. Note that GPU support is only available on Linux and Windows at this time.
+
+Array **views** can be passed directly into kernels and device functions. Additionally, there are overloads to make use of kernels for binary addition, subtraction and multiplication (with more planned for release soon). All arrays are trivially convertible to views. You can either pass an array to a view type constructor (e.g. `NCArrayView(NCArray)`), or use the provided the `view()` method.
+
+**NOTE:** Owner type arrays **cannot** be created in device code, even if they are managing device memory. I.e. `NCDevArray` and `SODevArray` are not constructible inside kernels or device functions. This is due to their use of dynamic memory allocation - the GPU heap for malloc based allocations is quite small, and synchronization of allocations is quite complex if creating an array in a running kernel (where many threads may be working in parallel). As such, these arrays use host APIs only.
+
+## Similarities and Differences Between Python and C++ APIs
+
+For the most part, the Python bindings exactly mirror the C++ bindings. There are, however, a small number of (important) differences:
+
+- Array indexing is bounds checked in Python, while use of `operator[]` in C++ is not.
 
 ## Roadmap
 

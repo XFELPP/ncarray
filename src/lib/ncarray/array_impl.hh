@@ -33,10 +33,12 @@ typedef SSIZE_T ssize_t;
 #include <type_traits>
 #include <vector>
 
+#ifndef NCA_HD
 #ifdef __CUDACC__
 #define NCA_HD __host__ __device__
 #else
 #define NCA_HD
+#endif
 #endif
 
 #ifndef NCARRAY_MAX_NDIM
@@ -162,6 +164,8 @@ namespace ncarray {
       , Storage()
     {
       this->m_data = other.data();
+      this->m_dtype = other.dtype();
+      this->m_read_only = other.read_only();
     }
 
     template <class OtherStorage>
@@ -169,7 +173,11 @@ namespace ncarray {
     NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
       : Layout(std::move(static_cast<const Layout&>(other)))
       , Storage()
-    {}
+    {
+      this->m_data = other.data();
+      this->m_dtype = other.dtype();
+      this->m_read_only = other.read_only();
+    }
 
     // --- Host only move/copy assignment for owner types --- //
     ArrayImpl& operator=(const ArrayImpl& other)
@@ -238,9 +246,11 @@ namespace ncarray {
       this->m_shape.set(shape_.data, ndim);
       this->m_strides.set(strides_.data, ndim);
 
-      if constexpr (requires { this->m_offsets; }) {
+      if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+        this->m_offsets.ndim = this->ndim();
         this->m_offsets.set(offsets_.data, ndim);
-      } else if constexpr (requires { this->m_suboffsets; }) {
+      } else if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        this->m_suboffsets.ndim = this->ndim();
         this->m_suboffsets.set(offsets_.data, ndim);
       }
 
@@ -254,11 +264,21 @@ namespace ncarray {
                      DType dtype_,
                      Metadata::value_type pointer_axis_,
                      bool read_only_) {
+      this->m_data = data_;
       this->m_shape.set(shape_, ndim);
       this->m_strides.set(strides_, ndim);
       this->m_dtype = dtype_;
       this->m_pointer_axis = pointer_axis_;
       this->m_read_only = read_only_;
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+          this->m_offsets[i] = 0;
+        } else if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+          this->m_suboffsets[i] = -1;
+        }
+      }
     }
 
     // --- Ref classes.... --- //
@@ -279,6 +299,22 @@ namespace ncarray {
         this->m_shape.set(shape_.data(), shape_.size());
         this->m_strides.set(strides_.data(), strides_.size());
       }
+
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = this->ndim();
+          this->m_suboffsets[i] = -1;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = this->ndim();
+          this->m_offsets[i] = 0;
+        }
+      }
+
+      if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        if (this->m_pointer_axis >= 0) {
+          this->m_suboffsets[this->m_pointer_axis] = 0;
+        }
+      }
     }
 
     // --- Owner classes.... --- //
@@ -298,14 +334,32 @@ namespace ncarray {
      */
     ArrayImpl(const std::vector<ssize_t>& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
+        ssize_t ndim { static_cast<ssize_t>(shape_.size()) };
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
-        this->m_shape.set(shape_.data(), shape_.size());
-        this->allocate(this->nbytes());
-        this->m_data = this->m_storage.get();
+        this->m_shape.ndim = ndim;
+        this->m_strides.ndim = ndim;
+
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+        }
         auto new_strides = calculate_c_order_strides(shape_,
                                                      ncarray::itemsize(dtype_));
-        this->m_strides.set(new_strides.data(), new_strides.size());
+
+        // Cannot use .set function from Metadata since it is host/device
+        for (ssize_t i = 0; i < ndim; ++i) {
+          this->m_shape[i] = shape_[i];
+          this->m_strides[i] = new_strides[i];
+          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+            this->m_suboffsets[i] = -1;
+          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+            this->m_offsets[i] = 0;
+          }
+        }
+        this->allocate(this->nbytes());
+        this->m_data = this->m_storage.get();
       }
     }
 
@@ -325,15 +379,33 @@ namespace ncarray {
      */
     ArrayImpl(const Metadata& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
+        ssize_t ndim { shape_.ndim };
         this->m_pointer_axis = -1;
-        this->m_shape.set(shape_.data, shape_.ndim);
         this->m_dtype = dtype_;
-        this->allocate(this->nbytes());
-        this->m_data = this->m_storage.get();
-        auto new_strides = calculate_c_order_strides(this->ndim(),
+        this->m_shape.ndim = ndim;
+        this->m_strides.ndim = ndim;
+
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+        }
+        auto new_strides = calculate_c_order_strides(ndim,
                                                      shape_.data,
                                                      ncarray::itemsize(dtype_));
-        this->m_strides.set(new_strides.data(), new_strides.size());
+
+        // Cannot use .set function from Metadata since it is host/device
+        for (ssize_t i = 0; i < ndim; ++i) {
+          this->m_shape[i] = shape_[i];
+          this->m_strides[i] = new_strides[i];
+          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+            this->m_suboffsets[i] = -1;
+          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+            this->m_offsets[i] = 0;
+          }
+        }
+        this->allocate(this->nbytes());
+        this->m_data = this->m_storage.get();
       }
     }
 
@@ -356,13 +428,30 @@ namespace ncarray {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
-        this->m_shape.set(shape_, ndim);
-        this->allocate(this->nbytes());
-        this->m_data = this->m_storage.get();
+        this->m_shape.ndim = ndim;
+        this->m_strides.ndim = ndim;
+
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+        }
         auto new_strides = calculate_c_order_strides(ndim,
                                                      shape_,
                                                      ncarray::itemsize(dtype_));
-        this->m_strides.set(new_strides.data(), ndim);
+
+        // Cannot use .set function from Metadata since it is host/device
+        for (ssize_t i = 0; i < ndim; ++i) {
+          this->m_shape[i] = shape_[i];
+          this->m_strides[i] = new_strides[i];
+          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+            this->m_suboffsets[i] = -1;
+          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+            this->m_offsets[i] = 0;
+          }
+        }
+        this->allocate(this->nbytes());
+        this->m_data = this->m_storage.get();
       }
     }
 
@@ -375,123 +464,22 @@ namespace ncarray {
     NCA_HD ViewType operator[](Args&&... idx_args) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
 
-      build_new_axes<sizeof...(Args)>(axes, 0, std::forward<Args>(idx_args)...);
+      if constexpr (sizeof...(Args) > 0) {
+        IndexItem indices[] = { IndexItem(std::forward<Args>(idx_args))... };
 
+        this->build_new_axes(axes, indices, sizeof...(Args));
+      } else {
+        this->build_new_axes(axes, nullptr, 0);
+      }
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
-    template <ssize_t TotalArgs = 0>
-    NCA_HD void build_new_axes(AxisDescr* new_axes, ssize_t axis) const {
-      for (ssize_t a = axis; a < this->ndim(); ++a) {
-        new_axes[a] = { this->shape(a), 0, this->stride(a) };
-      }
-    }
+    NCA_HD ViewType view_from_indices(const IndexItem* indices,
+                                      ssize_t num_indices) const {
+      AxisDescr axes[NCARRAY_MAX_NDIM];
+      this->build_new_axes(axes, indices, num_indices);
 
-    template <ssize_t TotalArgs = 0, typename Arg, typename... RemainingArgs>
-    NCA_HD void build_new_axes(AxisDescr* new_axes,
-                               ssize_t axis,
-                               Arg&& arg,
-                               RemainingArgs&&... remaining) const {
-      if constexpr (std::is_same_v<std::decay_t<Arg>, Ellipsis>) {
-        ssize_t jump = this->ndim() - TotalArgs + 1;
-
-        for (ssize_t a = 0; a < jump; ++a) {
-          ssize_t dim = axis + a;
-
-          ssize_t off_val { 0 };
-          if constexpr (requires { this->m_offsets; }) {
-            off_val = this->m_offsets[dim];
-          } else if constexpr (requires { this->m_suboffsets; }) {
-            off_val = this->m_suboffsets[dim];
-          }
-
-          new_axes[a] = {
-            dim,
-            this->m_shape[dim],
-            this->m_strides[dim],
-            off_val,
-            this->is_pointer_axis(dim),
-            false
-          };
-        }
-
-        if constexpr (sizeof...(RemainingArgs) > 0) {
-          build_new_axes<TotalArgs>(new_axes + jump,
-                                    axis + jump,
-                                    std::forward<RemainingArgs>(remaining)...);
-        }
-      } else {
-        ssize_t length { 1 };
-        ssize_t stride { this->m_strides[axis] };
-        ssize_t offset { 0 };
-        bool is_pointer { this->is_pointer_axis(axis) };
-        bool collapsed { false };
-
-        if constexpr (std::is_integral_v<std::decay_t<Arg>>) {
-          collapsed = true;
-          ssize_t idx = arg;
-          if (idx < 0) {
-            idx += this->m_shape[axis];
-          }
-
-          // The advance function for the layout will handle strides and offsets
-          // This allows different layouts to adjust appropriately.
-          offset = idx;
-        } else if constexpr (std::is_same_v<std::decay_t<Arg>, Slice>) {
-          ssize_t start = arg.start;
-          ssize_t stop = arg.stop;
-          ssize_t step = arg.step;
-          length = arg.length;
-
-          if (start < 0) {
-            start += this->m_shape[axis];
-          }
-          if (stop < 0) {
-            stop += this->m_shape[axis];
-          }
-
-          stride *= step;
-          if constexpr (requires { this->m_offsets; }) {
-            offset = this->m_offsets[axis] + start * this->m_strides[axis];
-          } else if constexpr (requires { this->m_suboffsets; }) {
-            offset = this->m_suboffsets[axis];
-          }
-        }
-
-        new_axes[0] = {
-          axis,
-          length,
-          stride,
-          offset,
-          is_pointer,
-          collapsed
-        };
-
-        if constexpr (sizeof...(RemainingArgs) > 0) {
-          build_new_axes<TotalArgs>(new_axes + 1,
-                                    axis + 1,
-                                    std::forward<RemainingArgs>(remaining)...);
-        } else if (axis + 1 < static_cast<ssize_t>(NCARRAY_MAX_NDIM)) {
-          ssize_t remaining_dims = this->ndim() - (axis + 1);
-          for (ssize_t a = 0; a < remaining_dims; ++a) {
-            ssize_t dim = axis + 1 + a;
-            ssize_t off_val { 0 };
-            if constexpr (requires { this->m_offsets; }) {
-              off_val = this->m_offsets[dim];
-            } else if constexpr (requires { this->m_suboffsets; }) {
-              off_val = this->m_suboffsets[dim];
-            }
-            new_axes[a + 1] = {
-              dim,
-              this->m_shape[dim],
-              this->m_strides[dim],
-              off_val,
-              this->is_pointer_axis(dim),
-              false
-            };
-          }
-        }
-      }
+      return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
     template <class VT>
@@ -502,6 +490,7 @@ namespace ncarray {
 
       ssize_t n_dim { 0 };
       ssize_t pointer_axis { -1 };
+      ssize_t shift_ptr_axis { -1 }; // Track the most recent ptr axis for shift accumulation
 
       // NOTE: Passing a length 1 slice does NOT collapse/remove the axis.
       // E.g. A 3-D NCArray* ncarr indexed as ncarr[:1] will have shape (1, ...)
@@ -510,17 +499,38 @@ namespace ncarray {
         const auto& d = axes[i];
 
         if (!d.collapsed) {
-          if (d.is_pointer) {
-            pointer_axis = n_dim;
-          }
           new_shape[n_dim] = d.length;
           new_strides[n_dim] = d.stride;
           new_offsets[n_dim] = d.offset;
+          if (d.data_shift != 0) {
+            if (shift_ptr_axis == -1) {
+              data_ptr = reinterpret_cast<std::uint8_t*>(data_ptr) + d.data_shift;
+            } else {
+              new_offsets[shift_ptr_axis] += d.data_shift;
+            }
+          }
+
+          if (d.is_pointer) {
+            pointer_axis = n_dim;
+            shift_ptr_axis = n_dim;
+          }
+
           n_dim++;
         } else {
           // NOTE: This call is critical! It makes that correct dereferncing and
           // offset accumulation occurs, regardless of subtype
-          data_ptr = this->advance(data_ptr, i, d.offset);
+          if (d.is_pointer) {
+            data_ptr = this->advance(data_ptr, i, d.offset);
+
+            // Reset the shift accumulator tracker if the axis was collapsed
+            shift_ptr_axis = -1;
+          } else {
+            if (shift_ptr_axis == -1) {
+              data_ptr = this->advance(data_ptr, i, d.offset);
+            } else {
+              new_offsets[shift_ptr_axis] += d.offset * this->m_strides[i];
+            }
+          }
         }
       }
 
@@ -587,7 +597,8 @@ namespace ncarray {
           dim,
           length,
           stride,
-          offset,
+          // For all arrays, this is correct - out_from_axes_ptr will handle
+          length == 1 ? 0 : offset,
           is_pointer,
           /*collapsed=*/length == 1
         };

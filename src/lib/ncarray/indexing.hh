@@ -17,8 +17,14 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #include <concepts>
-#include <variant>
-#include <vector>
+
+#ifndef NCA_HD
+#ifdef __CUDACC__
+#define NCA_HD __host__ __device__
+#else
+#define NCA_HD
+#endif
+#endif
 
 namespace ncarray {
   struct Ellipsis {};
@@ -50,16 +56,40 @@ namespace ncarray {
     std::same_as<std::decay_t<IdxT>, Slice> ||
     std::same_as<std::decay_t<IdxT>, Ellipsis>;
 
-  using IndexVariant = std::variant<ssize_t, Slice, Ellipsis>;
-  using ArrayIndices = std::vector<IndexVariant>;
+  enum class IndexType { Integer, Slice, Ellipsis };
 
+  struct IndexItem {
+    IndexType type;
+    ssize_t idx;
+    Slice slice { 0, 0 };
+
+    NCA_HD IndexItem(ssize_t idx_)
+      : type(IndexType::Integer)
+      , idx(idx_)
+    {}
+
+    NCA_HD IndexItem(Slice s)
+      : type(IndexType::Slice)
+      , slice(s)
+    {}
+
+    NCA_HD IndexItem(Ellipsis)
+      : type(IndexType::Ellipsis)
+    {}
+  };
+
+  /**
+   * A description of an axis of an array. This struct can be used for creation
+   * of new views.
+   */
   struct AxisDescr {
-    ssize_t index;
-    ssize_t length;
-    ssize_t stride;
-    ssize_t offset;
-    bool is_pointer { false };
-    bool collapsed { false };
+    ssize_t index;             ///< The axis index/dimension. E.g. 0 is the first axis.
+    ssize_t length;            ///< The total length of the axis.
+    ssize_t stride;            ///< The stride for this axis.
+    ssize_t offset;            ///< The offset or suboffset for this axis.
+    bool is_pointer { false }; ///< Whether the axis is a pointer axis.
+    bool collapsed { false };  ///< Whether the axis has been collapsed (squeezed)
+    ssize_t data_shift { 0 };  ///< An accumulator to propagate offsets for new views
   };
 
 } // namespace ncarray

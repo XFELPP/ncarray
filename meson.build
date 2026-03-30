@@ -232,3 +232,40 @@ py3.install_sources(
     pure: false,
     subdir: 'ncarray/core',
 )
+
+#### Testing ####
+#################
+gtest_dep = dependency('gtest', main: true, static: true, required: false)
+
+if not gtest_dep.found()
+    gtest_proj = subproject('gtest', default_options: ['default_library=static'])
+    gtest_dep = gtest_proj.get_variable('gtest_main_dep')
+endif
+
+deps_for_tests = [gtest_dep, ncarray_dep]
+
+if nca_has_cuda
+    deps_for_tests += cuda_dep
+endif
+
+test_index = executable(
+    'test_array_indexing',
+    [
+        'tests/cxx/test_indexing.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing array indexing.', test_index)
+
+test_ops = executable(
+    'test_array_operations',
+    [
+        'tests/cxx/test_operations.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing array operations.', test_ops)
