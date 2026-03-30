@@ -597,7 +597,8 @@ namespace ncarray {
           dim,
           length,
           stride,
-          offset,
+          // For all arrays, this is correct - out_from_axes_ptr will handle
+          length == 1 ? 0 : offset,
           is_pointer,
           /*collapsed=*/length == 1
         };

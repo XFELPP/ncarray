@@ -39,6 +39,11 @@ namespace ncarray {
      */
     template <typename T, ArrayLike A>
     void fill_recursive(const A& arr, void* current_data, ssize_t axis, T value) {
+      if (axis == static_cast<ssize_t>(arr.ndim())) {
+        // Base case handles when you index to a scalar (the loop below wouldn't enter)
+        *reinterpret_cast<T*>(current_data) = value;
+        return;
+      }
       ssize_t dim = arr.shape()[axis];
       bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
 
@@ -73,6 +78,12 @@ namespace ncarray {
                           void* dest_data,
                           const void* src_data,
                           ssize_t axis) {
+      if (axis == static_cast<ssize_t>(dest.ndim())) {
+        // Base case handles when you index to a scalar (the loop below wouldn't enter)
+        SrcT val = *reinterpret_cast<const SrcT*>(src_data);
+        *reinterpret_cast<DestT*>(dest_data) = op_traits<SrcT>::template cast<DestT>(val);
+        return;
+      }
       ssize_t dim = dest.shape()[axis];
       bool is_last_axis = (axis == static_cast<ssize_t>(dest.ndim()) - 1);
 
