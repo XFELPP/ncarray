@@ -246,9 +246,11 @@ namespace ncarray {
       this->m_shape.set(shape_.data, ndim);
       this->m_strides.set(strides_.data, ndim);
 
-      if constexpr (requires { this->m_offsets; }) {
+      if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+        this->m_offsets.ndim = this->ndim();
         this->m_offsets.set(offsets_.data, ndim);
-      } else if constexpr (requires { this->m_suboffsets; }) {
+      } else if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        this->m_suboffsets.ndim = this->ndim();
         this->m_suboffsets.set(offsets_.data, ndim);
       }
 
@@ -262,11 +264,21 @@ namespace ncarray {
                      DType dtype_,
                      Metadata::value_type pointer_axis_,
                      bool read_only_) {
+      this->m_data = data_;
       this->m_shape.set(shape_, ndim);
       this->m_strides.set(strides_, ndim);
       this->m_dtype = dtype_;
       this->m_pointer_axis = pointer_axis_;
       this->m_read_only = read_only_;
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+          this->m_offsets[i] = 0;
+        } else if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+          this->m_suboffsets[i] = -1;
+        }
+      }
     }
 
     // --- Ref classes.... --- //
@@ -286,6 +298,16 @@ namespace ncarray {
         this->m_read_only = read_only_;
         this->m_shape.set(shape_.data(), shape_.size());
         this->m_strides.set(strides_.data(), strides_.size());
+      }
+
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = this->ndim();
+          this->m_suboffsets[i] = -1;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = this->ndim();
+          this->m_offsets[i] = 0;
+        }
       }
 
       if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
@@ -312,14 +334,32 @@ namespace ncarray {
      */
     ArrayImpl(const std::vector<ssize_t>& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
+        ssize_t ndim { static_cast<ssize_t>(shape_.size()) };
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
-        this->m_shape.set(shape_.data(), shape_.size());
-        this->allocate(this->nbytes());
-        this->m_data = this->m_storage.get();
+        this->m_shape.ndim = ndim;
+        this->m_strides.ndim = ndim;
+
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+        }
         auto new_strides = calculate_c_order_strides(shape_,
                                                      ncarray::itemsize(dtype_));
-        this->m_strides.set(new_strides.data(), new_strides.size());
+
+        // Cannot use .set function from Metadata since it is host/device
+        for (ssize_t i = 0; i < ndim; ++i) {
+          this->m_shape[i] = shape_[i];
+          this->m_strides[i] = new_strides[i];
+          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+            this->m_suboffsets[i] = -1;
+          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+            this->m_offsets[i] = 0;
+          }
+        }
+        this->allocate(this->nbytes());
+        this->m_data = this->m_storage.get();
       }
     }
 
@@ -339,15 +379,33 @@ namespace ncarray {
      */
     ArrayImpl(const Metadata& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
+        ssize_t ndim { shape_.ndim };
         this->m_pointer_axis = -1;
-        this->m_shape.set(shape_.data, shape_.ndim);
         this->m_dtype = dtype_;
-        this->allocate(this->nbytes());
-        this->m_data = this->m_storage.get();
-        auto new_strides = calculate_c_order_strides(this->ndim(),
+        this->m_shape.ndim = ndim;
+        this->m_strides.ndim = ndim;
+
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+        }
+        auto new_strides = calculate_c_order_strides(ndim,
                                                      shape_.data,
                                                      ncarray::itemsize(dtype_));
-        this->m_strides.set(new_strides.data(), new_strides.size());
+
+        // Cannot use .set function from Metadata since it is host/device
+        for (ssize_t i = 0; i < ndim; ++i) {
+          this->m_shape[i] = shape_[i];
+          this->m_strides[i] = new_strides[i];
+          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+            this->m_suboffsets[i] = -1;
+          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+            this->m_offsets[i] = 0;
+          }
+        }
+        this->allocate(this->nbytes());
+        this->m_data = this->m_storage.get();
       }
     }
 
@@ -370,13 +428,30 @@ namespace ncarray {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
-        this->m_shape.set(shape_, ndim);
-        this->allocate(this->nbytes());
-        this->m_data = this->m_storage.get();
+        this->m_shape.ndim = ndim;
+        this->m_strides.ndim = ndim;
+
+        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          this->m_suboffsets.ndim = ndim;
+        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+          this->m_offsets.ndim = ndim;
+        }
         auto new_strides = calculate_c_order_strides(ndim,
                                                      shape_,
                                                      ncarray::itemsize(dtype_));
-        this->m_strides.set(new_strides.data(), ndim);
+
+        // Cannot use .set function from Metadata since it is host/device
+        for (ssize_t i = 0; i < ndim; ++i) {
+          this->m_shape[i] = shape_[i];
+          this->m_strides[i] = new_strides[i];
+          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+            this->m_suboffsets[i] = -1;
+          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+            this->m_offsets[i] = 0;
+          }
+        }
+        this->allocate(this->nbytes());
+        this->m_data = this->m_storage.get();
       }
     }
 

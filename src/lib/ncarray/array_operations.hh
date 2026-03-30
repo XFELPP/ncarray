@@ -433,7 +433,7 @@ namespace ncarray {
     auto add_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_add(left, right, result);
+        GPUEngine::execute_add(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -473,7 +473,7 @@ namespace ncarray {
     auto sub_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub(left, right, result);
+        GPUEngine::execute_sub(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -507,7 +507,7 @@ namespace ncarray {
     auto mul_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_mul(left, right, result);
+        GPUEngine::execute_mul(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -549,6 +549,13 @@ namespace ncarray {
 
     auto truediv_operation = [&]<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_truediv(left, right, result.view());
+#else
+        throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
+#endif
+      }
       auto truediv_op_internal = [](const std::uint8_t* lhs,
                                     const std::uint8_t* rhs,
                                     ResultT* output) {
