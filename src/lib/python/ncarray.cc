@@ -311,6 +311,8 @@ namespace {
   void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
     using ViewType = typename ArrayT::ViewType;
 
+    using ViewOrScalar = std::variant<ncarray::Scalar,ViewType>;
+
     arr_cl.def("__repr__", &ArrayT::repr)
     .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
       auto* shape = self.shape();
@@ -364,7 +366,7 @@ namespace {
          &ArrayT::view,
          "Convert the array to a *View type for use in view-only APIs (like kernels).")
     .def("__getitem__",
-         [](const ArrayT& self, py::object idx) -> py::object {
+         [](const ArrayT& self, py::object idx) -> ViewOrScalar {
            // NOTE: The Python bindings diverge from the C++ library on scalars.
            //       For simplicity, in Python, scalars are returned as scalars.
            //       In C++, they remain as an object tied to the array class.
@@ -398,10 +400,10 @@ namespace {
            ViewType view = self.view_from_indices(indices.data(), num_indices);
            // For convenience convert scalars to... scalars
            if (view.ndim() == 0) {
-             return py::cast(view.template get_scalar(view.data()));
+             return view.get_scalar(view.data());
            }
 
-           return py::cast(view);
+           return view;
          },
          py::is_operator(),
          py::return_value_policy::reference)

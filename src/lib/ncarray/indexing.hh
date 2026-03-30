@@ -30,14 +30,14 @@ namespace ncarray {
   struct Ellipsis {};
 
   struct Slice {
-    Slice(ssize_t start_, ssize_t stop_)
+    NCA_HD Slice(ssize_t start_, ssize_t stop_)
       : start(start_)
       , stop(stop_)
       , step(1)
       , length((stop - start + step - 1) / step)
     {}
 
-    Slice(ssize_t start_, ssize_t stop_, ssize_t step_)
+    NCA_HD Slice(ssize_t start_, ssize_t stop_, ssize_t step_)
       : start(start_)
       , stop(stop_)
       , step(step_)

@@ -582,7 +582,7 @@ namespace ncarray {
     ViewType squeeze() const {
       void* new_data = this->m_data;
 
-      AxisDescr new_axes[this->ndim()];
+      AxisDescr new_axes[NCARRAY_MAX_NDIM];
       for (ssize_t dim = 0; dim < this->ndim(); ++dim) {
         ssize_t length { this->m_shape[dim] };
         ssize_t stride { this->m_strides[dim] };
@@ -726,7 +726,7 @@ namespace ncarray {
       size_t indent = prefix.size();
       constexpr size_t edge_items = 3;
 
-      repr_recursive(oss, this->m_data, 0, indent, edge_items);
+      this->repr_recursive(oss, this->m_data, 0, indent, edge_items);
 
       oss << ", dtype=" << ncarray::to_string(this->m_dtype) << ")";
       return oss.str();
@@ -745,9 +745,10 @@ namespace ncarray {
                         ssize_t axis,
                         ssize_t indent,
                         ssize_t edge_items) const {
-      auto internal = [&]<typename T> {
-        repr_recursive_dispatched<T>(oss, current_data, axis, indent, edge_items);
+      auto internal = [&]<typename T>() {
+        this->template repr_recursive_dispatched<T>(oss, current_data, axis, indent, edge_items);
       };
+
       dispatch(this->m_dtype, internal);
     }
 
@@ -777,7 +778,7 @@ namespace ncarray {
             oss << val;
           }
         } else {
-          repr_recursive_dispatched<T>(oss, next_ptr, axis + 1, indent + 1, edge_items);
+          this->template repr_recursive_dispatched<T>(oss, next_ptr, axis + 1, indent + 1, edge_items);
         }
       };
 
