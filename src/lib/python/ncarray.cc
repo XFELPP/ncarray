@@ -311,8 +311,6 @@ namespace {
   void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
     using ViewType = typename ArrayT::ViewType;
 
-    using ViewOrScalar = std::variant<ViewType, ncarray::Scalar>;
-
     arr_cl.def("__repr__", &ArrayT::repr)
     .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
       auto* shape = self.shape();
@@ -366,7 +364,7 @@ namespace {
          &ArrayT::view,
          "Convert the array to a *View type for use in view-only APIs (like kernels).")
     .def("__getitem__",
-         [](const ArrayT& self, py::object idx) -> ViewOrScalar {
+         [](const ArrayT& self, py::object idx) -> py::object {
            // NOTE: The Python bindings diverge from the C++ library on scalars.
            //       For simplicity, in Python, scalars are returned as scalars.
            //       In C++, they remain as an object tied to the array class.
@@ -400,12 +398,13 @@ namespace {
            ViewType view = self.view_from_indices(indices.data(), num_indices);
            // For convenience convert scalars to... scalars
            if (view.ndim() == 0) {
-             return view.template get_scalar(view.data());
+             return py::cast(view.template get_scalar(view.data()));
            }
 
-           return view;
+           return py::cast(view);
          },
-         py::is_operator())
+         py::is_operator(),
+         py::return_value_policy::reference)
     .def("__setitem__",
          [](const ArrayT& self, py::object idx, py::object val) {
            ssize_t num_indices { 0 };
@@ -436,13 +435,19 @@ namespace {
 
            ViewType view = self.view_from_indices(indices.data(), num_indices);
            if (py::isinstance<py::array>(val)) {
-             // ... //
+             auto rhs_view = pyarray_to_view<ViewType>(val.cast<py::array>());
+             view.assign(rhs_view);
            } else if (py::isinstance<ArrayT>(val)) {
              view.assign(val.cast<ArrayT&>());
            } else {
-             // Convertible to scalar
-             // Use the algorithm directly to avoid the variant gets
-             view.fill(val.cast<ncarray::Scalar>());
+             try {
+               // See if its another nc/so array type
+               view.assign(val.cast<ViewType>());
+             } catch (...) {
+               // Convertible to scalar
+               // Use the algorithm directly to avoid the variant gets
+               view.fill(val.cast<ncarray::Scalar>());
+             }
            }
          },
          py::is_operator())

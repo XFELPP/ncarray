@@ -162,6 +162,10 @@ namespace ncarray {
     /**
      * Recursively operate on two arrays.
      *
+     * This function assumes the arrays are the same shape, except if there are
+     * extra padding dimensions. In that case (i.e., leading dimensions of size 1)
+     * a shape mismatch is tolerated.
+     *
      * E.g. this function can do binary add/subtract/multiply and so on.
      *
      * This function can cast the value as it is assigned.
@@ -193,7 +197,14 @@ namespace ncarray {
 
       for (ssize_t i = 0; i < dim; ++i) {
         const void* lhs_next = const_cast<const void*>(left_arr.advance(lhs_data, axis, i));
-        const void* rhs_next = const_cast<const void*>(right_arr.advance(rhs_data, axis, i));
+
+        // Align dimensions from the right side
+        ssize_t r_axis =
+          axis - (static_cast<ssize_t>(left_arr.ndim()) - static_cast<ssize_t>(right_arr.ndim()));
+
+        const void* rhs_next = (r_axis >= 0)
+          ? right_arr.advance(rhs_data, r_axis, (right_arr.shape(r_axis) == 1 ? 0 : i))
+          : rhs_data;
 
         if (is_last_axis) {
           op(reinterpret_cast<const std::uint8_t*>(lhs_next),
@@ -251,7 +262,8 @@ namespace ncarray {
     using std::invalid_argument::invalid_argument;
   };
 
-  template <typename Visitor> auto dispatch(DType type, Visitor&& visitor) {
+  template <typename Visitor>
+  auto dispatch(DType type, Visitor&& visitor) {
     switch (type) {
     case DType::bool_: {
       return visitor.template operator()<bool>();
