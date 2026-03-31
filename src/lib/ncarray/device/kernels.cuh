@@ -86,11 +86,11 @@ namespace ncarray {
   */
 
   // --- Copy and Modification --- //
-  template <typename T, ViewArrayLike OutT>
+  template <ViewArrayLike OutT, typename T>
   __global__ void fill_kernel(OutT out, T val) {
     ssize_t idx { blockIdx.x * blockDim.x + threadIdx.x };
     if (idx < out.size()) {
-      out.template operator[]<T>(idx) = val; // Direct, fast element access!
+      out.template operator[]<T>(idx) = val;
     }
   }
 } // namespace ncarray
