@@ -9,6 +9,7 @@
 #ifndef NCARRAY_ARRAY_TRAITS_HH
 #define NCARRAY_ARRAY_TRAITS_HH
 
+#include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
 #include "ncarray/storage.hh"
 
@@ -129,6 +130,21 @@ namespace ncarray {
     NCA_HD static To cast(const T& val) {
       if constexpr (std::is_same_v<To, T>) {
         return val;
+      } else if constexpr (Vector2DType<T> && !Vector2DType<To>) {
+        // For vectors just return the first value during a cast to scalar
+        return static_cast<To>(val.x);
+      } else if constexpr (!Vector2DType<T> && Vector2DType<To>) {
+        // For scalar to vector, broadcast.
+        To res;
+        res.x = static_cast<decltype(To::x)>(val);
+        res.y = static_cast<decltype(To::y)>(val);
+        if constexpr (Vector3DType<To>) {
+          res.z = static_cast<decltype(To::z)>(val);
+        }
+        if constexpr (Vector4DType<To>) {
+          res.w = static_cast<decltype(To::w)>(val);
+        }
+        return res;
       } else if constexpr (requires { To().real(); }) {
         // Scalar cast to complex
         return To(static_cast<typename To::value_type>(val), 0);
@@ -174,6 +190,18 @@ namespace ncarray {
     NCA_HD static To cast(const std::complex<T>& val) {
       if constexpr (std::is_same_v<To, std::complex<T>>) {
         return val;
+      } else if constexpr (Vector2DType<To>) {
+        // For vectors broadcast into the first values.
+        To res;
+        res.x = static_cast<decltype(To::x)>(val.real());
+        res.y = static_cast<decltype(To::y)>(val.imag());
+        if constexpr (Vector3DType<To>) {
+          res.z = static_cast<decltype(To::z)>(0);
+        }
+        if constexpr (Vector4DType<To>) {
+          res.w = static_cast<decltype(To::w)>(0);
+        }
+        return res;
       } else if constexpr (requires { To().real(); }) {
         // Complex to complex cast
         return To(static_cast<typename To::value_type>(val.real()),
@@ -210,6 +238,167 @@ namespace ncarray {
     // NOTE: Unsigned types promot to SIGNED for subtraction!
     using diff_type = int64_t;
   };
+
+  template <>
+  struct op_traits<Float2> : BaseOpTraits<Float2> {
+    using truediv_type = Double2;
+
+    // Comparisons and identities -- needed especially for specializations below
+    // on things like complex
+    NCA_HD static bool greater(const Float2& a, const Float2& b) {
+      return a.x > b.x && a.y > b.y;
+    }
+    NCA_HD static bool less(const Float2& a, const Float2& b) {
+      return a.x < b.x && a.y < b.y;
+    }
+    NCA_HD static Float2 lowest() {
+      return {
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()
+      };
+    }
+    NCA_HD static Float2 max() {
+      return {
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()
+      };
+    }
+  };
+
+  template <>
+  struct op_traits<Float3> : BaseOpTraits<Float3> {
+    using truediv_type = Double3;
+
+    NCA_HD static bool greater(const Float3& a, const Float3& b) {
+      return a.x > b.x && a.y > b.y && a.z > b.z;
+    }
+    NCA_HD static bool less(const Float3& a, const Float3& b) {
+      return a.x < b.x && a.y < b.y && a.z < b.z;
+    }
+    NCA_HD static Float3 lowest() {
+      return {
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()
+      };
+    }
+    NCA_HD static Float3 max() {
+      return {
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()
+      };
+    }
+  };
+
+  template <>
+  struct op_traits<Float4> : BaseOpTraits<Float4> {
+    using truediv_type = Double4;
+
+    NCA_HD static bool greater(const Float4& a, const Float4& b) {
+      return a.x > b.x && a.y > b.y && a.z > b.z && a.w > b.w;
+    }
+    NCA_HD static bool less(const Float4& a, const Float4& b) {
+      return a.x < b.x && a.y < b.y && a.z < b.z && a.w < b.w;
+    }
+    NCA_HD static Float4 lowest() {
+      return {
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()
+      };
+    }
+    NCA_HD static Float4 max() {
+      return {
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()
+      };
+    }
+  };
+
+  template <>
+  struct op_traits<Double2> : BaseOpTraits<Double2> {
+    using truediv_type = Double2;
+
+    // Comparisons and identities -- needed especially for specializations below
+    // on things like complex
+    NCA_HD static bool greater(const Double2& a, const Double2& b) {
+      return a.x > b.x && a.y > b.y;
+    }
+    NCA_HD static bool less(const Double2& a, const Double2& b) {
+      return a.x < b.x && a.y < b.y;
+    }
+    NCA_HD static Double2 lowest() {
+      return {
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest()
+      };
+    }
+    NCA_HD static Double2 max() {
+      return {
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max()
+      };
+    }
+  };
+
+  template <>
+  struct op_traits<Double3> : BaseOpTraits<Double3> {
+    using truediv_type = Double3;
+
+    NCA_HD static bool greater(const Double3& a, const Double3& b) {
+      return a.x > b.x && a.y > b.y && a.z > b.z;
+    }
+    NCA_HD static bool less(const Double3& a, const Double3& b) {
+      return a.x < b.x && a.y < b.y && a.z < b.z;
+    }
+    NCA_HD static Double3 lowest() {
+      return {
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest()
+      };
+    }
+    NCA_HD static Double3 max() {
+      return {
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max()
+      };
+    }
+  };
+
+  template <>
+  struct op_traits<Double4> : BaseOpTraits<Double4> {
+    using truediv_type = Double4;
+
+    NCA_HD static bool greater(const Double4& a, const Double4& b) {
+      return a.x > b.x && a.y > b.y && a.z > b.z && a.w > b.w;
+    }
+    NCA_HD static bool less(const Double4& a, const Double4& b) {
+      return a.x < b.x && a.y < b.y && a.z < b.z && a.w < b.w;
+    }
+    NCA_HD static Double4 lowest() {
+      return {
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest()
+      };
+    }
+    NCA_HD static Double4 max() {
+      return {
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max()
+      };
+    }
+  };
+
 
 } // namespace ncarray
 

@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.2.0',
+    version: '0.3.0',
     default_options: [
         'cpp_std=c++23',
         'cuda_std=c++20',
@@ -114,6 +114,7 @@ installed_headers = [
     'src/lib/ncarray/array_impl.hh',
     'src/lib/ncarray/array_operations.hh',
     'src/lib/ncarray/array_traits.hh',
+    'src/lib/ncarray/custom_types.hh',
     'src/lib/ncarray/dtype.hh',
     'src/lib/ncarray/indexing.hh',
     'src/lib/ncarray/layout.hh',
@@ -197,6 +198,7 @@ endif # end nca_has_cuda
 deps_for_py_mod = [ncarray_dep, pybind11_dep]
 
 if nca_has_cuda
+    deps_for_py_mod += cuda_dep
     deps_for_py_mod += ncdevarray_dep
 endif
 
@@ -246,6 +248,7 @@ deps_for_tests = [gtest_dep, ncarray_dep]
 
 if nca_has_cuda
     deps_for_tests += cuda_dep
+    deps_for_tests += ncdevarray_dep
 endif
 
 test_index = executable(
@@ -269,3 +272,14 @@ test_ops = executable(
     include_directories: ncarray_headers,
 )
 test('Testing array operations.', test_ops)
+
+test_float_vecs = executable(
+    'test_float_vecs',
+    [
+        'tests/cxx/test_float_vecs.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing custom float/double vectors.', test_float_vecs)

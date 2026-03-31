@@ -9,8 +9,11 @@
 #ifndef NCARRAY_DTYPE_HH
 #define NCARRAY_DTYPE_HH
 
+#include "ncarray/custom_types.hh"
+
 #include <complex>
 #include <cstdint>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -45,7 +48,13 @@ namespace ncarray {
     float64,
     complex64,
     complex128,
-    complex256
+    complex256,
+    vfloat2,
+    vfloat3,
+    vfloat4,
+    vdouble2,
+    vdouble3,
+    vdouble4
   };
 
   template <typename T> struct dtype_traits;
@@ -72,6 +81,14 @@ namespace ncarray {
   REGISTER_NCARRAY_DTYPE(std::complex<float>, complex64)
   REGISTER_NCARRAY_DTYPE(std::complex<double>, complex128)
   REGISTER_NCARRAY_DTYPE(std::complex<long double>, complex256)
+
+  REGISTER_NCARRAY_DTYPE(Float2, vfloat2)
+  REGISTER_NCARRAY_DTYPE(Float3, vfloat3)
+  REGISTER_NCARRAY_DTYPE(Float4, vfloat4)
+
+  REGISTER_NCARRAY_DTYPE(Double2, vdouble2)
+  REGISTER_NCARRAY_DTYPE(Double3, vdouble3)
+  REGISTER_NCARRAY_DTYPE(Double4, vdouble4)
 #undef REGISTER_NCARRAY_DTYPE
 
   NCA_HD inline size_t itemsize(DType type) {
@@ -96,6 +113,18 @@ namespace ncarray {
     case DType::complex128:
       return 16;
     case DType::complex256:
+      return 32;
+    case DType::vfloat2:
+      return 8;
+    case DType::vfloat3:
+      return 12;
+    case DType::vfloat4:
+      return 16;
+    case DType::vdouble2:
+      return 16;
+    case DType::vdouble3:
+      return 24;
+    case DType::vdouble4:
       return 32;
     default:
       return 0;
@@ -134,6 +163,18 @@ namespace ncarray {
       return "complex128";
     case DType::complex256:
       return "complex256";
+    case DType::vfloat2:
+      return "vfloat2";
+    case DType::vfloat3:
+      return "vfloat3";
+    case DType::vfloat4:
+      return "vfloat4";
+    case DType::vdouble2:
+      return "vdouble2";
+    case DType::vdouble3:
+      return "vdouble3";
+    case DType::vdouble4:
+      return "vdouble4";
     default:
       throw type_error("Unkonwn type!");
     }
@@ -144,7 +185,9 @@ namespace ncarray {
     bool, char,
     std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t,
     std::int8_t, std::int16_t, std::int32_t, std::int64_t,
-    float, double, std::complex<float>, std::complex<double>, std::complex<long double>>;
+    float, double, std::complex<float>, std::complex<double>, std::complex<long double>,
+    Float2, Float3, Float4, Double2, Double3, Double4
+  >;
 
   template <typename T> Scalar
   to_scalar(const void* ptr) {

@@ -22,24 +22,24 @@ typedef SSIZE_T ssize_t;
 
 namespace ncarray {
   // --- Binary operations --- //
-  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void add_kernel(const LeftT left, const RightT right, OutT out) {
-    ncarray::device::block_add(left, right, out);
+    ncarray::device::block_add<T, LeftT, RightT, OutT>(left, right, out);
   }
 
-  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void sub_kernel(const LeftT left, const RightT right, OutT out) {
-    ncarray::device::block_sub(left, right, out);
+    ncarray::device::block_sub<T, LeftT, RightT, OutT>(left, right, out);
   }
 
-  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void mul_kernel(const LeftT left, const RightT right, OutT out) {
-    ncarray::device::block_mul(left, right, out);
+    ncarray::device::block_mul<T, LeftT, RightT, OutT>(left, right, out);
   }
 
-  template <ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void truediv_kernel(const LeftT left, const RightT right, OutT out) {
-    ncarray::device::block_truediv(left, right, out);
+    ncarray::device::block_truediv<T, LeftT, RightT, OutT>(left, right, out);
   }
 
   // --- Reductions --- //
@@ -84,6 +84,15 @@ namespace ncarray {
     }
   }
   */
+
+  // --- Copy and Modification --- //
+  template <ViewArrayLike OutT, typename T>
+  __global__ void fill_kernel(OutT out, T val) {
+    ssize_t idx { blockIdx.x * blockDim.x + threadIdx.x };
+    if (idx < out.size()) {
+      out.template operator[]<T>(idx) = val;
+    }
+  }
 } // namespace ncarray
 
 #endif // NCARRAY_DEVICE_KERNELS_HH

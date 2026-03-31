@@ -6,6 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+#include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
 #include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
@@ -340,19 +341,22 @@ namespace {
     .def("__iter__", [](const ArrayT& self) {
         return py::make_iterator(self.begin(), self.end());
     })
-    // --- Array-Like Methods (indexing, size, shape, dtype, etc) --- //
+    // --- Array-Like Methods (indexing, size, shapedtype, etc) --- //
     .def_property_readonly("size",
                            &ArrayT::size,
-                           "The number of items in the NCArray*.")
+                           "The number of items in the array type.")
     .def_property_readonly("ndim",
                            &ArrayT::ndim,
-                           "The number of dimensions in the NCArray*.")
+                           "The number of dimensions in the array type.")
     .def_property_readonly("itemsize",
                            &ArrayT::itemsize,
-                           "The size in bytes of a single item in the NCArray*.")
+                           "The size in bytes of a single item in the array type.")
     .def_property_readonly("nbytes",
                            &ArrayT::nbytes,
-                           "The total size in bytes of all items in the NCArray*.")
+                           "The total size in bytes of all items in the array type.")
+    .def_property_readonly("dtype",
+                           &ArrayT::dtype,
+                           "The data type of the underlying elements.")
     .def("squeeze",
          &ArrayT::squeeze,
          "Collapse and remove all axes of length 1.")
@@ -523,8 +527,51 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     .value("complex64", ncarray::DType::complex64)
     .value("complex128", ncarray::DType::complex128)
     .value("complex256", ncarray::DType::complex256)
+    .value("vfloat2", ncarray::DType::vfloat2)
+    .value("vfloat3", ncarray::DType::vfloat3)
+    .value("vfloat4", ncarray::DType::vfloat4)
+    .value("vdouble2", ncarray::DType::vdouble2)
+    .value("vdouble3", ncarray::DType::vdouble3)
+    .value("vdouble4", ncarray::DType::vdouble4)
     .export_values()
     .finalize();
+
+  // --- Simple 2,3,4 float vectors (for CPU/GPU similarity) --- //
+  py::classh<ncarray::Float2>(ncarray_module, "Float2", "A simple 2 float vector.")
+    .def(py::init<float, float>())
+    .def_readwrite("x", &ncarray::Float2::x)
+    .def_readwrite("y", &ncarray::Float2::y);
+
+  py::classh<ncarray::Float3>(ncarray_module, "Float3", "A simple 3 float vector.")
+    .def(py::init<float, float, float>())
+    .def_readwrite("x", &ncarray::Float3::x)
+    .def_readwrite("y", &ncarray::Float3::y)
+    .def_readwrite("z", &ncarray::Float3::z);
+
+  py::classh<ncarray::Float4>(ncarray_module, "Float4", "A simple 4 float vector.")
+    .def(py::init<float, float, float, float>())
+    .def_readwrite("x", &ncarray::Float4::x)
+    .def_readwrite("y", &ncarray::Float4::y)
+    .def_readwrite("z", &ncarray::Float4::z)
+    .def_readwrite("w", &ncarray::Float4::w);
+
+  py::classh<ncarray::Double2>(ncarray_module, "Double2", "A simple 2 double vector.")
+    .def(py::init<double, double>())
+    .def_readwrite("x", &ncarray::Double2::x)
+    .def_readwrite("y", &ncarray::Double2::y);
+
+  py::classh<ncarray::Double3>(ncarray_module, "Double3", "A simple 3 double vector.")
+    .def(py::init<double, double, double>())
+    .def_readwrite("x", &ncarray::Double3::x)
+    .def_readwrite("y", &ncarray::Double3::y)
+    .def_readwrite("z", &ncarray::Double3::z);
+
+  py::classh<ncarray::Double4>(ncarray_module, "Double4", "A simple 4 double vector.")
+    .def(py::init<double, double, double, double>())
+    .def_readwrite("x", &ncarray::Double4::x)
+    .def_readwrite("y", &ncarray::Double4::y)
+    .def_readwrite("z", &ncarray::Double4::z)
+    .def_readwrite("w", &ncarray::Double4::w);
 
   // --- Namesake NCArray* array classes --- //
   auto ncview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView");
