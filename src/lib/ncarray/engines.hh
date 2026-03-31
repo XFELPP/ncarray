@@ -64,7 +64,7 @@ namespace ncarray {
     }
 
     template <typename T, class ArrayT>
-  static void execute_max(const ArrayT& arr, T* result) {
+    static void execute_max(const ArrayT& arr, T* result) {
       int TPB { 256 };
       int blocks { (arr.size() + TPB - 1) / TPB };
 
@@ -93,6 +93,16 @@ namespace ncarray {
       cudaDeviceSynchronize();
     }
     */
+
+    // --- Copy and modification --- //
+    template <typename T, class ArrayT>
+    static void execute_fill(const ArrayT& arr, T val) {
+      int TPB { 256 };
+      int blocks { (arr.size() + TPB - 1) / TPB };
+
+      fill_kernel<T, ArrayT><<<blocks, TPB>>>(arr, val);
+      cudaDeviceSynchronize();
+    }
   };
 
 } // namespace ncarray

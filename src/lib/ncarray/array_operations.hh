@@ -597,37 +597,38 @@ namespace ncarray {
 #else
         throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
 #endif
-      }
-      auto truediv_op_internal = [](const std::uint8_t* lhs,
-                                    const std::uint8_t* rhs,
-                                    ResultT* output) {
-        const T lhs_val = *reinterpret_cast<const T*>(lhs);
-        const T rhs_val = *reinterpret_cast<const T*>(rhs);
+      } else {
+        auto truediv_op_internal = [](const std::uint8_t* lhs,
+                                      const std::uint8_t* rhs,
+                                      ResultT* output) {
+          const T lhs_val = *reinterpret_cast<const T*>(lhs);
+          const T rhs_val = *reinterpret_cast<const T*>(rhs);
 
-        if (rhs_val == T(0)) {
-          bool is_finite { false };
-          // custom_types.hh has an overload of isfinite
-          using std::isfinite;
-          if constexpr (requires { lhs_val.real(); }) {
-            is_finite = isfinite(lhs_val.real()) && isfinite(lhs_val.imag());
+          if (rhs_val == T(0)) {
+            bool is_finite { false };
+            // custom_types.hh has an overload of isfinite
+            using std::isfinite;
+            if constexpr (requires { lhs_val.real(); }) {
+              is_finite = isfinite(lhs_val.real()) && isfinite(lhs_val.imag());
+            } else {
+              is_finite = isfinite(lhs_val);
+            }
+            *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
           } else {
-            is_finite = isfinite(lhs_val);
+            *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs_val);
           }
-          *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
-        } else {
-          *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs_val);
-        }
-      };
+        };
 
-      ssize_t starting_axis { 0 };
-      ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
-      impl::binary_reduce_recursive<T, decltype(truediv_op_internal), ResultT>(left,
-                                                                               right,
-                                                                               left.data(),
-                                                                               right.data(),
-                                                                               starting_axis,
-                                                                               truediv_op_internal,
-                                                                               result_ptr);
+        ssize_t starting_axis { 0 };
+        ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
+        impl::binary_reduce_recursive<T, decltype(truediv_op_internal), ResultT>(left,
+                                                                                 right,
+                                                                                 left.data(),
+                                                                                 right.data(),
+                                                                                 starting_axis,
+                                                                                 truediv_op_internal,
+                                                                                 result_ptr);
+      }
     };
 
     dispatch(left.dtype(), truediv_operation);
@@ -968,12 +969,26 @@ namespace ncarray {
   template <ArrayLike A>
   void fill(A& arr, Scalar val) {
     auto fill_op = [&]<typename T>() {
-      auto fill_op_internal = [](auto&& arg) -> T {
-        using FromT = std::decay_t<decltype(arg)>;
-        return ncarray::op_traits<FromT>::template cast<T>(arg);
-      };
-      T target_val = std::visit(fill_op_internal, val);
-      impl::fill_recursive<T>(arr, arr.data(), 0, target_val);
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        auto cast_op = [](auto&& arg) -> T {
+          using FromT = std::decay_t<decltype(arg)>;
+
+          return ncarray::op_traits<FromT>::template cast<T>(arg);
+        };
+        T target_val = std::visit(cast_op, val);
+        GPUEngine::execute_fill<T>(arr, target_val);
+#else
+        throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with as C++.");
+#endif
+      } else {
+        auto fill_op_internal = [](auto&& arg) -> T {
+          using FromT = std::decay_t<decltype(arg)>;
+          return ncarray::op_traits<FromT>::template cast<T>(arg);
+        };
+        T target_val = std::visit(fill_op_internal, val);
+        impl::fill_recursive<T>(arr, arr.data(), 0, target_val);
+      }
     };
 
     dispatch(arr.dtype(), fill_op);

@@ -474,6 +474,44 @@ namespace ncarray {
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
+    template <typename T>
+    NCA_HD inline T& operator[](ssize_t idx) {
+      void* out_data = const_cast<void*>(this->data());
+      ssize_t lin_idx { idx };
+
+#ifdef __CUDACC__
+#pragma unroll
+#endif
+      for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
+        ssize_t dim_shape = this->shape(dim);
+        ssize_t local_idx = lin_idx % dim_shape;
+
+        lin_idx /= this->shape(dim);
+
+        out_data = this->advance(out_data, dim, local_idx);
+      }
+
+      return *reinterpret_cast<T*>(out_data);
+    }
+
+    template <typename T>
+    NCA_HD inline const T& operator[](ssize_t idx) const {
+      const void* out_data = this->data();
+      ssize_t lin_idx { idx };
+
+#ifdef __CUDACC__
+#pragma unroll
+#endif
+      for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
+        ssize_t dim_shape = this->shape(dim);
+        ssize_t local_idx = lin_idx % dim_shape;
+        lin_idx /= dim_shape;
+        out_data = this->advance(out_data, dim, local_idx);
+      }
+
+      return *reinterpret_cast<const T*>(out_data);
+    }
+
     NCA_HD ViewType view_from_indices(const IndexItem* indices,
                                       ssize_t num_indices) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
