@@ -270,3 +270,14 @@ test_ops = executable(
     include_directories: ncarray_headers,
 )
 test('Testing array operations.', test_ops)
+
+test_float_vecs = executable(
+    'test_float_vecs',
+    [
+        'tests/cxx/test_float_vecs.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing custom float/double vectors.', test_float_vecs)

@@ -341,19 +341,22 @@ namespace {
     .def("__iter__", [](const ArrayT& self) {
         return py::make_iterator(self.begin(), self.end());
     })
-    // --- Array-Like Methods (indexing, size, shape, dtype, etc) --- //
+    // --- Array-Like Methods (indexing, size, shapedtype, etc) --- //
     .def_property_readonly("size",
                            &ArrayT::size,
-                           "The number of items in the NCArray*.")
+                           "The number of items in the array type.")
     .def_property_readonly("ndim",
                            &ArrayT::ndim,
-                           "The number of dimensions in the NCArray*.")
+                           "The number of dimensions in the array type.")
     .def_property_readonly("itemsize",
                            &ArrayT::itemsize,
-                           "The size in bytes of a single item in the NCArray*.")
+                           "The size in bytes of a single item in the array type.")
     .def_property_readonly("nbytes",
                            &ArrayT::nbytes,
-                           "The total size in bytes of all items in the NCArray*.")
+                           "The total size in bytes of all items in the array type.")
+    .def_property_readonly("dtype",
+                           &ArrayT::dtype,
+                           "The data type of the underlying elements.")
     .def("squeeze",
          &ArrayT::squeeze,
          "Collapse and remove all axes of length 1.")

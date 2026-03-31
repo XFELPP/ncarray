@@ -108,9 +108,16 @@ namespace ncarray {
 #define BINOPS3(OP) x OP other.x, y OP other.y, z OP other.z
 #define BINOPS4(OP) x OP other.x, y OP other.y, z OP other.z, w OP other.w
 
-#define SCALAROPS2(v, s, OP) v.x OP s, v.y OP s
-#define SCALAROPS3(v, s, OP) v.x OP s, v.y OP s, v.z OP s
-#define SCALAROPS4(v, s, OP) v.x OP s, v.y OP s, v.z OP s, v.w OP s
+#define SCALAROPS2(v, s, OP) static_cast<decltype(v.x)>(v.x OP s), static_cast<decltype(v.y)>(v.y OP s)
+#define SCALAROPS3(v, s, OP)            \
+  static_cast<decltype(v.x)>(v.x OP s), \
+  static_cast<decltype(v.y)>(v.y OP s), \
+  static_cast<decltype(v.z)>(v.z OP s)
+#define SCALAROPS4(v, s, OP)            \
+  static_cast<decltype(v.x)>(v.x OP s), \
+  static_cast<decltype(v.y)>(v.y OP s), \
+  static_cast<decltype(v.z)>(v.z OP s), \
+  static_cast<decltype(v.w)>(v.w OP s)
 
 #define COMPOPS2(a, b, OP) a.x OP b.x && a.y OP b.y
 #define COMPOPS3(a, b, OP) a.x OP b.x && a.y OP b.y && a.z OP b.z
