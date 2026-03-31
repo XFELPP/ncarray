@@ -114,6 +114,7 @@ installed_headers = [
     'src/lib/ncarray/array_impl.hh',
     'src/lib/ncarray/array_operations.hh',
     'src/lib/ncarray/array_traits.hh',
+    'src/lib/ncarray/custom_types.hh',
     'src/lib/ncarray/dtype.hh',
     'src/lib/ncarray/indexing.hh',
     'src/lib/ncarray/layout.hh',

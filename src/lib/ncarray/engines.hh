@@ -17,39 +17,39 @@
 namespace ncarray {
   struct GPUEngine {
     // --- Binary operations --- //
-    template <class Left, class Right, class Result>
+    template <typename T, class Left, class Right, class Result>
     static void execute_add(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
       int blocks { (left.size() + TPB - 1) / TPB };
 
-      add_kernel<<<blocks, TPB>>>(left, right, result);
+      add_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
       cudaDeviceSynchronize();
     }
 
-    template <class Left, class Right, class Result>
+    template <typename T, class Left, class Right, class Result>
     static void execute_sub(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
       int blocks { (left.size() + TPB - 1) / TPB };
 
-      sub_kernel<<<blocks, TPB>>>(left, right, result);
+      sub_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
       cudaDeviceSynchronize();
     }
 
-    template <class Left, class Right, class Result>
+    template <typename T, class Left, class Right, class Result>
     static void execute_mul(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
       int blocks { (left.size() + TPB - 1) / TPB };
 
-      mul_kernel<<<blocks, TPB>>>(left, right, result);
+      mul_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
       cudaDeviceSynchronize();
     }
 
-    template <class Left, class Right, class Result>
+    template <typename T, class Left, class Right, class Result>
     static void execute_truediv(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
       int blocks { (left.size() + TPB - 1) / TPB };
 
-      truediv_kernel<<<blocks, TPB>>>(left, right, result);
+      truediv_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
       cudaDeviceSynchronize();
     }
 

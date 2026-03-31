@@ -71,10 +71,12 @@ namespace ncarray {
                                      const RightT& right,
                                      OutT& out) {
 
-      impl::block_binary_transform(left,
-                                   right,
-                                   out,
-                                   [] __device__ (auto a, auto b) { return a + b; });
+      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
+                                                           right,
+                                                           out,
+                                                           [] __device__ (auto a, auto b) {
+                                                             return a + b;
+                                                           });
       //__syncthreads();
     }
 
@@ -83,10 +85,12 @@ namespace ncarray {
                                      const RightT& right,
                                      OutT& out) {
 
-      impl::block_binary_transform(left,
-                                   right,
-                                   out,
-                                   [] __device__(auto a, auto b) { return a - b; });
+      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
+                                                           right,
+                                                           out,
+                                                           [] __device__(auto a, auto b) {
+                                                             return a - b;
+                                                           });
       //__syncthreads();
     }
 
@@ -95,10 +99,12 @@ namespace ncarray {
                                      const RightT& right,
                                      OutT& out) {
 
-      impl::block_binary_transform(left,
-                                   right,
-                                   out,
-                                   [] __device__(auto a, auto b) { return a * b; });
+      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
+                                                           right,
+                                                           out,
+                                                           [] __device__(auto a, auto b) {
+                                                             return a * b;
+                                                           });
       //__syncthreads();
     }
 
@@ -107,10 +113,12 @@ namespace ncarray {
                                          const RightT& right,
                                          OutT& out) {
 
-      impl::block_binary_transform(left,
-                                   right,
-                                   out,
-                                   [] __device__(auto a, auto b) { return a / b; });
+      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
+                                                           right,
+                                                           out,
+                                                           [] __device__(auto a, auto b) {
+                                                             return a / b;
+                                                           });
       //__syncthreads();
     }
   } // namespace device

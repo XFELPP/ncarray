@@ -10,6 +10,7 @@
 #define NCARRAY_ARRAY_OPERATIONS_HH
 
 #include "ncarray/array_traits.hh"
+#include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
 #include "ncarray/array_impl.hh"
 #ifdef __CUDACC__
@@ -325,6 +326,24 @@ namespace ncarray {
     case DType::complex256: {
       return visitor.template operator()<std::complex<long double>>();
     }
+    case DType::vfloat2: {
+      return visitor.template operator()<Float2>();
+    }
+    case DType::vfloat3: {
+      return visitor.template operator()<Float3>();
+    }
+    case DType::vfloat4: {
+      return visitor.template operator()<Float4>();
+    }
+    case DType::vdouble2: {
+      return visitor.template operator()<Double2>();
+    }
+    case DType::vdouble3: {
+      return visitor.template operator()<Double3>();
+    }
+    case DType::vdouble4: {
+      return visitor.template operator()<Double4>();
+    }
     }
     throw type_error("Unsupported type for operation");
   }
@@ -456,7 +475,7 @@ namespace ncarray {
     auto add_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_add(left, right, result.view());
+        GPUEngine::execute_add<T>(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -496,7 +515,7 @@ namespace ncarray {
     auto sub_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub(left, right, result.view());
+        GPUEngine::execute_sub<T>(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -530,7 +549,7 @@ namespace ncarray {
     auto mul_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_mul(left, right, result.view());
+        GPUEngine::execute_mul<T>(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -574,7 +593,7 @@ namespace ncarray {
       using ResultT = typename op_traits<T>::truediv_type;
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_truediv(left, right, result.view());
+        GPUEngine::execute_truediv<T>(left, right, result.view());
 #else
         throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
 #endif
@@ -586,11 +605,13 @@ namespace ncarray {
         const T rhs_val = *reinterpret_cast<const T*>(rhs);
 
         if (rhs_val == T(0)) {
-          bool is_finite{false};
+          bool is_finite { false };
+          // custom_types.hh has an overload of isfinite
+          using std::isfinite;
           if constexpr (requires { lhs_val.real(); }) {
-            is_finite = std::isfinite(lhs_val.real()) && std::isfinite(lhs_val.imag());
+            is_finite = isfinite(lhs_val.real()) && isfinite(lhs_val.imag());
           } else {
-            is_finite = std::isfinite(lhs_val);
+            is_finite = isfinite(lhs_val);
           }
           *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
         } else {
@@ -793,11 +814,13 @@ namespace ncarray {
         const T lhs_val = *reinterpret_cast<const T*>(lhs);
 
         if (rhs == T(0)) {
-          bool is_finite{false};
+          bool is_finite { false };
+          // custom_types.hh has an overload of isfinite
+          using std::isfinite;
           if constexpr (requires { lhs_val.real(); }) {
-            is_finite = std::isfinite(lhs_val.real()) && std::isfinite(lhs_val.imag());
+            is_finite = isfinite(lhs_val.real()) && isfinite(lhs_val.imag());
           } else {
-            is_finite = std::isfinite(lhs_val);
+            is_finite = isfinite(lhs_val);
           }
           *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
         } else {
