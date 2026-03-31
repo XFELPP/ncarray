@@ -27,5 +27,5 @@ def test_array_creation_with_vectors():
     """Test creation of arrays with the custom floats from Python."""
     shape: List[int] = [10]
     a: ncarray.NCArray = ncarray.NCArray(shape, ncarray.DType.vfloat2)
-    assert a.dtype() == ncarray.DType.vfloat2
+    assert a.dtype == ncarray.DType.vfloat2
     assert a.itemsize == 8
