@@ -20,36 +20,36 @@ namespace ncarray {
     template <typename T, class Left, class Right, class Result>
     static void execute_add(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
-      int blocks { (left.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
-      add_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
+      add_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
       cudaDeviceSynchronize();
     }
 
     template <typename T, class Left, class Right, class Result>
     static void execute_sub(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
-      int blocks { (left.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
-      sub_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
+      sub_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
       cudaDeviceSynchronize();
     }
 
     template <typename T, class Left, class Right, class Result>
     static void execute_mul(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
-      int blocks { (left.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
-      mul_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
+      mul_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
       cudaDeviceSynchronize();
     }
 
     template <typename T, class Left, class Right, class Result>
     static void execute_truediv(const Left& left, const Right& right, Result& result) {
       int TPB { 256 };
-      int blocks { (left.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
-      truediv_kernel<T, Left, Right, Result><<<blocks, TPB>>>(left, right, result);
+      truediv_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
       cudaDeviceSynchronize();
     }
 
@@ -57,27 +57,27 @@ namespace ncarray {
     template <typename T, class ArrayT>
     static void execute_sum(const ArrayT& arr, typename op_traits<T>::sum_type* result) {
       int TPB { 256 };
-      int blocks { (arr.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
-      sum_kernel<TPB, ArrayT, T><<<blocks, TPB>>>(arr, result);
+      sum_kernel<TPB><<<blocks, TPB>>>(arr.view(), result);
       cudaDeviceSynchronize();
     }
 
     template <typename T, class ArrayT>
     static void execute_max(const ArrayT& arr, T* result) {
       int TPB { 256 };
-      int blocks { (arr.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
-      max_kernel<TPB, ArrayT, T><<<blocks, TPB>>>(arr, result);
+      max_kernel<TPB><<<blocks, TPB>>>(arr.view(), result);
       cudaDeviceSynchronize();
     }
 
     template <typename T, class ArrayT>
     static void execute_min(const ArrayT& arr, T* result) {
       int TPB { 256 };
-      int blocks { (arr.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
-      min_kernel<TPB, ArrayT, T><<<blocks, TPB>>>(arr, result);
+      min_kernel<TPB><<<blocks, TPB>>>(arr.view(), result);
       cudaDeviceSynchronize();
     }
     /*
@@ -98,9 +98,9 @@ namespace ncarray {
     template <typename T, class ArrayT>
     static void execute_fill(const ArrayT& arr, T val) {
       int TPB { 256 };
-      int blocks { (arr.size() + TPB - 1) / TPB };
+      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
-      fill_kernel<T, ArrayT><<<blocks, TPB>>>(arr, val);
+      fill_kernel<<<blocks, TPB>>>(arr.view(), val);
       cudaDeviceSynchronize();
     }
   };
