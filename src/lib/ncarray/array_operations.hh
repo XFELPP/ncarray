@@ -753,6 +753,172 @@ namespace ncarray {
     return *this;
   }
 
+  // --- Logical and boolean operators --- //
+
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto is_equal(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto equal_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_equal<T>(left, right, result.view());
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_equal<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), equal_op);
+    return result;
+  }
+
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto is_not_equal(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto not_equal_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_not_equal<T>(left, right, result.view());
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_not_equal<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), not_equal_op);
+    return result;
+  }
+
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto is_less_than(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto less_than_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_less_than<T>(left, right, result.view());
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_less_than<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), less_than_op);
+    return result;
+  }
+
+  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+  auto is_greater_than(const Left& left, const Right& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto greater_than_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_greater_than<T>(left, right, result.view());
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_greater_than<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), greater_than_op);
+    return result;
+  }
+
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_equal(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_equal<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator==(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_equal<ViewType, OtherType, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_not_equal(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_not_equal<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator!=(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_not_equal<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  //template <ArrayLike Left, ArrayLike Right>
+  //auto operator!=(const L& l, const R& r) {
+  //  return not_equal(l, r);
+  //}
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_less_than(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_less_than<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator<(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_less_than<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  //template <ArrayLike L, ArrayLike R> auto operator<=(const L& l, const R& r) {
+  //  return less_equal(l, r);
+  //}
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_greater_than(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_greater_than<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator>(const OtherType& other) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_greater_than<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  //template <ArrayLike L, ArrayLike R> auto operator>=(const L& l, const R& r) {
+  //  return greater_equal(l, r);
+  //}
+
   // --- Iterators --- //
   template <typename L, typename S>
   typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::begin() {

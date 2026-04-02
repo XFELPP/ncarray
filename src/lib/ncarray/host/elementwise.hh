@@ -694,6 +694,90 @@ namespace ncarray {
                                                0,
                                                div_op_internal);
     }
+
+    // --- Logical and boolean operators --- //
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    void equal_recursive(const Left& left, const Right& right, ResultType& result) {
+      auto equal_op_internal = [](const std::uint8_t* lhs,
+                                  const std::uint8_t* rhs,
+                                  bool* output) {
+        *output = *reinterpret_cast<const T*>(lhs) == *reinterpret_cast<const T*>(rhs);
+      };
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(equal_op_internal), bool>(left,
+                                                                          right,
+                                                                          left.data(),
+                                                                          right.data(),
+                                                                          starting_axis,
+                                                                          equal_op_internal,
+                                                                          result_ptr);
+    }
+
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    void not_equal_recursive(const Left& left, const Right& right, ResultType& result) {
+      auto not_equal_op_internal = [](const std::uint8_t* lhs,
+                                      const std::uint8_t* rhs,
+                                      bool* output) {
+        *output = *reinterpret_cast<const T*>(lhs) != *reinterpret_cast<const T*>(rhs);
+      };
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(not_equal_op_internal), bool>(left,
+                                                                              right,
+                                                                              left.data(),
+                                                                              right.data(),
+                                                                              starting_axis,
+                                                                              not_equal_op_internal,
+                                                                              result_ptr);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    void less_than_recursive(const Left& left,
+                             const Right& right,
+                             ResultType& result) {
+      auto less_than_op_internal = [](const std::uint8_t* lhs,
+                                      const std::uint8_t* rhs,
+                                      bool* output) {
+        *output = *reinterpret_cast<const T*>(lhs) < *reinterpret_cast<const T*>(rhs);
+      };
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(less_than_op_internal), bool>(left,
+                                                                              right,
+                                                                              left.data(),
+                                                                              right.data(),
+                                                                              starting_axis,
+                                                                              less_than_op_internal,
+                                                                              result_ptr);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    void greater_than_recursive(const Left& left,
+                                const Right& right,
+                                ResultType& result) {
+      auto greater_than_op_internal = [](const std::uint8_t* lhs,
+                                         const std::uint8_t* rhs,
+                                         bool* output) {
+
+        *output = *reinterpret_cast<const T*>(lhs) > *reinterpret_cast<const T*>(rhs);
+      };
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_reduce_recursive<T, decltype(greater_than_op_internal), bool>(left,
+                                                                                 right,
+                                                                                 left.data(),
+                                                                                 right.data(),
+                                                                                 starting_axis,
+                                                                                 greater_than_op_internal,
+                                                                                 result_ptr);
+    }
   } // namespace host
 } // namespace ncarray
 

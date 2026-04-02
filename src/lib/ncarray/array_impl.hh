@@ -817,8 +817,7 @@ namespace ncarray {
     inline ArrayImpl& operator/=(const OtherType& other);
 
     // --- Binary Operations Overloads for Scalar Broadcasts --- //
-    OwnerType
-    add(const Scalar& other) const;
+    OwnerType add(const Scalar& other) const;
     OwnerType operator+(const Scalar& other) const;
 
     OwnerType sub(const Scalar& other) const;
@@ -842,6 +841,27 @@ namespace ncarray {
 
     inline ArrayImpl& itruediv(const Scalar& other);
     inline ArrayImpl& operator/=(const Scalar& other);
+
+    // --- Logical and boolean operators --- //
+    template <ArrayLike OtherType>
+    OwnerType is_equal(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator==(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_not_equal(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator!=(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_less_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator<(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_greater_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator>(const OtherType& other) const;
 
     // -- Iterators --- //
 

@@ -25,7 +25,14 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
   namespace device {
     namespace impl {
-      template <typename T, class LeftT, class RightT, class OutT, class Op>
+      template <
+        typename T,
+        typename ResultT,
+        class LeftT,
+        class RightT,
+        class OutT,
+        class Op
+      >
       __device__ inline void block_binary_transform(const LeftT& left,
                                                     const RightT& right,
                                                     OutT& result,
@@ -60,7 +67,7 @@ namespace ncarray {
             res_ptr = result.advance(res_ptr, d, coords[d]);
           }
 
-          *static_cast<T*>(res_ptr) =
+          *static_cast<ResultT*>(res_ptr) =
             op(*static_cast<const T*>(lhs_ptr), *static_cast<const T*>(rhs_ptr));
         }
       }
@@ -164,12 +171,12 @@ namespace ncarray {
                                      const RightT& right,
                                      OutT& out) {
 
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__ (auto a, auto b) {
-                                                             return a + b;
-                                                           });
+      impl::block_binary_transform<T, T, LeftT, RightT, OutT>(left,
+                                                              right,
+                                                              out,
+                                                              [] __device__ (auto a, auto b) {
+                                                                return a + b;
+                                                              });
       //__syncthreads();
     }
 
@@ -177,12 +184,12 @@ namespace ncarray {
     __device__ inline void block_sub(const LeftT& left,
                                      const RightT& right,
                                      OutT& out) {
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__(auto a, auto b) {
-                                                             return a - b;
-                                                           });
+      impl::block_binary_transform<T, T, LeftT, RightT, OutT>(left,
+                                                              right,
+                                                              out,
+                                                              [] __device__(auto a, auto b) {
+                                                                return a - b;
+                                                              });
       //__syncthreads();
     }
 
@@ -190,12 +197,12 @@ namespace ncarray {
     __device__ inline void block_mul(const LeftT& left,
                                      const RightT& right,
                                      OutT& out) {
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__(auto a, auto b) {
-                                                             return a * b;
-                                                           });
+      impl::block_binary_transform<T, T, LeftT, RightT, OutT>(left,
+                                                              right,
+                                                              out,
+                                                              [] __device__(auto a, auto b) {
+                                                                return a * b;
+                                                              });
       //__syncthreads();
     }
 
@@ -203,12 +210,12 @@ namespace ncarray {
     __device__ inline void block_truediv(const LeftT& left,
                                          const RightT& right,
                                          OutT& out) {
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__(auto a, auto b) {
-                                                             return a / b;
-                                                           });
+      impl::block_binary_transform<T, T, LeftT, RightT, OutT>(left,
+                                                              right,
+                                                              out,
+                                                              [] __device__(auto a, auto b) {
+                                                                return a / b;
+                                                              });
       //__syncthreads();
     }
 
@@ -371,6 +378,61 @@ namespace ncarray {
       impl::block_inplace_binary_scalar_transform<T>(left, scalar_val, div_op);
     }
 
+    // --- Logical and boolean operators --- //
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_equal(const LeftT& left,
+                                       const RightT& right,
+                                       OutT& out) {
+
+      impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
+                                                                 right,
+                                                                 out,
+                                                                 [] __device__ (auto a, auto b) {
+                                                                   return a == b;
+                                                                 });
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_not_equal(const LeftT& left,
+                                           const RightT& right,
+                                           OutT& out) {
+
+      impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
+                                                                 right,
+                                                                 out,
+                                                                 [] __device__ (auto a, auto b) {
+                                                                   return a != b;
+                                                                 });
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_less_than(const LeftT& left,
+                                           const RightT& right,
+                                           OutT& out) {
+      impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
+                                                                 right,
+                                                                 out,
+                                                                 [] __device__(auto a, auto b) {
+                                                                   return a < b;
+                                                                 });
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_greater_than(const LeftT& left,
+                                              const RightT& right,
+                                              OutT& out) {
+      impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
+                                                                 right,
+                                                                 out,
+                                                                 [] __device__(auto a, auto b) {
+                                                                   return a > b;
+                                                                 });
+      //__syncthreads();
+    }
   } // namespace device
 } // namespace ncarray
 

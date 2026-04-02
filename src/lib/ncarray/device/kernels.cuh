@@ -110,7 +110,30 @@ namespace ncarray {
     device::inplace_block_scalar_truediv<T, LeftT>(left, scalar);
   }
 
+  // --- Logical and boolean operators --- //
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void equal_kernel(const LeftT left, const RightT right, OutT out) {
+    ncarray::device::block_equal<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void not_equal_kernel(const LeftT left, const RightT right, OutT out) {
+    ncarray::device::block_not_equal<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void less_than_kernel(const LeftT left, const RightT right, OutT out) {
+    ncarray::device::block_less_than<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void greater_than_kernel(const LeftT left, const RightT right, OutT out) {
+    ncarray::device::block_greater_than<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
   // --- Reductions --- //
+
   template <int BlockSize, typename T, ViewArrayLike ArrayT>
   __global__ void sum_kernel(const ArrayT arr,
                              typename op_traits<T>::sum_type* res) {

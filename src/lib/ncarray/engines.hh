@@ -9,6 +9,7 @@
 #ifndef NCARRAY_ENGINES_HH
 #define NCARRAY_ENGINES_HH
 
+#include "host/elementwise.hh"
 #include "ncarray/array_traits.hh"
 #ifdef __CUDACC__
 #include "ncarray/device/kernels.cuh"
@@ -221,6 +222,49 @@ namespace ncarray {
       inplace_truediv_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
     }
 
+    // --- Logical and boolean operators --- //
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_equal(const Left& left, const Right& right, Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      equal_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_not_equal(const Left& left,
+                                  const Right& right,
+                                  Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      not_equal_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_less_than(const Left& left,
+                                  const Right& right,
+                                  Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      less_than_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_than(const Left& left,
+                                     const Right& right,
+                                     Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      greater_than_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
 
     // --- Reductions --- //
 
@@ -431,7 +475,36 @@ namespace ncarray {
       host::inplace_truediv_scalar_recursive<T>(left, right);
     }
 
+    // --- Logical and boolean operators --- //
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_equal(const Left& left, const Right& right, Result& result) {
+      host::equal_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_not_equal(const Left& left,
+                                  const Right& right,
+                                  Result& result) {
+      host::not_equal_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_less_than(const Left& left,
+                                  const Right& right,
+                                  Result& result) {
+      host::less_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_than(const Left& left,
+                                     const Right& right,
+                                     Result& result) {
+      host::greater_than_recursive<T>(left, right, result);
+    }
+
     // --- Copy and Modification --- //
+
     template <typename T, ArrayLike Left>
     static void execute_fill(Left& left, const Scalar& val) {
       ssize_t starting_axis { 0 };
