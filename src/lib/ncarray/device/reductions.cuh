@@ -32,9 +32,8 @@ namespace ncarray {
         T thread_val { identity };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += BlockSize) {
-        //for (unsigned i = tid; i < static_cast<unsigned>(arr.size()); i += BlockSize) {
-          //thread_val = op(thread_val, arr[i]);
-          thread_val = op(thread_val, arr.template operator[]<T>(i));
+          T& item = arr[i];
+          thread_val = op(thread_val, item);
         }
 
         return BlockReduce(temp_storage).Reduce(thread_val, op);
@@ -46,7 +45,7 @@ namespace ncarray {
       using AccumT = typename op_traits<T>::sum_type;
 
       return impl::block_reduce_transform<BlockSize, AccumT>(arr,
-                                                             [] __device__ (auto a, auto b) {
+                                                             [] __device__ (auto& a, auto& b) {
                                                                return a + b;
                                                              },
                                                              AccumT { 0 });
@@ -55,7 +54,7 @@ namespace ncarray {
     template <int BlockSize, class ArrayT, typename T>
     __device__ inline T block_max(const ArrayT& arr) {
       return impl::block_reduce_transform<BlockSize, T>(arr,
-                                                        [] __device__ (auto a, auto b) {
+                                                        [] __device__ (auto& a, auto& b) {
                                                           if (op_traits<T>::greater(a, b)) {
                                                             return a;
                                                           }
@@ -67,7 +66,7 @@ namespace ncarray {
     template <int BlockSize, class ArrayT, typename T>
     __device__ inline T block_min(const ArrayT& arr) {
       return impl::block_reduce_transform<BlockSize, T>(arr,
-                                                        [] __device__ (auto a, auto b) {
+                                                        [] __device__ (auto& a, auto& b) {
                                                           if (op_traits<T>::less(a, b)) {
                                                             return a;
                                                           }

@@ -304,7 +304,7 @@ namespace ncarray {
   // --- Inplace binary operations --- //
 
   template <ArrayLike Left, ArrayLike Right>
-  NCA_HD void inplace_add(Left& left, const Right& right) {
+  void inplace_add(Left& left, const Right& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -320,7 +320,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  NCA_HD void inplace_sub(Left& left, const Right& right) {
+  void inplace_sub(Left& left, const Right& right) {
     auto sub_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -336,7 +336,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  NCA_HD void inplace_mul(Left& left, const Right& right) {
+  void inplace_mul(Left& left, const Right& right) {
     auto mul_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -352,7 +352,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  NCA_HD void inplace_truediv(Left& left, const Right& right) {
+  void inplace_truediv(Left& left, const Right& right) {
     auto div_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -384,14 +384,14 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_add<ThisType, OtherType>(*this, other);
     return *this;
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_add<ThisType, OtherType>(*this, other);
     return *this;
@@ -413,7 +413,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
 
     ncarray::inplace_sub<ThisType, OtherType>(*this, other);
@@ -421,7 +421,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
 
     ncarray::inplace_sub<ThisType, OtherType>(*this, other);
@@ -444,7 +444,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
 
     ncarray::inplace_mul<ThisType, OtherType>(*this, other);
@@ -452,7 +452,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
 
     ncarray::inplace_mul<ThisType, OtherType>(*this, other);
@@ -475,7 +475,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_truediv<ThisType, OtherType>(*this, other);
 
@@ -483,7 +483,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const OtherType& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const OtherType& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_truediv<ThisType, OtherType>(*this, other);
 
@@ -591,7 +591,7 @@ namespace ncarray {
   // --- Inplace binary operations with a scalar broadcast --- //
 
   template <ArrayLike Left>
-  NCA_HD void inplace_add_scalar(Left& left, const Scalar& right) {
+  void inplace_add_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -607,7 +607,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left>
-  NCA_HD void inplace_sub_scalar(Left& left, const Scalar& right) {
+  void inplace_sub_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -622,7 +622,7 @@ namespace ncarray {
     dispatch(left.dtype(), add_op);
   }
   template <ArrayLike Left>
-  NCA_HD void inplace_mul_scalar(Left& left, const Scalar& right) {
+  void inplace_mul_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -638,7 +638,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left>
-  NCA_HD void inplace_truediv_scalar(Left& left, const Scalar& right) {
+  void inplace_truediv_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -666,13 +666,13 @@ namespace ncarray {
     return ncarray::add_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_add_scalar<ThisType>(*this, other);
     return *this;
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_add_scalar<ThisType>(*this, other);
     return *this;
@@ -691,13 +691,13 @@ namespace ncarray {
     return ncarray::sub_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_sub_scalar<ThisType>(*this, other);
     return *this;
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_sub_scalar<ThisType>(*this, other);
     return *this;
@@ -716,13 +716,13 @@ namespace ncarray {
     return ncarray::mul_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_mul_scalar<ThisType>(*this, other);
     return *this;
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_mul_scalar<ThisType>(*this, other);
     return *this;
@@ -741,13 +741,13 @@ namespace ncarray {
     return ncarray::truediv_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_truediv_scalar<ThisType>(*this, other);
     return *this;
   }
   template <class L, class S>
-  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const Scalar& other) {
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const Scalar& other) {
     using ThisType = ArrayImpl<L, S>;
     ncarray::inplace_truediv_scalar<ThisType>(*this, other);
     return *this;

@@ -43,7 +43,6 @@ namespace ncarray {
                                               T val,
                                               AtomicFn&& atomic,
                                               CASFn&& fn) {
-        //if constexpr (std::is_floating_point_v<T> || std::is_integral_v<T>) {
         if constexpr (NativeOp) {
           atomic(addr, val);
         } else if constexpr (Vector2DType<T>) {
@@ -94,7 +93,6 @@ namespace ncarray {
 
       using ValT = typename op_traits<T>::value_type;
       auto CASOp = [] __device__ (ValT old_v, ValT v) {
-      //auto CASOp = [] __device__ (auto old_v, auto v) {
         return old_v + v;
       };
 
@@ -118,7 +116,6 @@ namespace ncarray {
 
       using ValT = typename op_traits<T>::value_type;
       auto CASOp = [] __device__ (ValT old_v, ValT v) {
-      //auto CASOp = [] __device__ (auto old_v, auto v) {
         return old_v > v ? old_v : v;
       };
 
@@ -142,7 +139,6 @@ namespace ncarray {
 
       using ValT = typename op_traits<T>::value_type;
       auto CASOp = [] __device__(ValT old_v, ValT v) {
-      //auto CASOp = [] __device__ (auto old_v, auto v) {
         return old_v < v ? old_v : v;
       };
 

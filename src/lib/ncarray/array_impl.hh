@@ -24,6 +24,7 @@ typedef SSIZE_T ssize_t;
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -69,6 +70,56 @@ namespace {
 } // anonymous namespace
 
 namespace ncarray {
+  // --- Array Element Proxy --- //
+  /**
+   * The element proxy can be returned by arrays during indexing to provide
+   * reference based access to the underlying data.
+   *
+   * This mostly provides improved ergonomics.
+   *
+   * operator T& style functions do NOT type check. If you require type checking
+   * an `at<T>` function is provided.
+   */
+  struct ArrayElementProxy {
+    void* m_data;
+    DType m_dtype;
+
+    template <typename T>
+    NCA_HD inline operator T&() const {
+      return *reinterpret_cast<T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline operator const T&() const {
+      return *reinterpret_cast<const T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline ArrayElementProxy& operator=(const T& val) {
+      *reinterpret_cast<T*>(m_data) = val;
+      return *this;
+    }
+
+    // --- Type checking versions --- //
+    template <typename T>
+    NCA_HD inline T& at() {
+      assert(m_dtype == dtype_traits<T>::value);
+      return *reinterpret_cast<T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline const T& at() const {
+      assert(m_dtype == dtype_traits<T>::value);
+      return *reinterpret_cast<const T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline void set(const T& val) {
+      assert(m_dtype == dtype_traits<T>::value);
+      *reinterpret_cast<T*>(m_data) = val;
+    }
+  };
+
   // --- Array Implementations --- //
   /**
    * The ArrayImpl provides the mean entry point for all array types.
@@ -106,7 +157,8 @@ namespace ncarray {
     // knowing how much memory to allocate relies on information from Layout
     // This means that these constructors MUST be correct and initialize everything
     // --- Host-only copy constructor for owner types --- //
-    ArrayImpl(const ArrayImpl& other) requires std::is_base_of_v<OwnerTag, Storage>
+    ArrayImpl(const ArrayImpl& other)
+      requires std::is_base_of_v<OwnerTag, Storage>
       : Layout(static_cast<const Layout&>(other))
     {
       this->m_dtype = other.dtype();
@@ -117,9 +169,11 @@ namespace ncarray {
       this->m_data = reinterpret_cast<void*>(this->m_storage.get());
     }
 
-    ArrayImpl(ArrayImpl&& other) noexcept requires std::is_base_of_v<OwnerTag, Storage>
-        : Layout(std::move(static_cast<Layout&>(other))),
-          Storage(std::move(static_cast<Storage&>(other))) {
+    ArrayImpl(ArrayImpl&& other) noexcept
+      requires std::is_base_of_v<OwnerTag, Storage>
+      : Layout(std::move(static_cast<Layout&>(other)))
+      , Storage(std::move(static_cast<Storage&>(other)))
+    {
       // After move make sure to reset the data pointer
       this->m_data = reinterpret_cast<void*>(this->m_storage.get());
     }
@@ -459,6 +513,8 @@ namespace ncarray {
       return this->size() * this->itemsize();
     }
 
+    // --- Int/slice/ellipsis variadic indexing to view --- //
+
     template <typename... Args>
       requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
     NCA_HD ViewType operator[](Args&&... idx_args) const {
@@ -474,8 +530,9 @@ namespace ncarray {
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
-    template <typename T>
-    NCA_HD inline T& operator[](ssize_t idx) {
+    // --- Linearized indexing to reference (non-const and const) --- //
+
+    NCA_HD inline ArrayElementProxy operator[](ssize_t idx) {
       void* out_data = const_cast<void*>(this->data());
       ssize_t lin_idx { idx };
 
@@ -491,11 +548,10 @@ namespace ncarray {
         out_data = this->advance(out_data, dim, local_idx);
       }
 
-      return *reinterpret_cast<T*>(out_data);
+      return { out_data, this->dtype() };
     }
 
-    template <typename T>
-    NCA_HD inline const T& operator[](ssize_t idx) const {
+    NCA_HD inline const ArrayElementProxy operator[](ssize_t idx) const {
       const void* out_data = this->data();
       ssize_t lin_idx { idx };
 
@@ -509,9 +565,51 @@ namespace ncarray {
         out_data = this->advance(out_data, dim, local_idx);
       }
 
-      return *reinterpret_cast<const T*>(out_data);
+      return { const_cast<void*>(out_data), this->dtype() };
     }
 
+    // --- Variadic indexing to reference --- //
+    // operator() overloads are intended for indexing down to a single point reference.
+    // For view semantics, use the variadic operator[] - a specialized version of that
+    // operator also accepts a "linearized" index to traverse the entire N-D array
+    // with one index.
+    template <typename... Args>
+    requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
+    NCA_HD inline ArrayElementProxy operator()(Args... args) {
+      assert(sizeof...(Args) == this->ndim());
+
+      void* ptr = const_cast<void*>(this->data());
+      ssize_t axis { 0 };
+
+      ((ptr = this->advance(ptr, axis++, static_cast<ssize_t>(args))), ...);
+
+      return { ptr, this->dtype() };
+    }
+
+    template <typename... Args>
+    requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
+    NCA_HD inline const ArrayElementProxy operator()(Args... args) const {
+      assert(sizeof...(Args) == this->ndim());
+
+      const void* ptr = this->data();
+      ssize_t axis { 0 };
+
+      ((ptr = this->advance(ptr, axis++, static_cast<ssize_t>(args))), ...);
+
+      return { const_cast<void*>(ptr), this->dtype() };
+    }
+
+    // --- Utilities for building new views --- //
+
+    /**
+     * Provided a set of indices, construct a new ViewType of array.
+     *
+     * @param[in] indices The index specification. Each item contains a type
+     *            (like Slice, or integer) and the axis it belongs to.
+     * @param[in] num_indices The number of indices that were provided for
+     *            traversing the pointer.
+     * @returns The new view of the data.
+     */
     NCA_HD ViewType view_from_indices(const IndexItem* indices,
                                       ssize_t num_indices) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
@@ -520,6 +618,20 @@ namespace ncarray {
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
+    /**
+     * Traverse a data pointer using per axis specifications for shapes, strides,
+     * and offsets/suboffsets etc.
+     *
+     * This function in general is not likely to be used directly. It correctly
+     * traverses the data pointer, accumulating offsets as needed, to produce a
+     * final view that matches the input axes specifications.
+     *
+     * Using the view_from_indices function is more user friendly.
+     *
+     * @param[in] data_ptr The data to traverse.
+     * @param[in] axes The specification for each axis in the new view.
+     * @returns The new view of the data.
+     */
     template <class VT>
     NCA_HD VT out_from_axes_ptr(void* data_ptr, const AxisDescr* axes) const {
       Metadata new_shape;
@@ -685,24 +797,24 @@ namespace ncarray {
 
     // --- Binary inplace operations --- //
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& iadd(const OtherType& other);
+    inline ArrayImpl& iadd(const OtherType& other);
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& operator+=(const OtherType& other);
+    inline ArrayImpl& operator+=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& isub(const OtherType& other);
+    inline ArrayImpl& isub(const OtherType& other);
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& operator-=(const OtherType& other);
+    inline ArrayImpl& operator-=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& imul(const OtherType& other);
+    inline ArrayImpl& imul(const OtherType& other);
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& operator*=(const OtherType& other);
+    inline ArrayImpl& operator*=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& itruediv(const OtherType& other);
+    inline ArrayImpl& itruediv(const OtherType& other);
     template <ArrayLike OtherType>
-    NCA_HD inline ArrayImpl& operator/=(const OtherType& other);
+    inline ArrayImpl& operator/=(const OtherType& other);
 
     // --- Binary Operations Overloads for Scalar Broadcasts --- //
     OwnerType
@@ -719,17 +831,17 @@ namespace ncarray {
     OwnerType operator/(const Scalar& other) const;
 
     // --- Inplace binary operations with scalar broadcasts --- //
-    NCA_HD inline ArrayImpl& iadd(const Scalar& other);
-    NCA_HD inline ArrayImpl& operator+=(const Scalar& other);
+    inline ArrayImpl& iadd(const Scalar& other);
+    inline ArrayImpl& operator+=(const Scalar& other);
 
-    NCA_HD inline ArrayImpl& isub(const Scalar& other);
-    NCA_HD inline ArrayImpl& operator-=(const Scalar& other);
+    inline ArrayImpl& isub(const Scalar& other);
+    inline ArrayImpl& operator-=(const Scalar& other);
 
-    NCA_HD inline ArrayImpl& imul(const Scalar& other);
-    NCA_HD inline ArrayImpl& operator*=(const Scalar& other);
+    inline ArrayImpl& imul(const Scalar& other);
+    inline ArrayImpl& operator*=(const Scalar& other);
 
-    NCA_HD inline ArrayImpl& itruediv(const Scalar& other);
-    NCA_HD inline ArrayImpl& operator/=(const Scalar& other);
+    inline ArrayImpl& itruediv(const Scalar& other);
+    inline ArrayImpl& operator/=(const Scalar& other);
 
     // -- Iterators --- //
 

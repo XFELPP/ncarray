@@ -146,7 +146,7 @@ namespace ncarray {
     ssize_t idx { static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x) };
 
     if (idx < out.size()) {
-      out.template operator[]<T>(idx) = val;
+      out[idx] = val;
     }
   }
 } // namespace ncarray
