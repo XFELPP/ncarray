@@ -32,7 +32,9 @@ namespace ncarray {
         T thread_val { identity };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += BlockSize) {
-          thread_val = op(thread_val, arr[i]);
+        //for (unsigned i = tid; i < static_cast<unsigned>(arr.size()); i += BlockSize) {
+          //thread_val = op(thread_val, arr[i]);
+          thread_val = op(thread_val, arr.template operator[]<T>(i));
         }
 
         return BlockReduce(temp_storage).Reduce(thread_val, op);
@@ -53,7 +55,12 @@ namespace ncarray {
     template <int BlockSize, class ArrayT, typename T>
     __device__ inline T block_max(const ArrayT& arr) {
       return impl::block_reduce_transform<BlockSize, T>(arr,
-                                                        cub::Max(),
+                                                        [] __device__ (auto a, auto b) {
+                                                          if (op_traits<T>::greater(a, b)) {
+                                                            return a;
+                                                          }
+                                                          return b;
+                                                        },
                                                         op_traits<T>::lowest());
     }
 

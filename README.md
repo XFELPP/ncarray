@@ -2,9 +2,9 @@
 [![Release build](https://github.com/XFELPP/ncarray/actions/workflows/release.yml/badge.svg)](https://github.com/XFELPP/ncarray/actions/workflows/release.yml)[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
 ## Status
-This is an early alpha release. The project is still in the very early stages of development.
+This project should be considered to be in an early alpha stage. The project is still in the initial stages of development. Internals may change from release to release. That said, the high level interface is likely fairly stable. This is particularly true if used only from Python. For C++ developers, the high-level API (e.g. solely including `ncarrays.h` and linking the specializations) is likewise fairly stable. The lower-level headers may be subject to more churn.
 
-Documentation is entirely lacking, as are test suites.
+Many major features are alreaedy available, but there are still quite a few more to go. The road-map below outlines the features planned for each release in order. After completing this set of initial features, focus will be turned over to stabilizing the library, improving test coverage and formalizing/publishing documentation. Some documentation exists, but it is entirely inline in the various headers. A small test suite has been started, but is far from covering all corners of the API.
 
 ## Overview
 
@@ -120,7 +120,18 @@ For the most part, the Python bindings exactly mirror the C++ bindings. There ar
 
 ## Roadmap
 
-- Formalize documentation.
-- Test suite.
-- Fancy indexing on all array types (boolean masking etc).
-- `DLPack` suppport
+The current plan for releases, in order is:
+
+1. `v0.4.0` - Arithmetic, logical, and comparison operations (i.e. in place operations `/=` e.g., and `>`, `<` `&&` and so on).
+
+  - This release includes additional improvements in CUDA support including generalized atomics to support these operations.
+
+2. `v0.5.0` - Additional reduction operations (e.g. standard deviation `std`), and shape/axis-aware implementations (e.g. `ncarr.sum(axis=0)`. Other operations include reduction by key.
+3. `v0.6.0` - Boolean indexing and conditional selection with something like a `where` function.
+
+  - Additional indexing improvements are planned for this stage as well. Multi-dimensional sliced assignments for instance. Broadcasting support, etc.
+
+4. `v0.7.0` - CuPy integration
+5. `v0.8.0` - `DLPack` integration
+
+The above road-map is subject to change. Throughout the process, test coverage and documentation will be improved. Upon initial implementation of the above feature sets, focus will be switched to stabilizing the library.

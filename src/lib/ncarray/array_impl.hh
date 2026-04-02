@@ -683,8 +683,30 @@ namespace ncarray {
     template <ArrayLike OtherType>
     OwnerType operator/(const OtherType& other) const;
 
+    // --- Binary inplace operations --- //
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& iadd(const OtherType& other);
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& operator+=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& isub(const OtherType& other);
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& operator-=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& imul(const OtherType& other);
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& operator*=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& itruediv(const OtherType& other);
+    template <ArrayLike OtherType>
+    NCA_HD inline ArrayImpl& operator/=(const OtherType& other);
+
     // --- Binary Operations Overloads for Scalar Broadcasts --- //
-    OwnerType add(const Scalar& other) const;
+    OwnerType
+    add(const Scalar& other) const;
     OwnerType operator+(const Scalar& other) const;
 
     OwnerType sub(const Scalar& other) const;
@@ -695,6 +717,19 @@ namespace ncarray {
 
     OwnerType truediv(const Scalar& other) const;
     OwnerType operator/(const Scalar& other) const;
+
+    // --- Inplace binary operations with scalar broadcasts --- //
+    NCA_HD inline ArrayImpl& iadd(const Scalar& other);
+    NCA_HD inline ArrayImpl& operator+=(const Scalar& other);
+
+    NCA_HD inline ArrayImpl& isub(const Scalar& other);
+    NCA_HD inline ArrayImpl& operator-=(const Scalar& other);
+
+    NCA_HD inline ArrayImpl& imul(const Scalar& other);
+    NCA_HD inline ArrayImpl& operator*=(const Scalar& other);
+
+    NCA_HD inline ArrayImpl& itruediv(const Scalar& other);
+    NCA_HD inline ArrayImpl& operator/=(const Scalar& other);
 
     // -- Iterators --- //
 

@@ -9,12 +9,17 @@
 #ifndef NCARRAY_ARRAY_OPERATIONS_HH
 #define NCARRAY_ARRAY_OPERATIONS_HH
 
+#include "ncarray/array_impl.hh"
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
-#include "ncarray/array_impl.hh"
-#ifdef __CUDACC__
 #include "ncarray/engines.hh"
+
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
 #endif
 
 #include <cmath>
@@ -24,251 +29,6 @@
 #include <stdexcept>
 
 namespace ncarray {
-
-  namespace impl {
-    /**
-     * Recursively fill an array with with a scalar value.
-     *
-     * This function can cast the value as it is assigned.
-     *
-     * @tparam T The type of the value to fill into the array.
-     * @tparam A The type of the array being operated on (ArrayLike constrained.)
-     * @param[in] arr The array.
-     * @param[out] current_data The pointer to the current data in the array.
-     * @param[in] axis The current axis being traversed.
-     * @param[in] value The value to fill into the array.
-     */
-    template <typename T, ArrayLike A>
-    void fill_recursive(const A& arr, void* current_data, ssize_t axis, T value) {
-      if (axis == static_cast<ssize_t>(arr.ndim())) {
-        // Base case handles when you index to a scalar (the loop below wouldn't enter)
-        *reinterpret_cast<T*>(current_data) = value;
-        return;
-      }
-      ssize_t dim = arr.shape()[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
-
-      for (ssize_t i = 0; i < dim; ++i) {
-        void* next_ptr = arr.advance(current_data, axis, i);
-        if (is_last_axis) {
-          *reinterpret_cast<T*>(next_ptr) = value;
-        } else {
-          fill_recursive<T>(arr, next_ptr, axis + 1, value);
-        }
-      }
-    }
-
-    /**
-     * Recursively assign one array to another. The shapes MUST match.
-     *
-     * This function can cast the values as they are assigned.
-     *
-     * @tparam DestT The dtype of the destination array.
-     * @tparam SrcT The dtype of the source array.
-     * @tparam Dest The type of array to assign to. (ArrayLike constrained.)
-     * @tparam Src The type of array to pull values from. (ArrayLike constrained.)
-     * @param[out] dest The array to assign to.
-     * @param[in] src The array to pull values from.
-     * @param[in] dest_data The pointer to the current data in the destination.
-     * @param[in] src_data The pointer to the current data in the source.
-     * @param[in] axis The current axis being traversed.
-     */
-    template <typename DestT, typename SrcT, ArrayLike Dest, ArrayLike Src>
-    void assign_recursive(Dest& dest,
-                          const Src& src,
-                          void* dest_data,
-                          const void* src_data,
-                          ssize_t axis) {
-      if (axis == static_cast<ssize_t>(dest.ndim())) {
-        // Base case handles when you index to a scalar (the loop below wouldn't enter)
-        SrcT val = *reinterpret_cast<const SrcT*>(src_data);
-        *reinterpret_cast<DestT*>(dest_data) = op_traits<SrcT>::template cast<DestT>(val);
-        return;
-      }
-      ssize_t dim = dest.shape()[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(dest.ndim()) - 1);
-
-      for (ssize_t i = 0; i < dim; ++i) {
-        void* next_dest = dest.advance(dest_data, axis, i);
-
-        const void* next_src = const_cast<const void*>(src.advance(src_data, axis, i));
-
-        if (is_last_axis) {
-          SrcT val = *reinterpret_cast<const SrcT*>(next_src);
-          *reinterpret_cast<DestT*>(next_dest) = op_traits<SrcT>::template cast<DestT>(val);
-        } else {
-          assign_recursive<DestT, SrcT>(dest, src, next_dest, next_src, axis + 1);
-        }
-      }
-    }
-
-    /**
-     * Recursively copy an array into an output location.
-     *
-     * This function can cast the value as it is assigned.
-     *
-     * @tparam T The dtype for the source array.
-     * @tparam OutputType The dtype for the destination array.
-     * @param[in] arr The array.
-     * @param[in] current_src The pointer to the current data in the source array.
-     * @param[in] axis The current axis being traversed.
-     * @param[out] dest Reference to pointer for the destination array.
-     */
-    template <typename T, typename OutputType, ArrayLike A>
-    void copy_into_recursive(const A& arr,
-                             const void* current_src,
-                             ssize_t axis,
-                             OutputType*& dest) {
-      ssize_t dim = arr.shape()[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
-
-      for (ssize_t i = 0; i < dim; ++i) {
-        const void* next_ptr = const_cast<const void*>(arr.advance(current_src, axis, i));
-
-        if (is_last_axis) {
-          T val = *reinterpret_cast<const T*>(next_ptr);
-          *dest = op_traits<T>::template cast<OutputType>(val);
-          dest++;
-        } else {
-          copy_into_recursive<T, OutputType>(arr, next_ptr, axis + 1, dest);
-        }
-      }
-    }
-
-    /**
-     * Recursively reduce an array to a scalar.
-     *
-     * This function can cast the value as it is assigned.
-     *
-     * @tparam T The dtype for the source array.
-     * @tparam Op The type of the reduction function.
-     * @tparam AccumT The type of the value being accumulated into.
-     * @tparam A The type of the array object.
-     * @param[in] arr The array.
-     * @param[in] current_data The pointer to the current data in the source array.
-     * @param[in] axis The current axis being traversed.
-     * @param[in] op The reduction operation.
-     * @param[in] acc The identity value for the reduction. (on recursion it accumulates)
-     */
-    template <typename T, typename Op, typename AccumT, ArrayLike A>
-    AccumT reduce_recursive(const A& arr,
-                            const void* current_data,
-                            ssize_t axis,
-                            Op op,
-                            AccumT acc) {
-      ssize_t dim = arr.shape()[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
-
-      for (ssize_t i = 0; i < dim; ++i) {
-        const void* next_ptr = const_cast<const void*>(arr.advance(current_data, axis, i));
-
-        if (is_last_axis) {
-          op(reinterpret_cast<const std::uint8_t*>(next_ptr), &acc);
-        } else {
-          acc = reduce_recursive<T>(arr, next_ptr, axis + 1, op, acc);
-        }
-      }
-      return acc;
-    }
-
-    /**
-     * Recursively operate on two arrays.
-     *
-     * This function assumes the arrays are the same shape, except if there are
-     * extra padding dimensions. In that case (i.e., leading dimensions of size 1)
-     * a shape mismatch is tolerated.
-     *
-     * E.g. this function can do binary add/subtract/multiply and so on.
-     *
-     * This function can cast the value as it is assigned.
-     *
-     * @tparam T The dtype for the source array.
-     * @tparam Op The type of the reduction function.
-     * @tparam AccumT The type of the value being accumulated into.
-     * @tparam A The type of the left hand side array.
-     * @tparam B The type of the right hand side array.
-     * @param[in] left_arr The left hand side array.
-     * @param[in] right_arr The right hand side array.
-     * @param[in] lhs_data The pointer to the current data in the left hand side array.
-     * @param[in] right_data The pointer to the current right hand side's data.
-     * @param[in] axis The current axis being traversed.
-     * @param[in] op The reduction operation.
-     * @param[out] res The output array's data.
-     */
-    template <typename T, typename Op, typename ResultTOrAccumT, ArrayLike A, ArrayLike B>
-    void binary_reduce_recursive(const A& left_arr,
-                                 const B& right_arr,
-                                 const void* lhs_data,
-                                 const void* rhs_data,
-                                 ssize_t axis,
-                                 Op op,
-                                 ResultTOrAccumT*& res) {
-      // Assume both sides have same shape for this function
-      ssize_t dim = left_arr.shape()[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(left_arr.ndim()) - 1);
-
-      for (ssize_t i = 0; i < dim; ++i) {
-        const void* lhs_next = const_cast<const void*>(left_arr.advance(lhs_data, axis, i));
-
-        // Align dimensions from the right side
-        ssize_t r_axis =
-          axis - (static_cast<ssize_t>(left_arr.ndim()) - static_cast<ssize_t>(right_arr.ndim()));
-
-        const void* rhs_next = (r_axis >= 0)
-          ? right_arr.advance(rhs_data, r_axis, (right_arr.shape(r_axis) == 1 ? 0 : i))
-          : rhs_data;
-
-        if (is_last_axis) {
-          op(reinterpret_cast<const std::uint8_t*>(lhs_next),
-             reinterpret_cast<const std::uint8_t*>(rhs_next), res);
-          res++;
-        } else {
-          binary_reduce_recursive<T>(left_arr, right_arr, lhs_next, rhs_next, axis + 1, op, res);
-        }
-      }
-    }
-
-    /**
-     * Recursively operate on an array, broadcasting a scalar.
-     *
-     * E.g. this function can do binary add/subtract/multiply and so on.
-     *
-     * This function can cast the value as it is assigned.
-     *
-     * @tparam T The dtype for the source array.
-     * @tparam ScalarT The type of the scalar.
-     * @tparam Op The type of the reduction function.
-     * @tparam ResultT The type of the output array.
-     * @tparam A The type of the left hand side array.
-     * @param[in] arr The array.
-     * @param[in] current_data The pointer to the current data in the source array.
-     * @param[in] scalar_val The scalar to broadcast.
-     * @param[in] axis The current axis being traversed.
-     * @param[in] op The reduction operation.
-     * @param[out] res The output array.
-     */
-    template <typename T, typename ScalarT, typename Op, typename ResultT, ArrayLike A>
-    void binary_scalar_recursive(const A& arr,
-                                 const void* current_data,
-                                 const ScalarT scalar_val,
-                                 ssize_t axis,
-                                 Op op,
-                                 ResultT*& res) {
-      ssize_t dim = arr.shape()[axis];
-      bool is_last_axis = (axis == static_cast<ssize_t>(arr.ndim()) - 1);
-
-      for (ssize_t i = 0; i < dim; ++i) {
-        const void* next_ptr = const_cast<const void*>(arr.advance(current_data, axis, i));
-        if (is_last_axis) {
-          op(reinterpret_cast<const uint8_t*>(next_ptr), scalar_val, res);
-          res++;
-        } else {
-          binary_scalar_recursive<T>(arr, next_ptr, scalar_val, axis + 1, op, res);
-        }
-      }
-    }
-  } // namespace impl
-
   class index_error : public std::invalid_argument {
   public:
     using std::invalid_argument::invalid_argument;
@@ -345,6 +105,7 @@ namespace ncarray {
       return visitor.template operator()<Double4>();
     }
     }
+
     throw type_error("Unsupported type for operation");
   }
 
@@ -354,16 +115,15 @@ namespace ncarray {
   template <ArrayLike A>
   Scalar sum(const A& arr) {
     auto sum_operation = [&]<typename T>() -> Scalar {
-      using AccumT = typename op_traits<T>::sum_type;
-
-      auto sum_op_internal = [](const std::uint8_t* data, AccumT* output) {
-        *output += static_cast<AccumT>(*reinterpret_cast<const T*>(data));
-      };
-
-      ssize_t starting_axis { 0 };
-      AccumT result =
-          impl::reduce_recursive<T>(arr, arr.data(), starting_axis, sum_op_internal, AccumT{0});
-      return Scalar{result};
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_sum<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_sum<T>(arr);
+      }
     };
 
     return dispatch(arr.dtype(), sum_operation);
@@ -372,22 +132,15 @@ namespace ncarray {
   template <ArrayLike A>
   Scalar mean(const A& arr) {
     auto sum_operation = [&]<typename T>() -> Scalar {
-      using AccumT = typename op_traits<T>::sum_type;
-      using ResultT = typename op_traits<T>::truediv_type;
-
-      auto sum_op_internal = [](const std::uint8_t* data, AccumT* output) {
-        *output += static_cast<AccumT>(*reinterpret_cast<const T*>(data));
-      };
-
-      ssize_t starting_axis { 0 };
-      AccumT result =
-          impl::reduce_recursive<T>(arr,
-                                    arr.data(),
-                                    starting_axis,
-                                    sum_op_internal,
-                                    AccumT{0});
-      ResultT mean = static_cast<ResultT>(result) / static_cast<double>(arr.size());
-      return Scalar{mean};
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_mean<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_mean<T>(arr);
+      }
     };
 
     return dispatch(arr.dtype(), sum_operation);
@@ -396,20 +149,15 @@ namespace ncarray {
   template <ArrayLike A>
   Scalar max(const A& arr) {
     auto max_operation = [&]<typename T>() {
-      // Don't need a broader type for this one
-      auto max_op_internal = [](const std::uint8_t* data, T* output) {
-        T val = *reinterpret_cast<const T*>(data);
-        if (op_traits<T>::greater(val, *output)) {
-          *output = val;
-        }
-      };
-      ssize_t starting_axis { 0 };
-      T result = impl::reduce_recursive<T>(arr,
-                                           arr.data(),
-                                           starting_axis,
-                                           max_op_internal,
-                                           op_traits<T>::lowest());
-      return Scalar{result};
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_max<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_max<T>(arr);
+      }
     };
 
     return dispatch(arr.dtype(), max_operation);
@@ -418,20 +166,15 @@ namespace ncarray {
   template <ArrayLike A>
   Scalar min(const A& arr) {
     auto min_operation = [&]<typename T>() {
-      // Don't need a broader type for this one
-      auto min_op_internal = [](const std::uint8_t* data, T* output) {
-        T val = *reinterpret_cast<const T*>(data);
-        if (op_traits<T>::less(val, *output)) {
-          *output = val;
-        }
-      };
-      ssize_t starting_axis { 0 };
-      T result = impl::reduce_recursive<T>(arr,
-                                           arr.data(),
-                                           starting_axis,
-                                           min_op_internal,
-                                           op_traits<T>::max());
-      return Scalar{result};
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_min<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_min<T>(arr);
+      }
     };
 
     return dispatch(arr.dtype(), min_operation);
@@ -480,22 +223,7 @@ namespace ncarray {
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
       } else {
-        using AccumT = typename op_traits<T>::sum_type;
-
-        auto add_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, AccumT* output) {
-          *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) +
-            *reinterpret_cast<const T*>(rhs);
-        };
-
-        ssize_t starting_axis { 0 };
-        AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
-        impl::binary_reduce_recursive<T, decltype(add_op_internal), AccumT>(left,
-                                                                            right,
-                                                                            left.data(),
-                                                                            right.data(),
-                                                                            starting_axis,
-                                                                            add_op_internal,
-                                                                            result_ptr);
+        HostEngine::execute_add<T>(left, right, result);
       }
     };
 
@@ -520,21 +248,7 @@ namespace ncarray {
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
       } else {
-        using DiffT = typename op_traits<T>::diff_type;
-        auto sub_op_internal = [](const std::uint8_t* lhs, const std::uint8_t* rhs, DiffT* output) {
-          *output =
-            static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - *reinterpret_cast<const T*>(rhs);
-        };
-
-        ssize_t starting_axis { 0 };
-        DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
-        impl::binary_reduce_recursive<T, decltype(sub_op_internal), DiffT>(left,
-                                                                           right,
-                                                                           left.data(),
-                                                                           right.data(),
-                                                                           starting_axis,
-                                                                           sub_op_internal,
-                                                                           result_ptr);
+        HostEngine::execute_sub<T>(left, right, result);
       }
     };
 
@@ -554,25 +268,7 @@ namespace ncarray {
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
       } else {
-        auto mul_op_internal = [](const std::uint8_t* lhs,
-                                  const std::uint8_t* rhs,
-                                  T* output) {
-          if constexpr (std::is_same_v<T, bool>) {
-            *output = *reinterpret_cast<const bool*>(lhs) && *reinterpret_cast<const bool*>(rhs);
-          } else {
-            *output = *reinterpret_cast<const T*>(lhs) * *reinterpret_cast<const T*>(rhs);
-          }
-        };
-
-        ssize_t starting_axis { 0 };
-        T* result_ptr = reinterpret_cast<T*>(result.data());
-        impl::binary_reduce_recursive<T, decltype(mul_op_internal), T>(left,
-                                                                       right,
-                                                                       left.data(),
-                                                                       right.data(),
-                                                                       starting_axis,
-                                                                       mul_op_internal,
-                                                                       result_ptr);
+        HostEngine::execute_mul<T>(left, right, result);
       }
     };
 
@@ -590,7 +286,6 @@ namespace ncarray {
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto truediv_operation = [&]<typename T>() {
-      using ResultT = typename op_traits<T>::truediv_type;
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
         GPUEngine::execute_truediv<T>(left, right, result.view());
@@ -598,41 +293,79 @@ namespace ncarray {
         throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
 #endif
       } else {
-        auto truediv_op_internal = [](const std::uint8_t* lhs,
-                                      const std::uint8_t* rhs,
-                                      ResultT* output) {
-          const T lhs_val = *reinterpret_cast<const T*>(lhs);
-          const T rhs_val = *reinterpret_cast<const T*>(rhs);
-
-          if (rhs_val == T(0)) {
-            bool is_finite { false };
-            // custom_types.hh has an overload of isfinite
-            using std::isfinite;
-            if constexpr (requires { lhs_val.real(); }) {
-              is_finite = isfinite(lhs_val.real()) && isfinite(lhs_val.imag());
-            } else {
-              is_finite = isfinite(lhs_val);
-            }
-            *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
-          } else {
-            *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs_val);
-          }
-        };
-
-        ssize_t starting_axis { 0 };
-        ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
-        impl::binary_reduce_recursive<T, decltype(truediv_op_internal), ResultT>(left,
-                                                                                 right,
-                                                                                 left.data(),
-                                                                                 right.data(),
-                                                                                 starting_axis,
-                                                                                 truediv_op_internal,
-                                                                                 result_ptr);
+        HostEngine::execute_truediv<T>(left, right, result);
       }
     };
 
     dispatch(left.dtype(), truediv_operation);
     return result;
+  }
+
+  // --- Inplace binary operations --- //
+
+  template <ArrayLike Left, ArrayLike Right>
+  NCA_HD void inplace_add(Left& left, const Right& right) {
+    auto add_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_add<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_add<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), add_op);
+  }
+
+  template <ArrayLike Left, ArrayLike Right>
+  NCA_HD void inplace_sub(Left& left, const Right& right) {
+    auto sub_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_sub<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_sub<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), sub_op);
+  }
+
+  template <ArrayLike Left, ArrayLike Right>
+  NCA_HD void inplace_mul(Left& left, const Right& right) {
+    auto mul_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_mul<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_mul<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), mul_op);
+  }
+
+  template <ArrayLike Left, ArrayLike Right>
+  NCA_HD void inplace_truediv(Left& left, const Right& right) {
+    auto div_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_truediv<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_truediv<T>(left, right);
+      }
+    };
+
+    dispatch(left.dtype(), div_op);
   }
 
   template <class L, class S>
@@ -649,6 +382,20 @@ namespace ncarray {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
   }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_add<ThisType, OtherType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_add<ThisType, OtherType>(*this, other);
+    return *this;
+  }
 
   template <class L, class S>
   template <ArrayLike OtherType>
@@ -663,6 +410,22 @@ namespace ncarray {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_sub<ThisType, OtherType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_sub<ThisType, OtherType>(*this, other);
+    return *this;
   }
 
   template <class L, class S>
@@ -679,6 +442,22 @@ namespace ncarray {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
   }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_mul<ThisType, OtherType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_mul<ThisType, OtherType>(*this, other);
+    return *this;
+  }
 
   template <class L, class S>
   template <ArrayLike OtherType>
@@ -694,6 +473,22 @@ namespace ncarray {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
   }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_truediv<ThisType, OtherType>(*this, other);
+
+    return *this;
+  }
+  template <class L, class S>
+  template <ArrayLike OtherType>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const OtherType& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_truediv<ThisType, OtherType>(*this, other);
+
+    return *this;
+  }
 
   // --- Binary operations with a scalar broadcast --- //
 
@@ -708,25 +503,15 @@ namespace ncarray {
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto add_operation = [&]<typename T>() {
-      using AccumT = typename op_traits<T>::sum_type;
-
-      auto add_op_internal = [](const std::uint8_t* lhs, const T rhs, AccumT* output) {
-        *output = static_cast<AccumT>(*reinterpret_cast<const T*>(lhs)) + rhs;
-      };
-
-      ssize_t starting_axis { 0 };
-      auto cast_op = [](auto&& arg) {
-        using FromT = std::decay_t<decltype(arg)>;
-        return op_traits<FromT>::template cast<T>(arg);
-      };
-      T scalar_val = std::visit(cast_op, right);
-      AccumT* result_ptr = reinterpret_cast<AccumT*>(result.data());
-      impl::binary_scalar_recursive<T, AccumT>(left,
-                                               left.data(),
-                                               scalar_val,
-                                               starting_axis,
-                                               add_op_internal,
-                                               result_ptr);
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_add_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_add_scalar<T>(left, right, result);
+      }
     };
 
     dispatch(left.dtype(), add_operation);
@@ -743,25 +528,15 @@ namespace ncarray {
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto sub_operation = [&]<typename T>() {
-      using DiffT = typename op_traits<T>::diff_type;
-
-      auto sub_op_internal = [](const std::uint8_t* lhs, const T rhs, DiffT* output) {
-        *output = static_cast<DiffT>(*reinterpret_cast<const T*>(lhs)) - rhs;
-      };
-
-      ssize_t starting_axis { 0 };
-      auto cast_op = [](auto&& arg) {
-        using FromT = std::decay_t<decltype(arg)>;
-        return op_traits<FromT>::template cast<T>(arg);
-      };
-      T scalar_val = std::visit(cast_op, right);
-      DiffT* result_ptr = reinterpret_cast<DiffT*>(result.data());
-      impl::binary_scalar_recursive<T, DiffT>(left,
-                                              left.data(),
-                                              scalar_val,
-                                              starting_axis,
-                                              sub_op_internal,
-                                              result_ptr);
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_sub_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_sub_scalar<T>(left, right, result);
+      }
     };
 
     dispatch(left.dtype(), sub_operation);
@@ -773,27 +548,15 @@ namespace ncarray {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
     auto mul_operation = [&]<typename T>() {
-      auto mul_op_internal = [](const std::uint8_t* lhs, const T rhs, T* output) {
-        if constexpr (std::is_same_v<T, bool>) {
-          *output = *reinterpret_cast<const bool*>(lhs) && rhs;
-        } else {
-          *output = *reinterpret_cast<const T*>(lhs) * rhs;
-        }
-      };
-
-      ssize_t starting_axis { 0 };
-      auto cast_op = [](auto&& arg) {
-        using FromT = std::decay_t<decltype(arg)>;
-        return op_traits<FromT>::template cast<T>(arg);
-      };
-      T scalar_val = std::visit(cast_op, right);
-      T* result_ptr = reinterpret_cast<T*>(result.data());
-      impl::binary_scalar_recursive<T>(left,
-                                       left.data(),
-                                       scalar_val,
-                                       starting_axis,
-                                       mul_op_internal,
-                                       result_ptr);
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_mul_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_mul_scalar<T>(left, right, result);
+      }
     };
 
     dispatch(left.dtype(), mul_operation);
@@ -810,42 +573,84 @@ namespace ncarray {
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
     auto truediv_operation = [&]<typename T>() {
-      using ResultT = typename op_traits<T>::truediv_type;
-      auto truediv_op_internal = [](const std::uint8_t* lhs, const T rhs, ResultT* output) {
-        const T lhs_val = *reinterpret_cast<const T*>(lhs);
-
-        if (rhs == T(0)) {
-          bool is_finite { false };
-          // custom_types.hh has an overload of isfinite
-          using std::isfinite;
-          if constexpr (requires { lhs_val.real(); }) {
-            is_finite = isfinite(lhs_val.real()) && isfinite(lhs_val.imag());
-          } else {
-            is_finite = isfinite(lhs_val);
-          }
-          *output = is_finite ? std::nan("") : static_cast<ResultT>(lhs_val);
-        } else {
-          *output = static_cast<ResultT>(lhs_val) / static_cast<ResultT>(rhs);
-        }
-      };
-
-      ssize_t starting_axis { 0 };
-      auto cast_op = [](auto&& arg) {
-        using FromT = std::decay_t<decltype(arg)>;
-        return op_traits<FromT>::template cast<T>(arg);
-      };
-      T scalar_val = std::visit(cast_op, right);
-      ResultT* result_ptr = reinterpret_cast<ResultT*>(result.data());
-      impl::binary_scalar_recursive<T>(left,
-                                       left.data(),
-                                       scalar_val,
-                                       starting_axis,
-                                       truediv_op_internal,
-                                       result_ptr);
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_truediv_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_truediv_scalar<T>(left, right, result);
+      }
     };
 
     dispatch(left.dtype(), truediv_operation);
     return result;
+  }
+
+  // --- Inplace binary operations with a scalar broadcast --- //
+
+  template <ArrayLike Left>
+  NCA_HD void inplace_add_scalar(Left& left, const Scalar& right) {
+    auto add_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_add_scalar<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_add_scalar<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), add_op);
+  }
+
+  template <ArrayLike Left>
+  NCA_HD void inplace_sub_scalar(Left& left, const Scalar& right) {
+    auto add_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_sub_scalar<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_sub_scalar<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), add_op);
+  }
+  template <ArrayLike Left>
+  NCA_HD void inplace_mul_scalar(Left& left, const Scalar& right) {
+    auto add_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_mul_scalar<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_mul_scalar<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), add_op);
+  }
+
+  template <ArrayLike Left>
+  NCA_HD void inplace_truediv_scalar(Left& left, const Scalar& right) {
+    auto add_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_inplace_truediv_scalar<T>(left, right);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_inplace_truediv_scalar<T>(left, right);
+      }
+    };
+    dispatch(left.dtype(), add_op);
   }
 
   template <class L, class S>
@@ -860,6 +665,18 @@ namespace ncarray {
 
     return ncarray::add_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_add_scalar<ThisType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_add_scalar<ThisType>(*this, other);
+    return *this;
+  }
 
   template <class L, class S>
   typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::sub(const Scalar& other) const {
@@ -872,6 +689,18 @@ namespace ncarray {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::sub_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_sub_scalar<ThisType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_sub_scalar<ThisType>(*this, other);
+    return *this;
   }
 
   template <class L, class S>
@@ -886,6 +715,18 @@ namespace ncarray {
 
     return ncarray::mul_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_mul_scalar<ThisType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_mul_scalar<ThisType>(*this, other);
+    return *this;
+  }
 
   template <class L, class S>
   typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::truediv(const Scalar& other) const {
@@ -898,6 +739,18 @@ namespace ncarray {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::truediv_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_truediv_scalar<ThisType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  NCA_HD inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+    ncarray::inplace_truediv_scalar<ThisType>(*this, other);
+    return *this;
   }
 
   // --- Iterators --- //
@@ -971,6 +824,8 @@ namespace ncarray {
     auto fill_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
+        // NOTE: We do the cast here instead of in engine to keep the variant
+        // Far away
         auto cast_op = [](auto&& arg) -> T {
           using FromT = std::decay_t<decltype(arg)>;
 
@@ -982,12 +837,7 @@ namespace ncarray {
         throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with as C++.");
 #endif
       } else {
-        auto fill_op_internal = [](auto&& arg) -> T {
-          using FromT = std::decay_t<decltype(arg)>;
-          return ncarray::op_traits<FromT>::template cast<T>(arg);
-        };
-        T target_val = std::visit(fill_op_internal, val);
-        impl::fill_recursive<T>(arr, arr.data(), 0, target_val);
+        HostEngine::execute_fill<T>(arr, val);
       }
     };
 
@@ -997,9 +847,13 @@ namespace ncarray {
   template <ArrayLike A, typename OutputType>
   inline void copy_into(const A& arr, OutputType*& dest) {
     auto copy_op = [&]<typename T>() {
-      ssize_t starting_axis { 0 };
-      impl::copy_into_recursive<T, OutputType>(arr, arr.data(), starting_axis, dest);
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+        // TODO: GPU copy_into
+      } else {
+        HostEngine::execute_copy_into<T>(arr, dest);
+      }
     };
+
     dispatch(arr.dtype(), copy_op);
   }
 
@@ -1014,17 +868,13 @@ namespace ncarray {
         throw type_error("Shapes must match for assignment");
       }
     }
-    auto assign_op = [&]<typename DestT>() {
-      auto assign_op_internal = [&]<typename SrcT>() {
-        ssize_t starting_axis { 0 };
-        impl::assign_recursive<DestT, SrcT>(dest,
-                                            src,
-                                            dest.data(),
-                                            src.data(),
-                                            starting_axis);
-      };
 
-      dispatch(src.dtype(), assign_op_internal);
+    auto assign_op = [&]<typename DestT>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
+        // TODO: GPU assign
+      } else {
+        HostEngine::execute_assign<DestT>(dest, src);
+      }
     };
     dispatch(dest.dtype(), assign_op);
   }
