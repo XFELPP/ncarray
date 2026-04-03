@@ -9,7 +9,6 @@
 #ifndef NCARRAY_ENGINES_HH
 #define NCARRAY_ENGINES_HH
 
-#include "host/elementwise.hh"
 #include "ncarray/array_traits.hh"
 #ifdef __CUDACC__
 #include "ncarray/device/kernels.cuh"
@@ -341,6 +340,78 @@ namespace ncarray {
       cudaDeviceSynchronize();
     }
 
+    // --- Logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_logical_and_scalar(const Left& left,
+                                           const Scalar& right,
+                                           ResultType& result) {
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1) / TPB) };
+
+      logical_and_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                    scalar_val,
+                                                    result.view());
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_logical_or_scalar(const Left& left,
+                                          const Scalar& right,
+                                          ResultType& result) {
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1) / TPB) };
+
+      logical_or_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                   scalar_val,
+                                                   result.view());
+    }
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_logical_and_scalar(Left& left, const Scalar& right) {
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      inplace_logical_and_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+    }
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_logical_or_scalar(Left& left, const Scalar& right) {
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      int TPB { 256 };
+      int blocks{static_cast<int>((left.size() + TPB - 1)) / TPB};
+
+      inplace_logical_or_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+    }
+
     // --- Reductions --- //
 
     template <typename T, class ArrayT>
@@ -617,6 +688,34 @@ namespace ncarray {
     template <typename T, class Left, class Right>
     static void execute_inplace_logical_or(Left& left, const Right& right) {
       host::inplace_logical_or_recursive<T>(left, right);
+    }
+
+    // --- Logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_logical_and_scalar(const Left& left,
+                                           const Scalar& right,
+                                           ResultType result) {
+      host::logical_and_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_logical_or_scalar(const Left& left,
+                                          const Scalar& right,
+                                          ResultType result) {
+      host::logical_or_scalar_recursive<T>(left, right, result);
+    }
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_logical_and_scalar(Left& left, const Scalar& right) {
+      host::inplace_logical_and_scalar_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_logical_or_scalar(Left& left, const Scalar& right) {
+      host::inplace_logical_or_scalar_recursive<T>(left, right);
     }
 
     // --- Copy and Modification --- //

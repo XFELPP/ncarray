@@ -173,6 +173,30 @@ namespace ncarray {
     ncarray::device::inplace_block_logical_or<T, LeftT, RightT>(left, right);
   }
 
+  // --- Logical operators with scalar broadcast --- //
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void logical_and_scalar_kernel(const LeftT left, const T right, OutT out) {
+    ncarray::device::block_scalar_logical_and<T, LeftT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void logical_or_scalar_kernel(const LeftT left, const T right, OutT out) {
+    ncarray::device::block_scalar_logical_or<T, LeftT, OutT>(left, right, out);
+  }
+
+  // --- Inplace logical operators with scalar broadcast --- //
+
+  template <typename T, ViewArrayLike LeftT>
+  __global__ void inplace_logical_and_scalar_kernel(LeftT left, const T scalar) {
+    ncarray::device::inplace_block_scalar_logical_and<T, LeftT>(left, scalar);
+  }
+
+  template <typename T, ViewArrayLike LeftT>
+  __global__ void inplace_logical_or_scalar_kernel(LeftT left, const T scalar) {
+    ncarray::device::inplace_block_scalar_logical_or<T, LeftT>(left, scalar);
+  }
+
   // --- Reductions --- //
 
   template <int BlockSize, typename T, ViewArrayLike ArrayT>

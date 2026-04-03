@@ -121,7 +121,7 @@ namespace ncarray {
             ptr = arr.advance(ptr, d, coords[d]);
           }
 
-          *static_cast<ResultT*>(ptr) = op(*static_cast<T*>(ptr));
+          op(*static_cast<T*>(ptr));
         }
       }
 
@@ -153,8 +153,8 @@ namespace ncarray {
             ssize_t r_coord = (right.shape(d) == 1) ? 0 : coords[d + diff];
             rhs_ptr = right.advance(rhs_ptr, d, r_coord);
           }
-          *static_cast<T*>(lhs_ptr) =
-            op(*static_cast<T*>(lhs_ptr), *static_cast<const T*>(rhs_ptr));
+
+          op(*static_cast<T*>(lhs_ptr), *static_cast<const T*>(rhs_ptr));
         }
       }
 
@@ -212,7 +212,7 @@ namespace ncarray {
             lhs_ptr = left.advance(lhs_ptr, d, coords[d]);
           }
 
-          *static_cast<T*>(lhs_ptr) = op(*static_cast<T*>(lhs_ptr), scalar_val);
+          op(*static_cast<T*>(lhs_ptr), scalar_val);
         }
       }
     } // namespace impl
@@ -517,33 +517,40 @@ namespace ncarray {
     __device__ inline void block_logical_and(const LeftT& left,
                                              const RightT& right,
                                              OutT& out) {
-      impl::block_binary_transform<T, bool>(left,
-                                            right,
-                                            out,
-                                            [] __device__(auto a, auto b) {
-                                              return static_cast<bool>(a) && static_cast<bool>(b);
-                                            });
+      auto op = [] __device__ (auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) && static_cast<bool>(b); }) {
+          return static_cast<bool>(a) && static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+      impl::block_binary_transform<T, bool>(left, right, out, op);
     }
 
     template <typename T, class LeftT, class RightT, class OutT>
     __device__ inline void block_logical_or(const LeftT& left,
                                             const RightT& right,
                                             OutT& out) {
-      impl::block_binary_transform<T, bool>(left,
-                                            right,
-                                            out,
-                                            [] __device__ (auto a, auto b) {
-                                              return static_cast<bool>(a) || static_cast<bool>(b);
-                                            });
+      auto op = [] __device__(auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) || static_cast<bool>(b); }) {
+          return static_cast<bool>(a) || static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+      impl::block_binary_transform<T, bool>(left, right, out, op);
     }
 
     template <typename T, class ArrayT, class OutT>
     __device__ inline void block_logical_not(const ArrayT& arr, OutT& out) {
-      impl::block_unary_transform<T, bool>(arr,
-                                           out,
-                                           [] __device__ (auto x) {
-                                             return !static_cast<bool>(x);
-                                           });
+      auto op = [] __device__ (auto x) {
+        if constexpr (requires { !static_cast<bool>(x); }) {
+          return !static_cast<bool>(x);
+        } else {
+          return false;
+        }
+      };
+      impl::block_unary_transform<T, bool>(arr, out, op);
     }
 
     // --- Inplace logical operators --- //
@@ -564,6 +571,54 @@ namespace ncarray {
                                                  [] __device__ (auto& a, auto b) {
                                                    a = (a || b);
                                                  });
+    }
+
+    // --- Logical operators with scalar broadcast --- //
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_logical_and(const LeftT& left,
+                                                    const T& scalar_val,
+                                                    OutT& out) {
+      auto op = [] __device__(auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) && static_cast<bool>(b); }) {
+          return static_cast<bool>(a) && static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+      impl::block_binary_scalar_transform<T, LeftT, OutT>(left, scalar_val, out, op);
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_logical_or(const LeftT& left,
+                                                   const T& scalar_val,
+                                                   OutT& out) {
+      auto op = [] __device__(auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) || static_cast<bool>(b); }) {
+          return static_cast<bool>(a) || static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+      impl::block_binary_scalar_transform<T, LeftT, OutT>(left, scalar_val, out, op);
+    }
+
+    // --- Inplace logical operators with scalar broadcast --- //
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_logical_and(LeftT& left,
+                                                            const T& scalar_val) {
+      auto and_op = [] __device__(auto& a, auto b) {
+        a = (static_cast<bool>(a) && static_cast<bool>(b));
+      };
+      impl::block_inplace_binary_scalar_transform<T, LeftT>(left, scalar_val, and_op);
+    }
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_logical_or(LeftT& left,
+                                                           const T& scalar_val) {
+      auto or_op = [] __device__(auto& a, auto b) {
+        a = (static_cast<bool>(a) || static_cast<bool>(b));
+      };
+      impl::block_inplace_binary_scalar_transform<T, LeftT>(left, scalar_val, or_op);
     }
   } // namespace device
 } // namespace ncarray

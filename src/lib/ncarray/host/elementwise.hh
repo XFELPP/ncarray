@@ -288,7 +288,7 @@ namespace ncarray {
         bool is_last_axis = (axis == static_cast<ssize_t>(left_arr.ndim()) - 1);
 
         for (ssize_t i = 0; i < dim; ++i) {
-          void* lhs_next = left_arr.advance(lhs_data, axis, i);
+          void* lhs_next = const_cast<void*>(left_arr.advance(lhs_data, axis, i));
 
           // Align dimensions from the right side
           ssize_t r_axis =
@@ -539,7 +539,11 @@ namespace ncarray {
     template <typename T, ArrayLike Left, ArrayLike Right>
     void inplace_mul_recursive(Left& left, const Right& right) {
       auto mul_op_internal = [](std::uint8_t* lhs, const std::uint8_t* rhs) {
-        *reinterpret_cast<T*>(lhs) *= *reinterpret_cast<const T*>(rhs);
+        if constexpr (std::is_same_v<T, bool>) {
+          *reinterpret_cast<T*>(lhs) &= *reinterpret_cast<const T*>(rhs);
+        } else {
+          *reinterpret_cast<T*>(lhs) *= *reinterpret_cast<const T*>(rhs);
+        }
       };
 
       impl::inplace_binary_reduce_recursive<T>(left,
@@ -992,6 +996,113 @@ namespace ncarray {
                                                                                        right.data(),
                                                                                        starting_axis,
                                                                                        logical_or_op_internal);
+    }
+
+    // --- Logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void logical_and_scalar_recursive(const Left& left,
+                                      const Scalar& right,
+                                      ResultType& result) {
+      auto and_op = [](const std::uint8_t* a, const T b, bool* out) {
+        if constexpr (requires { static_cast<bool>(*reinterpret_cast<const T*>(a)); }) {
+          *out = static_cast<bool>(*reinterpret_cast<const T*>(a)) && static_cast<bool>(b);
+        } else {
+          *out = false;
+        }
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      bool* res_ptr = reinterpret_cast<bool*>(result.data());
+
+      ssize_t starting_axis { 0 };
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       and_op,
+                                       res_ptr);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void logical_or_scalar_recursive(const Left& left,
+                                     const Scalar& right,
+                                     ResultType& result) {
+      auto or_op = [](const std::uint8_t* a, const T b, bool* out) {
+        if constexpr (requires { static_cast<bool>(*reinterpret_cast<const T*>(a)); }) {
+          *out = static_cast<bool>(*reinterpret_cast<const T*>(a)) || static_cast<bool>(b);
+        } else {
+          *out = false;
+        }
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      bool* res_ptr = reinterpret_cast<bool*>(result.data());
+      ssize_t starting_axis { 0 };
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       or_op,
+                                       res_ptr);
+    }
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left>
+    void inplace_logical_and_scalar_recursive(Left& left, const Scalar& right) {
+      auto and_op = [](std::uint8_t* a, const T b) {
+        *reinterpret_cast<bool*>(a) =
+          static_cast<bool>(*reinterpret_cast<const T*>(a)) && static_cast<bool>(b);
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      impl::inplace_binary_scalar_recursive<T>(left,
+                                               left.data(),
+                                               scalar_val,
+                                               starting_axis,
+                                               and_op);
+    }
+
+    template <typename T, ArrayLike Left>
+    void inplace_logical_or_scalar_recursive(Left& left, const Scalar& right) {
+      auto or_op = [](std::uint8_t* a, const T b) {
+        *reinterpret_cast<bool*>(a) =
+            static_cast<bool>(*reinterpret_cast<const T*>(a)) || static_cast<bool>(b);
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      impl::inplace_binary_scalar_recursive<T>(left,
+                                               left.data(),
+                                               scalar_val,
+                                               starting_axis,
+                                               or_op);
     }
   } // namespace host
 } // namespace ncarray

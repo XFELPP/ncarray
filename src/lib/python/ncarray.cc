@@ -297,6 +297,53 @@ namespace {
       py::is_operator())
 
   /**
+   * @def REGISTER_OPERATION_NOSCALAR(PYMETHOD, OP)
+   * @brief A helper to attach a dunder to a class binding for operator overloads.
+   *        As REGISTER_OPERATION, but this does not allow scalar overloads.
+   * @example REGISTER_OPERATION("add", +) binds operator+(...) to __add__
+   * @todo We currently need to convert arrays to view, because the C++ lib cannot
+   *       take the array directly.
+   */
+#define REGISTER_OPERATION_NOSCALAR(PYMETHOD, OP)                                   \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const ArrayT& other) {          \
+      return py::cast(self OP other);                                               \
+    },                                                                              \
+      py::is_operator())                                                            \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
+      return py::cast(self OP pyarray_to_view<typename ArrayT::ViewType>(other));   \
+    },                                                                              \
+      py::is_operator())                                                            \
+    .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
+      return py::cast(pyarray_to_view<typename ArrayT::ViewType>(other) OP self);   \
+    },                                                                              \
+      py::is_operator())
+
+
+  /**
+   * @def REGISTER_INPLACE_OPERATION(PYMETHOD, OP)
+   * @brief A helper to attach a dunder to a class binding for inplace operator overloads.
+   * @example REGISTER_INPLACE_OPERATION("iadd", +=) binds operator+=(...) to __iadd__
+   * @todo We currently need to convert arrays to view, because the C++ lib cannot
+   *       take the array directly.
+   */
+#define REGISTER_INPLACE_OPERATION(PYMETHOD, OP)                              \
+    .def("__" PYMETHOD "__", [](ArrayT& self, const ArrayT& other) {          \
+      self OP other;                                                          \
+      return self;                                                            \
+    },                                                                        \
+      py::is_operator())                                                      \
+    .def("__" PYMETHOD "__", [](ArrayT& self, const py::array& other) {       \
+      self OP pyarray_to_view<typename ArrayT::ViewType>(other);              \
+      return self;                                                            \
+    },                                                                        \
+      py::is_operator())                                                      \
+    .def("__" PYMETHOD "__", [](ArrayT& self, const ncarray::Scalar& other) { \
+      self OP other;                                                          \
+      return self;                                                            \
+    },                                                                        \
+      py::is_operator())
+
+  /**
    * Helper function to attach common methods to a Python binding for an array
    * specialization.
    *
@@ -462,11 +509,31 @@ namespace {
     .def("max", &ArrayT::max)
     .def("min", &ArrayT::min)
     .def("mean", &ArrayT::mean)
-    // --- Binary Array Methods --- //
+    // --- Binary Arithmetic Methods --- //
     REGISTER_OPERATION("add", +)
     REGISTER_OPERATION("sub", -)
     REGISTER_OPERATION("mul", *)
     REGISTER_OPERATION("truediv", /)
+    // --- Inplace Binary Arithmetic Methods --- //
+    REGISTER_INPLACE_OPERATION("iadd", +=)
+    REGISTER_INPLACE_OPERATION("isub", -=)
+    REGISTER_INPLACE_OPERATION("imul", *=)
+    REGISTER_INPLACE_OPERATION("itruediv", /=)
+    // --- Binary Comparisons --- //
+    // Currently, these do  support comparisons to a scalar. E>g. ncarr == 1.0
+    //REGISTER_OPERATION_NOSCALAR("eq", ==)
+    //REGISTER_OPERATION_NOSCALAR("ne", !=)
+    //REGISTER_OPERATION_NOSCALAR("lt", <)
+    //REGISTER_OPERATION_NOSCALAR("le", <=)
+    //REGISTER_OPERATION_NOSCALAR("gt", >)
+    //REGISTER_OPERATION_NOSCALAR("ge", >=)
+    // --- Logical Operations --- //
+    //REGISTER_OPERATION("and", &&)
+    //REGISTER_OPERATION("or", ||)
+    //REGISTER_OPERATION("and", !=)
+    // --- Inplace Logical Operations --- //
+    //REGISTER_INPLACE_OPERATION("iand", &=)
+    //REGISTER_INPLACE_OPERATION("ior", |=)
     // NumPy protocol compatibility
     // __array__(self, dtype=None, copy=None)
     .def("__array__", [](const ArrayT& self,
@@ -502,6 +569,8 @@ namespace {
       return ufunc(*new_args, **kwargs);
     });
 #undef REGISTER_OPERATION
+#undef REGISTER_OPERATION_NOSCALAR
+#undef REGISTER_INPLACE_OPERATION
   }
 } // anonymous namespace
 

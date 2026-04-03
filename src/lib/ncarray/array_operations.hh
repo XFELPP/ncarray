@@ -1182,6 +1182,145 @@ namespace ncarray {
     return *this;
   }
 
+  // --- Logical operators with scalar broadcast --- //
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto logical_and_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto and_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_logical_and_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_logical_and_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), and_op);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto logical_or_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), left.dtype());
+
+    auto or_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_logical_or_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_logical_or_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), or_op);
+    return result;
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_and(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator&&(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_or(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator||(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  // --- Inplace logical operators with scalar broadcast --- //
+  // logical and
+  template <ArrayLike Left>
+  void inplace_logical_and_scalar(Left& left, const Scalar& right) {
+    auto and_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<T, bool>) {
+        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+          GPUEngine::execute_inplace_logical_and_scalar<T>(left, right);
+#else
+          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+        } else {
+          HostEngine::execute_inplace_logical_and_scalar<T>(left, right);
+        }
+      }
+    };
+    dispatch(left.dtype(), and_op);
+  }
+
+  // logical or
+  template <ArrayLike Left>
+  void inplace_logical_or_scalar(Left& left, const Scalar& right) {
+    auto or_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<T, bool>) {
+        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+          GPUEngine::execute_inplace_logical_or_scalar<T>(left, right);
+#else
+          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+        } else {
+          HostEngine::execute_inplace_logical_or_scalar<T>(left, right);
+        }
+      }
+    };
+    dispatch(left.dtype(), or_op);
+  }
+
+  // inplace logical and
+  template <class L, class S>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::ilogical_and(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_logical_and_scalar<ThisType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator&=(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_logical_and_scalar<ThisType>(*this, other);
+    return *this;
+  }
+
+  // inplace logical or
+  template <class L, class S>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::ilogical_or(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_logical_or_scalar<ThisType>(*this, other);
+    return *this;
+  }
+  template <class L, class S>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator|=(const Scalar& other) {
+    using ThisType = ArrayImpl<L, S>;
+
+    ncarray::inplace_logical_or_scalar<ThisType>(*this, other);
+    return *this;
+  }
+
   // --- Iterators --- //
 
   template <typename L, typename S>

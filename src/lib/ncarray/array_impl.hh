@@ -900,6 +900,21 @@ namespace ncarray {
     template <ArrayLike OtherType>
     inline ArrayImpl& operator|=(const OtherType& other);
 
+    // --- Logical operators with scalar broadcast --- //
+    OwnerType logical_and(const Scalar& other) const;
+    OwnerType operator&&(const Scalar& other) const;
+
+    OwnerType logical_or(const Scalar& other) const;
+    OwnerType operator||(const Scalar& other) const;
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    inline ArrayImpl& ilogical_and(const Scalar& other);
+    inline ArrayImpl& operator&=(const Scalar& other);
+
+    inline ArrayImpl& ilogical_or(const Scalar& other);
+    inline ArrayImpl& operator|=(const Scalar& other);
+
     // -- Iterators --- //
 
     //template <ViewLike VT>
