@@ -102,7 +102,9 @@ namespace ncarray {
     // --- Binary operations with a scalar broadcast --- //
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_add_scalar(const Left& left, const Scalar& right, ResultType& result) {
+    static void execute_add_scalar(const Left& left,
+                                   const Scalar& right,
+                                   ResultType& result) {
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -117,7 +119,9 @@ namespace ncarray {
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_sub_scalar(const Left& left, const Scalar& right, ResultType& result) {
+    static void execute_sub_scalar(const Left& left,
+                                   const Scalar& right,
+                                   ResultType& result) {
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -132,7 +136,9 @@ namespace ncarray {
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_mul_scalar(const Left& left, const Scalar& right, ResultType& result) {
+    static void execute_mul_scalar(const Left& left,
+                                   const Scalar& right,
+                                   ResultType& result) {
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -146,7 +152,9 @@ namespace ncarray {
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_truediv_scalar(const Left& left, const Scalar& right, ResultType& result) {
+    static void execute_truediv_scalar(const Left& left,
+                                       const Scalar& right,
+                                       ResultType& result) {
       auto cast_op = [](auto&& arg) {
         using FromT = std::decay_t<decltype(arg)>;
         return op_traits<FromT>::template cast<T>(arg);
@@ -695,14 +703,14 @@ namespace ncarray {
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
     static void execute_logical_and_scalar(const Left& left,
                                            const Scalar& right,
-                                           ResultType result) {
+                                           ResultType& result) {
       host::logical_and_scalar_recursive<T>(left, right, result);
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
     static void execute_logical_or_scalar(const Left& left,
                                           const Scalar& right,
-                                          ResultType result) {
+                                          ResultType& result) {
       host::logical_or_scalar_recursive<T>(left, right, result);
     }
 

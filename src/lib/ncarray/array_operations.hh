@@ -34,81 +34,6 @@ namespace ncarray {
     using std::invalid_argument::invalid_argument;
   };
 
-  template <typename Visitor>
-  auto dispatch(DType type, Visitor&& visitor) {
-    switch (type) {
-    case DType::bool_: {
-      return visitor.template operator()<bool>();
-    }
-    case DType::char_: {
-      return visitor.template operator()<char>();
-    }
-    // Stuck becuase of std::uint8_t
-    // case DType::uchar: {
-    //  return visitor.template operator()<unsigned char>();
-    //}
-    case DType::uint8: {
-      return visitor.template operator()<std::uint8_t>();
-    }
-    case DType::uint16: {
-      return visitor.template operator()<std::uint16_t>();
-    }
-    case DType::uint32: {
-      return visitor.template operator()<std::uint32_t>();
-    }
-    case DType::uint64: {
-      return visitor.template operator()<std::uint64_t>();
-    }
-    case DType::int8: {
-      return visitor.template operator()<std::int8_t>();
-    }
-    case DType::int16: {
-      return visitor.template operator()<std::int16_t>();
-    }
-    case DType::int32: {
-      return visitor.template operator()<std::int32_t>();
-    }
-    case DType::int64: {
-      return visitor.template operator()<std::int64_t>();
-    }
-    case DType::float32: {
-      return visitor.template operator()<float>();
-    }
-    case DType::float64: {
-      return visitor.template operator()<double>();
-    }
-    case DType::complex64: {
-      return visitor.template operator()<std::complex<float>>();
-    }
-    case DType::complex128: {
-      return visitor.template operator()<std::complex<double>>();
-    }
-    case DType::complex256: {
-      return visitor.template operator()<std::complex<long double>>();
-    }
-    case DType::vfloat2: {
-      return visitor.template operator()<Float2>();
-    }
-    case DType::vfloat3: {
-      return visitor.template operator()<Float3>();
-    }
-    case DType::vfloat4: {
-      return visitor.template operator()<Float4>();
-    }
-    case DType::vdouble2: {
-      return visitor.template operator()<Double2>();
-    }
-    case DType::vdouble3: {
-      return visitor.template operator()<Double3>();
-    }
-    case DType::vdouble4: {
-      return visitor.template operator()<Double4>();
-    }
-    }
-
-    throw type_error("Unsupported type for operation");
-  }
-
   // Unary reduction operations
   // --------------------------
 
@@ -218,7 +143,7 @@ namespace ncarray {
     auto add_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_add<T>(left, right, result.view());
+        GPUEngine::execute_add<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -243,7 +168,7 @@ namespace ncarray {
     auto sub_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub<T>(left, right, result.view());
+        GPUEngine::execute_sub<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -263,7 +188,7 @@ namespace ncarray {
     auto mul_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_mul<T>(left, right, result.view());
+        GPUEngine::execute_mul<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -288,7 +213,7 @@ namespace ncarray {
     auto truediv_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_truediv<T>(left, right, result.view());
+        GPUEngine::execute_truediv<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
 #endif
@@ -762,7 +687,7 @@ namespace ncarray {
     auto equal_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_equal<T>(left, right, result.view());
+        GPUEngine::execute_equal<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -782,7 +707,7 @@ namespace ncarray {
     auto not_equal_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_not_equal<T>(left, right, result.view());
+        GPUEngine::execute_not_equal<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -802,7 +727,7 @@ namespace ncarray {
     auto less_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_less_than<T>(left, right, result.view());
+        GPUEngine::execute_less_than<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -822,7 +747,7 @@ namespace ncarray {
     auto less_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_less_equal_than<T>(left, right, result.view());
+        GPUEngine::execute_less_equal_than<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -842,7 +767,7 @@ namespace ncarray {
     auto greater_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_greater_than<T>(left, right, result.view());
+        GPUEngine::execute_greater_than<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -862,7 +787,7 @@ namespace ncarray {
     auto greater_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_greater_equal_than<T>(left, right, result.view());
+        GPUEngine::execute_greater_equal_than<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -882,7 +807,7 @@ namespace ncarray {
     auto logical_and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_and<T>(left, right, result.view());
+        GPUEngine::execute_logical_and<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
@@ -902,7 +827,7 @@ namespace ncarray {
     auto logical_or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_or<T>(left, right, result.view());
+        GPUEngine::execute_logical_or<T>(left, right, result);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif

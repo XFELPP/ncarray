@@ -160,6 +160,9 @@ namespace ncarray {
   public:
     using MemType = HostTag;
 
+    // By default, owners are NOT read only.
+    NCA_H OwnerPolicy() { this->m_read_only = false; }
+
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 
     NCA_H inline void allocate(ssize_t nbytes) {
@@ -180,6 +183,9 @@ namespace ncarray {
   struct DevOwnerPolicy : public StoragePolicy<DevOwnerPolicy>, public OwnerTag {
   public:
     using MemType = DevTag;
+
+    // By default, owners are NOT read only.
+    NCA_H DevOwnerPolicy() { this->m_read_only = false; }
 
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 

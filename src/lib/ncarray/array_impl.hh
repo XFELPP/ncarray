@@ -70,6 +70,83 @@ namespace {
 } // anonymous namespace
 
 namespace ncarray {
+  // --- Dispatch operation --- //
+
+  template <typename Visitor>
+  auto dispatch(DType type, Visitor&& visitor) {
+    switch (type) {
+    case DType::bool_: {
+      return visitor.template operator()<bool>();
+    }
+    case DType::char_: {
+      return visitor.template operator()<char>();
+    }
+    // Stuck becuase of std::uint8_t
+    // case DType::uchar: {
+    //  return visitor.template operator()<unsigned char>();
+    //}
+    case DType::uint8: {
+      return visitor.template operator()<std::uint8_t>();
+    }
+    case DType::uint16: {
+      return visitor.template operator()<std::uint16_t>();
+    }
+    case DType::uint32: {
+      return visitor.template operator()<std::uint32_t>();
+    }
+    case DType::uint64: {
+      return visitor.template operator()<std::uint64_t>();
+    }
+    case DType::int8: {
+      return visitor.template operator()<std::int8_t>();
+    }
+    case DType::int16: {
+      return visitor.template operator()<std::int16_t>();
+    }
+    case DType::int32: {
+      return visitor.template operator()<std::int32_t>();
+    }
+    case DType::int64: {
+      return visitor.template operator()<std::int64_t>();
+    }
+    case DType::float32: {
+      return visitor.template operator()<float>();
+    }
+    case DType::float64: {
+      return visitor.template operator()<double>();
+    }
+    case DType::complex64: {
+      return visitor.template operator()<std::complex<float>>();
+    }
+    case DType::complex128: {
+      return visitor.template operator()<std::complex<double>>();
+    }
+    case DType::complex256: {
+      return visitor.template operator()<std::complex<long double>>();
+    }
+    case DType::vfloat2: {
+      return visitor.template operator()<Float2>();
+    }
+    case DType::vfloat3: {
+      return visitor.template operator()<Float3>();
+    }
+    case DType::vfloat4: {
+      return visitor.template operator()<Float4>();
+    }
+    case DType::vdouble2: {
+      return visitor.template operator()<Double2>();
+    }
+    case DType::vdouble3: {
+      return visitor.template operator()<Double3>();
+    }
+    case DType::vdouble4: {
+      return visitor.template operator()<Double4>();
+    }
+    }
+
+    throw type_error("Unsupported type for operation");
+  }
+
   // --- Array Element Proxy --- //
   /**
    * The element proxy can be returned by arrays during indexing to provide
@@ -96,7 +173,11 @@ namespace ncarray {
 
     template <typename T>
     NCA_HD inline ArrayElementProxy& operator=(const T& val) {
-      *reinterpret_cast<T*>(m_data) = val;
+      auto assign_op = [&]<typename ArrayT>() {
+        *reinterpret_cast<ArrayT*>(m_data) = op_traits<T>::template cast<ArrayT>(val);
+      };
+
+      ncarray::dispatch(m_dtype, assign_op);
       return *this;
     }
 
@@ -516,7 +597,7 @@ namespace ncarray {
     // --- Int/slice/ellipsis variadic indexing to view --- //
 
     template <typename... Args>
-      requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
+    requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
     NCA_HD ViewType operator[](Args&&... idx_args) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
 
