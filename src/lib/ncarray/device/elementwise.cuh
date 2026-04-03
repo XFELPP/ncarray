@@ -451,7 +451,6 @@ namespace ncarray {
     __device__ inline void block_not_equal(const LeftT& left,
                                            const RightT& right,
                                            OutT& out) {
-
       impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
                                                                  right,
                                                                  out,
@@ -465,12 +464,13 @@ namespace ncarray {
     __device__ inline void block_less_than(const LeftT& left,
                                            const RightT& right,
                                            OutT& out) {
+      auto l_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::less(a, b);
+      };
       impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
                                                                  right,
                                                                  out,
-                                                                 [] __device__(auto a, auto b) {
-                                                                   return a < b;
-                                                                 });
+                                                                 l_op);
       //__syncthreads();
     }
 
@@ -478,12 +478,13 @@ namespace ncarray {
     __device__ inline void block_less_equal_than(const LeftT& left,
                                                  const RightT& right,
                                                  OutT& out) {
+      auto le_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::le(a, b);
+      };
       impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
                                                                  right,
                                                                  out,
-                                                                 [] __device__ (auto a, auto b) {
-                                                                   return a <= b;
-                                                                 });
+                                                                 le_op);
       //__syncthreads();
     }
 
@@ -491,12 +492,13 @@ namespace ncarray {
     __device__ inline void block_greater_than(const LeftT& left,
                                               const RightT& right,
                                               OutT& out) {
+      auto g_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::greater(a, b);
+      };
       impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
                                                                  right,
                                                                  out,
-                                                                 [] __device__(auto a, auto b) {
-                                                                   return a > b;
-                                                                 });
+                                                                 g_op);
       //__syncthreads();
     }
 
@@ -504,12 +506,13 @@ namespace ncarray {
     __device__ inline void block_greater_equal_than(const LeftT& left,
                                                     const RightT& right,
                                                     OutT& out) {
+      auto ge_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::ge(a, b);
+      };
       impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
                                                                  right,
                                                                  out,
-                                                                 [] __device__ (auto a, auto b) {
-                                                                   return a >= b;
-                                                                 });
+                                                                 ge_op);
       //__syncthreads();
     }
 
@@ -574,6 +577,7 @@ namespace ncarray {
     }
 
     // --- Logical operators with scalar broadcast --- //
+
     template <typename T, class LeftT, class OutT>
     __device__ inline void block_scalar_logical_and(const LeftT& left,
                                                     const T& scalar_val,
@@ -603,6 +607,7 @@ namespace ncarray {
     }
 
     // --- Inplace logical operators with scalar broadcast --- //
+
     template <typename T, class LeftT>
     __device__ inline void inplace_block_scalar_logical_and(LeftT& left,
                                                             const T& scalar_val) {

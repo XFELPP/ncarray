@@ -1115,14 +1115,16 @@ namespace ncarray {
   template <ArrayLike Left, ArrayLike Right>
   auto inplace_logical_and(Left& left, const Right& right) {
     auto logical_and_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+      if constexpr (std::is_same_v<T, bool>) {
+        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_logical_and<T>(left, right);
+          GPUEngine::execute_inplace_logical_and<T>(left, right);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+          throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
-      } else {
-        HostEngine::execute_inplace_logical_and<T>(left, right);
+        } else {
+          HostEngine::execute_inplace_logical_and<T>(left, right);
+        }
       }
     };
 
@@ -1132,14 +1134,16 @@ namespace ncarray {
   template <ArrayLike Left, ArrayLike Right>
   auto inplace_logical_or(Left& left, const Right& right) {
     auto logical_or_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+      if constexpr (std::is_same_v<T, bool>) {
+        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_logical_or<T>(left, right);
+          GPUEngine::execute_inplace_logical_or<T>(left, right);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+          throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
 #endif
-      } else {
-        HostEngine::execute_inplace_logical_or<T>(left, right);
+        } else {
+          HostEngine::execute_inplace_logical_or<T>(left, right);
+        }
       }
     };
 

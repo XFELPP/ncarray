@@ -100,9 +100,16 @@ namespace ncarray {
   friend NCA_HD bool operator<(const VECDTYPE& a, const VECDTYPE& b) {  \
     return __VA_ARGS__(a, b, <);                                        \
   }                                                                     \
+  friend NCA_HD bool operator<=(const VECDTYPE& a, const VECDTYPE& b) { \
+    return __VA_ARGS__(a, b, <=);                                       \
+  }                                                                     \
   friend NCA_HD bool operator>(const VECDTYPE& a, const VECDTYPE& b) {  \
     return __VA_ARGS__(a, b, >);                                        \
+  }                                                                     \
+  friend NCA_HD bool operator>=(const VECDTYPE& a, const VECDTYPE& b) { \
+    return __VA_ARGS__(a, b, >=);                                       \
   }
+
 
 #define BINOPS2(OP) x OP other.x, y OP other.y
 #define BINOPS3(OP) x OP other.x, y OP other.y, z OP other.z
@@ -168,6 +175,10 @@ namespace ncarray {
       , y(static_cast<float>(other.y))
     {}
 
+    NCA_HD explicit inline operator bool() const {
+      return x || y;
+    }
+
     DEFINE_VECTOR_OPS(Float2, BINOPS2)
     DEFINE_SCALAR_OPS(Float2, SCALAROPS2)
     DEFINE_VECTOR_COMPARISONS(Float2, COMPOPS2)
@@ -210,6 +221,10 @@ namespace ncarray {
       if constexpr (Vector3DType<U>) {
         z = static_cast<float>(other.z);
       }
+    }
+
+    NCA_HD explicit inline operator bool() const {
+      return x || y || z;
     }
 
     DEFINE_VECTOR_OPS(Float3, BINOPS3)
@@ -262,6 +277,10 @@ namespace ncarray {
       }
     }
 
+    NCA_HD explicit inline operator bool() const {
+      return x || y || z || w;
+    }
+
     DEFINE_VECTOR_OPS(Float4, BINOPS4)
     DEFINE_SCALAR_OPS(Float4, SCALAROPS4)
     DEFINE_VECTOR_COMPARISONS(Float4, COMPOPS4)
@@ -298,6 +317,10 @@ namespace ncarray {
       : x(static_cast<double>(other.x))
       , y(static_cast<double>(other.y))
     {}
+
+    NCA_HD explicit inline operator bool() const {
+      return x || y;
+    }
 
     DEFINE_VECTOR_OPS(Double2, BINOPS2)
     DEFINE_SCALAR_OPS(Double2, SCALAROPS2)
@@ -341,6 +364,10 @@ namespace ncarray {
       if constexpr (Vector3DType<U>) {
         z = static_cast<double>(other.z);
       }
+    }
+
+    NCA_HD explicit inline operator bool() const {
+      return x || y || z;
     }
 
     DEFINE_VECTOR_OPS(Double3, BINOPS3)
@@ -391,6 +418,10 @@ namespace ncarray {
       if constexpr (Vector4DType<U>) {
         w = static_cast<double>(other.w);
       }
+    }
+
+    NCA_HD explicit inline operator bool() const {
+      return x || y || z || w;
     }
 
     DEFINE_VECTOR_OPS(Double4, BINOPS4)

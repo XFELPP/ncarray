@@ -78,7 +78,7 @@ namespace ncarray {
    * This mostly provides improved ergonomics.
    *
    * operator T& style functions do NOT type check. If you require type checking
-   * an `at<T>` function is provided.
+   * an `get<T>` function is provided.
    */
   struct ArrayElementProxy {
     void* m_data;
@@ -102,13 +102,13 @@ namespace ncarray {
 
     // --- Type checking versions --- //
     template <typename T>
-    NCA_HD inline T& at() {
+    NCA_HD inline T& get() {
       assert(m_dtype == dtype_traits<T>::value);
       return *reinterpret_cast<T*>(m_data);
     }
 
     template <typename T>
-    NCA_HD inline const T& at() const {
+    NCA_HD inline const T& get() const {
       assert(m_dtype == dtype_traits<T>::value);
       return *reinterpret_cast<const T*>(m_data);
     }
@@ -536,8 +536,12 @@ namespace ncarray {
       void* out_data = const_cast<void*>(this->data());
       ssize_t lin_idx { idx };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__)
 #pragma unroll
+#elif defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC unroll 10
+#elif defined(__clang__)
+#pragma clang loop unroll(full)
 #endif
       for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
         ssize_t dim_shape = this->shape(dim);
@@ -555,8 +559,12 @@ namespace ncarray {
       const void* out_data = this->data();
       ssize_t lin_idx { idx };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__)
 #pragma unroll
+#elif defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC unroll 10
+#elif defined(__clang__)
+#pragma clang loop unroll(full)
 #endif
       for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
         ssize_t dim_shape = this->shape(dim);
@@ -901,6 +909,7 @@ namespace ncarray {
     inline ArrayImpl& operator|=(const OtherType& other);
 
     // --- Logical operators with scalar broadcast --- //
+
     OwnerType logical_and(const Scalar& other) const;
     OwnerType operator&&(const Scalar& other) const;
 

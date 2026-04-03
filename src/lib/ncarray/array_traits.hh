@@ -124,7 +124,9 @@ namespace ncarray {
     // Comparisons and identities -- needed especially for specializations below
     // on things like complex
     NCA_HD static bool greater(const T& a, const T& b) { return a > b; }
+    NCA_HD static bool ge(const T& a, const T& b) { return a >= b; }
     NCA_HD static bool less(const T& a, const T& b) { return a < b; }
+    NCA_HD static bool le(const T& a, const T& b) { return a >= b; }
     NCA_HD static T lowest() { return std::numeric_limits<T>::lowest(); }
     NCA_HD static T max() { return std::numeric_limits<T>::max(); }
 
@@ -174,11 +176,25 @@ namespace ncarray {
       return a.imag() > b.imag();
     }
 
+    NCA_HD static bool ge(const std::complex<T>& a, const std::complex<T>& b) {
+      if (a.real() != b.real()) {
+        return a.real() > b.real();
+      }
+      return a.imag() >= b.imag();
+    }
+
     NCA_HD static bool less(const std::complex<T>& a, const std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() < b.real();
       }
       return a.imag() < b.imag();
+    }
+
+    NCA_HD static bool le(const std::complex<T>& a, const std::complex<T>& b) {
+      if (a.real() != b.real()) {
+        return a.real() < b.real();
+      }
+      return a.imag() <= b.imag();
     }
 
     NCA_HD static std::complex<T> lowest() {

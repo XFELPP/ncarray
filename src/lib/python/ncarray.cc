@@ -521,19 +521,18 @@ namespace {
     REGISTER_INPLACE_OPERATION("itruediv", /=)
     // --- Binary Comparisons --- //
     // Currently, these do  support comparisons to a scalar. E>g. ncarr == 1.0
-    //REGISTER_OPERATION_NOSCALAR("eq", ==)
-    //REGISTER_OPERATION_NOSCALAR("ne", !=)
-    //REGISTER_OPERATION_NOSCALAR("lt", <)
-    //REGISTER_OPERATION_NOSCALAR("le", <=)
-    //REGISTER_OPERATION_NOSCALAR("gt", >)
-    //REGISTER_OPERATION_NOSCALAR("ge", >=)
+    REGISTER_OPERATION_NOSCALAR("eq", ==)
+    REGISTER_OPERATION_NOSCALAR("ne", !=)
+    REGISTER_OPERATION_NOSCALAR("lt", <)
+    REGISTER_OPERATION_NOSCALAR("le", <=)
+    REGISTER_OPERATION_NOSCALAR("gt", >)
+    REGISTER_OPERATION_NOSCALAR("ge", >=)
     // --- Logical Operations --- //
-    //REGISTER_OPERATION("and", &&)
-    //REGISTER_OPERATION("or", ||)
-    //REGISTER_OPERATION("and", !=)
+    REGISTER_OPERATION("and", &&)
+    REGISTER_OPERATION("or", ||)
     // --- Inplace Logical Operations --- //
-    //REGISTER_INPLACE_OPERATION("iand", &=)
-    //REGISTER_INPLACE_OPERATION("ior", |=)
+    REGISTER_INPLACE_OPERATION("iand", &=)
+    REGISTER_INPLACE_OPERATION("ior", |=)
     // NumPy protocol compatibility
     // __array__(self, dtype=None, copy=None)
     .def("__array__", [](const ArrayT& self,

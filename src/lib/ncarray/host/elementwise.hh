@@ -818,7 +818,9 @@ namespace ncarray {
       auto less_than_op_internal = [](const std::uint8_t* lhs,
                                       const std::uint8_t* rhs,
                                       bool* output) {
-        *output = *reinterpret_cast<const T*>(lhs) < *reinterpret_cast<const T*>(rhs);
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        const T& b = *reinterpret_cast<const T*>(rhs);
+        *output = op_traits<T>::less(a, b);
       };
 
       ssize_t starting_axis { 0 };
@@ -839,7 +841,9 @@ namespace ncarray {
       auto less_eq_op_internal = [](const std::uint8_t* lhs,
                                     const std::uint8_t* rhs,
                                     bool* output) {
-        *output = *reinterpret_cast<const T*>(lhs) <= *reinterpret_cast<const T*>(rhs);
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        const T& b = *reinterpret_cast<const T*>(rhs);
+        *output = op_traits<T>::le(a, b);
       };
 
       ssize_t starting_axis { 0 };
@@ -861,8 +865,9 @@ namespace ncarray {
       auto greater_than_op_internal = [](const std::uint8_t* lhs,
                                          const std::uint8_t* rhs,
                                          bool* output) {
-
-        *output = *reinterpret_cast<const T*>(lhs) > *reinterpret_cast<const T*>(rhs);
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        const T& b = *reinterpret_cast<const T*>(rhs);
+        *output = op_traits<T>::greater(a, b);
       };
 
       ssize_t starting_axis { 0 };
@@ -883,8 +888,9 @@ namespace ncarray {
       auto greater_eq_op_internal = [](const std::uint8_t* lhs,
                                          const std::uint8_t* rhs,
                                          bool* output) {
-
-        *output = *reinterpret_cast<const T*>(lhs) >= *reinterpret_cast<const T*>(rhs);
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        const T& b = *reinterpret_cast<const T*>(rhs);
+        *output = op_traits<T>::ge(a, b);
       };
 
       ssize_t starting_axis { 0 };
@@ -905,9 +911,15 @@ namespace ncarray {
                                const Right& right,
                                ResultType& result) {
       auto logical_and_op_internal = [](const std::uint8_t* lhs,
-                                      const std::uint8_t* rhs,
-                                      bool* output) {
-        *output = *reinterpret_cast<const T*>(lhs) && *reinterpret_cast<const T*>(rhs);
+                                        const std::uint8_t* rhs,
+                                        bool* output) {
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        const T& b = *reinterpret_cast<const T*>(rhs);
+        if constexpr (requires { static_cast<bool>(a) && static_cast<bool>(b); }) {
+          *output = static_cast<bool>(a) && static_cast<bool>(b);
+        } else {
+          *output = false;
+        }
       };
 
       ssize_t starting_axis { 0 };
@@ -928,8 +940,13 @@ namespace ncarray {
       auto logical_or_op_internal = [](const std::uint8_t* lhs,
                                        const std::uint8_t* rhs,
                                        bool* output) {
-
-        *output = *reinterpret_cast<const T*>(lhs) || *reinterpret_cast<const T*>(rhs);
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        const T& b = *reinterpret_cast<const T*>(rhs);
+        if constexpr (requires { static_cast<bool>(a) || static_cast<bool>(b); }) {
+          *output = static_cast<bool>(a) || static_cast<bool>(b);
+        } else {
+          *output = false;
+        }
       };
 
       ssize_t starting_axis { 0 };
@@ -972,12 +989,12 @@ namespace ncarray {
       };
 
       ssize_t starting_axis { 0 };
-      impl::inplace_binary_reduce_recursive<T, decltype(logical_and_op_internal), bool>(left,
-                                                                                        right,
-                                                                                        left.data(),
-                                                                                        right.data(),
-                                                                                        starting_axis,
-                                                                                        logical_and_op_internal);
+      impl::inplace_binary_reduce_recursive<T, decltype(logical_and_op_internal)>(left,
+                                                                                  right,
+                                                                                  left.data(),
+                                                                                  right.data(),
+                                                                                  starting_axis,
+                                                                                  logical_and_op_internal);
     }
 
     template <typename T, ArrayLike Left, ArrayLike Right>
@@ -990,12 +1007,12 @@ namespace ncarray {
       };
 
       ssize_t starting_axis { 0 };
-      impl::inplace_binary_reduce_recursive<T, decltype(logical_or_op_internal), bool>(left,
-                                                                                       right,
-                                                                                       left.data(),
-                                                                                       right.data(),
-                                                                                       starting_axis,
-                                                                                       logical_or_op_internal);
+      impl::inplace_binary_reduce_recursive<T, decltype(logical_or_op_internal)>(left,
+                                                                                 right,
+                                                                                 left.data(),
+                                                                                 right.data(),
+                                                                                 starting_axis,
+                                                                                 logical_or_op_internal);
     }
 
     // --- Logical operators with scalar broadcast --- //
