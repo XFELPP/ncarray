@@ -128,8 +128,49 @@ namespace ncarray {
   }
 
   template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void less_equal_than_kernel(const LeftT left,
+                                         const RightT right,
+                                         OutT out) {
+    ncarray::device::block_less_equal_than<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
   __global__ void greater_than_kernel(const LeftT left, const RightT right, OutT out) {
     ncarray::device::block_greater_than<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void greater_equal_than_kernel(const LeftT left,
+                                            const RightT right,
+                                            OutT out) {
+    ncarray::device::block_greater_equal_than<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void logical_and_kernel(const LeftT left, const RightT right, OutT out) {
+    ncarray::device::block_logical_and<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT, ViewArrayLike OutT>
+  __global__ void logical_or_kernel(const LeftT left, const RightT right, OutT out) {
+    ncarray::device::block_logical_or<T, LeftT, RightT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike ArrayT, ViewArrayLike OutT>
+  __global__ void logical_not_kernel(const ArrayT arr, OutT out) {
+    ncarray::device::block_logical_not<T, ArrayT, OutT>(arr, out);
+  }
+
+  // --- Inplace logical operators --- //
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT>
+  __global__ void inplace_logical_and_kernel(LeftT left, const RightT right) {
+    ncarray::device::inplace_block_logical_and<T, LeftT, RightT>(left, right);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT>
+  __global__ void inplace_logical_or_kernel(LeftT left, const RightT right) {
+    ncarray::device::inplace_block_logical_or<T, LeftT, RightT>(left, right);
   }
 
   // --- Reductions --- //

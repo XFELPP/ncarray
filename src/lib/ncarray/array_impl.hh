@@ -830,6 +830,7 @@ namespace ncarray {
     OwnerType operator/(const Scalar& other) const;
 
     // --- Inplace binary operations with scalar broadcasts --- //
+
     inline ArrayImpl& iadd(const Scalar& other);
     inline ArrayImpl& operator+=(const Scalar& other);
 
@@ -843,6 +844,7 @@ namespace ncarray {
     inline ArrayImpl& operator/=(const Scalar& other);
 
     // --- Logical and boolean operators --- //
+
     template <ArrayLike OtherType>
     OwnerType is_equal(const OtherType& other) const;
     template <ArrayLike OtherType>
@@ -859,9 +861,44 @@ namespace ncarray {
     OwnerType operator<(const OtherType& other) const;
 
     template <ArrayLike OtherType>
+    OwnerType is_less_equal_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator<=(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
     OwnerType is_greater_than(const OtherType& other) const;
     template <ArrayLike OtherType>
     OwnerType operator>(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_greater_equal_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator>=(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType logical_and(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator&&(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType logical_or(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator||(const OtherType& other) const;
+
+    OwnerType logical_not() const;
+    OwnerType operator!() const;
+
+    // --- Inplace logical operators --- //
+
+    template <ArrayLike OtherType>
+    inline ArrayImpl& ilogical_and(const OtherType& other);
+    template <ArrayLike OtherType>
+    inline ArrayImpl& operator&=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    inline ArrayImpl& ilogical_or(const OtherType& other);
+    template <ArrayLike OtherType>
+    inline ArrayImpl& operator|=(const OtherType& other);
 
     // -- Iterators --- //
 

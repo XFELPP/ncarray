@@ -25,6 +25,36 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
   namespace device {
     namespace impl {
+      template <typename T, typename ResultT, class ArrayT, class OutT, class Op>
+      __device__ inline void block_unary_transform(const ArrayT& arr,
+                                                   OutT& result,
+                                                   Op op) {
+        unsigned tid { threadIdx.x };
+        unsigned stride { blockDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+
+          for (ssize_t d = arr.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % arr.shape(d);
+            tmp_idx /= arr.shape(d);
+          }
+
+          const void* ptr = const_cast<void*>(arr.data());
+          for (int d = 0; d < arr.ndim(); ++d) {
+            ptr = arr.advance(ptr, d, coords[d]);
+          }
+
+          void* res_ptr = result.data();
+          for (int d = 0; d < result.ndim(); ++d) {
+            res_ptr = result.advance(res_ptr, d, coords[d]);
+          }
+
+          *static_cast<ResultT*>(res_ptr) = op(*static_cast<const T*>(ptr));
+        }
+      }
+
       template <
         typename T,
         typename ResultT,
@@ -69,6 +99,29 @@ namespace ncarray {
 
           *static_cast<ResultT*>(res_ptr) =
             op(*static_cast<const T*>(lhs_ptr), *static_cast<const T*>(rhs_ptr));
+        }
+      }
+
+      template <typename T, typename ResultT, class ArrayT, class Op>
+      __device__ inline void block_inplace_unary_transform(ArrayT& arr, Op op) {
+        unsigned tid { threadIdx.x };
+        unsigned stride { blockDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+
+          for (ssize_t d = arr.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % arr.shape(d);
+            tmp_idx /= arr.shape(d);
+          }
+
+          void* ptr = const_cast<void*>(arr.data());
+          for (int d = 0; d < arr.ndim(); ++d) {
+            ptr = arr.advance(ptr, d, coords[d]);
+          }
+
+          *static_cast<ResultT*>(ptr) = op(*static_cast<T*>(ptr));
         }
       }
 
@@ -422,6 +475,19 @@ namespace ncarray {
     }
 
     template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_less_equal_than(const LeftT& left,
+                                                 const RightT& right,
+                                                 OutT& out) {
+      impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
+                                                                 right,
+                                                                 out,
+                                                                 [] __device__ (auto a, auto b) {
+                                                                   return a <= b;
+                                                                 });
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
     __device__ inline void block_greater_than(const LeftT& left,
                                               const RightT& right,
                                               OutT& out) {
@@ -432,6 +498,72 @@ namespace ncarray {
                                                                    return a > b;
                                                                  });
       //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_greater_equal_than(const LeftT& left,
+                                                    const RightT& right,
+                                                    OutT& out) {
+      impl::block_binary_transform<T, bool, LeftT, RightT, OutT>(left,
+                                                                 right,
+                                                                 out,
+                                                                 [] __device__ (auto a, auto b) {
+                                                                   return a >= b;
+                                                                 });
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_logical_and(const LeftT& left,
+                                             const RightT& right,
+                                             OutT& out) {
+      impl::block_binary_transform<T, bool>(left,
+                                            right,
+                                            out,
+                                            [] __device__(auto a, auto b) {
+                                              return static_cast<bool>(a) && static_cast<bool>(b);
+                                            });
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_logical_or(const LeftT& left,
+                                            const RightT& right,
+                                            OutT& out) {
+      impl::block_binary_transform<T, bool>(left,
+                                            right,
+                                            out,
+                                            [] __device__ (auto a, auto b) {
+                                              return static_cast<bool>(a) || static_cast<bool>(b);
+                                            });
+    }
+
+    template <typename T, class ArrayT, class OutT>
+    __device__ inline void block_logical_not(const ArrayT& arr, OutT& out) {
+      impl::block_unary_transform<T, bool>(arr,
+                                           out,
+                                           [] __device__ (auto x) {
+                                             return !static_cast<bool>(x);
+                                           });
+    }
+
+    // --- Inplace logical operators --- //
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_logical_and(LeftT& left, const RightT& right) {
+      impl::block_inplace_binary_transform<bool>(left,
+                                                 right,
+                                                 [] __device__(auto& a, auto b) {
+                                                   a = (a && b);
+                                                 });
+    }
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_logical_or(LeftT& left, const RightT& right) {
+      impl::block_inplace_binary_transform<bool>(left,
+                                                 right,
+                                                 [] __device__ (auto& a, auto b) {
+                                                   a = (a || b);
+                                                 });
     }
   } // namespace device
 } // namespace ncarray

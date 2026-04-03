@@ -256,6 +256,19 @@ namespace ncarray {
     }
 
     template <typename T, class Left, class Right, class Result>
+    static void execute_less_equal_than(const Left& left,
+                                        const Right& right,
+                                        Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      less_equal_than_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                 right.view(),
+                                                 result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
     static void execute_greater_than(const Left& left,
                                      const Right& right,
                                      Result& result) {
@@ -263,6 +276,68 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       greater_than_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_equal_than(const Left& left,
+                                           const Right& right,
+                                           Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      greater_equal_than_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                    right.view(),
+                                                    result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_logical_and(const Left& left,
+                                    const Right& right,
+                                    Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      logical_and_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_logical_or(const Left& left, const Right& right, Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      logical_or_kernel<T><<<blocks, TPB>>>(left.view(), right.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Array, class Result>
+    static void execute_logical_not(const Array& arr, Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
+
+      logical_not_kernel<T><<<blocks, TPB>>>(arr.view(), result.view());
+      cudaDeviceSynchronize();
+    }
+
+    // --- Inplace logical operators --- //
+
+    template <typename T, class Left, class Right>
+    static void execute_inplace_logical_and(Left& left, Right& right) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      inplace_logical_and_kernel<T><<<blocks, TPB>>>(left.view(), right.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right>
+    static void execute_inplace_logical_or(Left& left, Right& right) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      inplace_logical_or_kernel<T><<<blocks, TPB>>>(left.view(), right.view());
       cudaDeviceSynchronize();
     }
 
@@ -497,10 +572,51 @@ namespace ncarray {
     }
 
     template <typename T, class Left, class Right, class Result>
+    static void execute_less_equal_than(const Left& left,
+                                        const Right& right,
+                                        Result& result) {
+      host::less_equal_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
     static void execute_greater_than(const Left& left,
                                      const Right& right,
                                      Result& result) {
       host::greater_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_equal_than(const Left& left,
+                                           const Right& right,
+                                           Result& result) {
+      host::greater_equal_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_logical_and(const Left& left, const Right& right, Result& result) {
+      host::logical_and_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_logical_or(const Left& left, const Right& right, Result& result) {
+      host::logical_or_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Array, class Result>
+    static void execute_logical_not(const Array& arr, Result& result) {
+      host::logical_not_recursive<T>(arr, result);
+    }
+
+    // --- Inplace logical operators --- //
+
+    template <typename T, class Left, class Right>
+    static void execute_inplace_logical_and(Left& left, const Right& right) {
+      host::inplace_logical_and_recursive<T>(left, right);
+    }
+
+    template <typename T, class Left, class Right>
+    static void execute_inplace_logical_or(Left& left, const Right& right) {
+      host::inplace_logical_or_recursive<T>(left, right);
     }
 
     // --- Copy and Modification --- //
