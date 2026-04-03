@@ -552,6 +552,80 @@ namespace ncarray {
       impl::block_unary_transform<T, bool>(arr, out, not_op);
     }
 
+    // --- Comparison operators with scalar broadcast --- //
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_equal(const LeftT& left,
+                                              const T& scalar_val,
+                                              OutT& out) {
+      auto eq_op = [] __device__ (auto a, auto b) {
+        return a == b;
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, eq_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_not_equal(const LeftT& left,
+                                                  const T& scalar_val,
+                                                  OutT& out) {
+      auto ne_op = [] __device__ (auto a, auto b) {
+        return a != b;
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, ne_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_less_than(const LeftT& left,
+                                                  const T& scalar_val,
+                                                  OutT& out) {
+      auto l_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::less(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, l_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_less_equal_than(const LeftT& left,
+                                                        const T& scalar_val,
+                                                        OutT& out) {
+      auto le_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::le(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, le_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_greater_than(const LeftT& left,
+                                                     const T& scalar_val,
+                                                     OutT& out) {
+      auto g_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::greater(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, g_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_greater_equal_than(const LeftT& left,
+                                                           const T& scalar_val,
+                                                           OutT& out) {
+      auto ge_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::ge(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, ge_op);
+      //__syncthreads();
+    }
+
     // --- Inplace logical operators --- //
 
     template <typename T, class LeftT, class RightT>

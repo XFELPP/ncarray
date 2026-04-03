@@ -161,10 +161,48 @@ namespace ncarray {
     ncarray::device::block_logical_not<T, ArrayT, OutT>(arr, out);
   }
 
+  // --- Comparison operators with scalar broadcast --- //
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void equal_scalar_kernel(const LeftT left, const T right, OutT out) {
+    ncarray::device::block_scalar_equal<T, LeftT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void not_equal_scalar_kernel(const LeftT left, const T right, OutT out) {
+    ncarray::device::block_scalar_not_equal<T, LeftT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void less_than_scalar_kernel(const LeftT left, const T right, OutT out) {
+    ncarray::device::block_scalar_less_than<T, LeftT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void less_equal_than_scalar_kernel(const LeftT left,
+                                                const T right,
+                                                OutT out) {
+    ncarray::device::block_scalar_less_equal_than<T, LeftT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void greater_than_scalar_kernel(const LeftT left,
+                                             const T right,
+                                             OutT out) {
+    ncarray::device::block_scalar_greater_than<T, LeftT, OutT>(left, right, out);
+  }
+
+  template <typename T, ViewArrayLike LeftT, ViewArrayLike OutT>
+  __global__ void greater_equal_than_scalar_kernel(const LeftT left,
+                                                   const T right,
+                                                   OutT out) {
+    ncarray::device::block_scalar_greater_equal_than<T, LeftT, OutT>(left, right, out);
+  }
+
   // --- Inplace logical operators --- //
 
   template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT>
-  __global__ void inplace_logical_and_kernel(LeftT left, const RightT right) {
+  __global__ void inplace_logical_and_kernel(LeftT left, const T right) {
     ncarray::device::inplace_block_logical_and<T, LeftT, RightT>(left, right);
   }
 

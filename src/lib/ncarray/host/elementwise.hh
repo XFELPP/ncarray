@@ -979,6 +979,175 @@ namespace ncarray {
                                                                                result_ptr);
     }
 
+    // --- Comparison operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void equal_scalar_recursive(const Left& left,
+                                const Scalar& right,
+                                ResultType& result) {
+      auto equal_op_internal = [](const std::uint8_t* lhs,
+                                  const T rhs,
+                                  bool* output) {
+        *output = *reinterpret_cast<const T*>(lhs) == rhs;
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       equal_op_internal,
+                                       result_ptr);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void not_equal_scalar_recursive(const Left& left,
+                                    const Scalar& right,
+                                    ResultType& result) {
+      auto not_equal_op_internal = [](const std::uint8_t* lhs,
+                                      const T rhs,
+                                      bool* output) {
+        *output = *reinterpret_cast<const T*>(lhs) != rhs;
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       not_equal_op_internal,
+                                       result_ptr);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void less_than_scalar_recursive(const Left& left,
+                                    const Scalar& right,
+                                    ResultType& result) {
+      auto less_than_op_internal = [](const std::uint8_t* lhs,
+                                      const T rhs,
+                                      bool* output) {
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        *output = op_traits<T>::less(a, rhs);
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       less_than_op_internal,
+                                       result_ptr);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void less_equal_than_scalar_recursive(const Left& left,
+                                          const Scalar& right,
+                                          ResultType& result) {
+      auto less_eq_op_internal = [](const std::uint8_t* lhs,
+                                    const T rhs,
+                                    bool* output) {
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        *output = op_traits<T>::le(a, rhs);
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       less_eq_op_internal,
+                                       result_ptr);
+    }
+
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void greater_than_scalar_recursive(const Left& left,
+                                       const Scalar& right,
+                                       ResultType& result) {
+      auto greater_than_op_internal = [](const std::uint8_t* lhs,
+                                         const T rhs,
+                                         bool* output) {
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        *output = op_traits<T>::greater(a, rhs);
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       greater_than_op_internal,
+                                       result_ptr);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    void greater_equal_than_scalar_recursive(const Left& left,
+                                             const Scalar& right,
+                                             ResultType& result) {
+      auto greater_eq_op_internal = [](const std::uint8_t* lhs,
+                                       const T rhs,
+                                       bool* output) {
+        const T& a = *reinterpret_cast<const T*>(lhs);
+        *output = op_traits<T>::ge(a, rhs);
+      };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      ssize_t starting_axis { 0 };
+      bool* result_ptr = reinterpret_cast<bool*>(result.data());
+      impl::binary_scalar_recursive<T>(left,
+                                       left.data(),
+                                       scalar_val,
+                                       starting_axis,
+                                       greater_eq_op_internal,
+                                       result_ptr);
+    }
+
     // --- Inplace logical operators --- //
 
     template <typename T, ArrayLike Left, ArrayLike Right>

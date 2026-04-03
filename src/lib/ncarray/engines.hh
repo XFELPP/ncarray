@@ -329,6 +329,126 @@ namespace ncarray {
       cudaDeviceSynchronize();
     }
 
+    // --- Comparison operators with scalar broadcast --- //
+
+    template <typename T, class Left, class Result>
+    static void execute_equal_scalar(const Left& left,
+                                     const Scalar& right,
+                                     Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      equal_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val, result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_not_equal_scalar(const Left& left,
+                                         const Scalar& right,
+                                         Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      not_equal_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                  scalar_val,
+                                                  result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_less_than_scalar(const Left& left,
+                                         const Scalar& right,
+                                         Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      less_than_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                  scalar_val,
+                                                  result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_less_equal_than_scalar(const Left& left,
+                                               const Scalar& right,
+                                               Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      less_equal_than_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                        scalar_val,
+                                                        result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_greater_than_scalar(const Left& left,
+                                            const Scalar& right,
+                                            Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      greater_than_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                     scalar_val,
+                                                     result.view());
+      cudaDeviceSynchronize();
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_equal_than_scalar(const Left& left,
+                                                  const Scalar& right,
+                                                  Result& result) {
+      int TPB { 256 };
+      int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
+
+      auto cast_op = [](auto&& arg) {
+        using FromT = std::decay_t<decltype(arg)>;
+        return op_traits<FromT>::template cast<T>(arg);
+      };
+
+      T scalar_val = std::visit(cast_op, right);
+
+      greater_equal_than_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
+                                                           scalar_val,
+                                                           result.view());
+      cudaDeviceSynchronize();
+    }
+
     // --- Inplace logical operators --- //
 
     template <typename T, class Left, class Right>
@@ -717,6 +837,50 @@ namespace ncarray {
     template <typename T, class Array, class Result>
     static void execute_logical_not(const Array& arr, Result& result) {
       host::logical_not_recursive<T>(arr, result);
+    }
+
+    // --- Comparison operators with scalar broadcast --- //
+
+    template <typename T, class Left, class Result>
+    static void execute_equal_scalar(const Left& left,
+                                     const Scalar& right,
+                                     Result& result) {
+      host::equal_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_not_equal_scalar(const Left& left,
+                                         const Scalar& right,
+                                         Result& result) {
+      host::not_equal_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_less_than_scalar(const Left& left,
+                                         const Scalar& right,
+                                         Result& result) {
+      host::less_than_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_less_equal_than_scalar(const Left& left,
+                                               const Scalar& right,
+                                               Result& result) {
+      host::less_equal_than_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_greater_than_scalar(const Left& left,
+                                            const Scalar& right,
+                                            Result& result) {
+      host::greater_than_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_greater_equal_than_scalar(const Left& left,
+                                                  const Scalar& right,
+                                                  Result& result) {
+      host::greater_equal_than_scalar_recursive<T>(left, right, result);
     }
 
     // --- Inplace logical operators --- //

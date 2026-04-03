@@ -297,29 +297,6 @@ namespace {
       py::is_operator())
 
   /**
-   * @def REGISTER_OPERATION_NOSCALAR(PYMETHOD, OP)
-   * @brief A helper to attach a dunder to a class binding for operator overloads.
-   *        As REGISTER_OPERATION, but this does not allow scalar overloads.
-   * @example REGISTER_OPERATION("add", +) binds operator+(...) to __add__
-   * @todo We currently need to convert arrays to view, because the C++ lib cannot
-   *       take the array directly.
-   */
-#define REGISTER_OPERATION_NOSCALAR(PYMETHOD, OP)                                   \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const ArrayT& other) {          \
-      return py::cast(self OP other);                                               \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
-      return py::cast(self OP pyarray_to_view<typename ArrayT::ViewType>(other));   \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
-      return py::cast(pyarray_to_view<typename ArrayT::ViewType>(other) OP self);   \
-    },                                                                              \
-      py::is_operator())
-
-
-  /**
    * @def REGISTER_INPLACE_OPERATION(PYMETHOD, OP)
    * @brief A helper to attach a dunder to a class binding for inplace operator overloads.
    * @example REGISTER_INPLACE_OPERATION("iadd", +=) binds operator+=(...) to __iadd__
@@ -521,12 +498,12 @@ namespace {
     REGISTER_INPLACE_OPERATION("itruediv", /=)
     // --- Binary Comparisons --- //
     // Currently, these do  support comparisons to a scalar. E>g. ncarr == 1.0
-    REGISTER_OPERATION_NOSCALAR("eq", ==)
-    REGISTER_OPERATION_NOSCALAR("ne", !=)
-    REGISTER_OPERATION_NOSCALAR("lt", <)
-    REGISTER_OPERATION_NOSCALAR("le", <=)
-    REGISTER_OPERATION_NOSCALAR("gt", >)
-    REGISTER_OPERATION_NOSCALAR("ge", >=)
+    REGISTER_OPERATION("eq", ==)
+    REGISTER_OPERATION("ne", !=)
+    REGISTER_OPERATION("lt", <)
+    REGISTER_OPERATION("le", <=)
+    REGISTER_OPERATION("gt", >)
+    REGISTER_OPERATION("ge", >=)
     // --- Logical Operations --- //
     REGISTER_OPERATION("and", &&)
     REGISTER_OPERATION("or", ||)

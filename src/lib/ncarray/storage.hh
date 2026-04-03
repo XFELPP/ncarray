@@ -43,8 +43,8 @@ typedef SSIZE_T ssize_t;
 
 namespace ncarray {
 #ifdef NCA_HAS_CUDA
-  static std::atomic<bool> NCA_STREAMS_INIT { false };
-  static cudaStream_t alloc_stream;
+  inline std::atomic<bool> NCA_STREAMS_INIT { false };
+  inline cudaStream_t alloc_stream;
 #endif
   struct MemTag {};
   struct HostTag : MemTag {};

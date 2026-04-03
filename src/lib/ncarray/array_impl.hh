@@ -73,7 +73,7 @@ namespace ncarray {
   // --- Dispatch operation --- //
 
   template <typename Visitor>
-  auto dispatch(DType type, Visitor&& visitor) {
+  NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
     switch (type) {
     case DType::bool_: {
       return visitor.template operator()<bool>();
@@ -142,9 +142,10 @@ namespace ncarray {
     case DType::vdouble4: {
       return visitor.template operator()<Double4>();
     }
+    default:
+      assert(false && "Invalid DType for operation!");
+      return visitor.template operator()<float>();
     }
-
-    throw type_error("Unsupported type for operation");
   }
 
   // --- Array Element Proxy --- //
@@ -976,6 +977,26 @@ namespace ncarray {
 
     OwnerType logical_not() const;
     OwnerType operator!() const;
+
+    // --- Comparison operators with scalar broadcast --- //
+
+    OwnerType is_equal(const Scalar& other) const;
+    OwnerType operator==(const Scalar& other) const;
+
+    OwnerType is_not_equal(const Scalar& other) const;
+    OwnerType operator!=(const Scalar& other) const;
+
+    OwnerType is_less_than(const Scalar& other) const;
+    OwnerType operator<(const Scalar& other) const;
+
+    OwnerType is_less_equal_than(const Scalar& other) const;
+    OwnerType operator<=(const Scalar& other) const;
+
+    OwnerType is_greater_than(const Scalar& other) const;
+    OwnerType operator>(const Scalar& other) const;
+
+    OwnerType is_greater_equal_than(const Scalar& other) const;
+    OwnerType operator>=(const Scalar& other) const;
 
     // --- Inplace logical operators --- //
 

@@ -1035,6 +1035,224 @@ namespace ncarray {
     return ncarray::logical_not<ViewType, OwnerType>(*this);
   }
 
+  // --- Comparison operators with scalar broadcast --- //
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto is_equal_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto equal_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_equal_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_equal_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), equal_op);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto is_not_equal_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto not_equal_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_not_equal_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_not_equal_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), not_equal_op);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto is_less_than_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto less_than_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_less_than_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_less_than_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), less_than_op);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto is_less_equal_than_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto less_than_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_less_equal_than_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_less_equal_than_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), less_than_op);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto is_greater_than_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto greater_than_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_greater_than_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_greater_than_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), greater_than_op);
+    return result;
+  }
+
+  template <ArrayLike Left, OwningArrayLike ResultType>
+  auto is_greater_equal_than_scalar(const Left& left, const Scalar& right) {
+    ResultType result(left.ndim(), left.shape(), DType::bool_);
+
+    auto greater_than_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_greater_equal_than_scalar<T>(left, right, result);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+#endif
+      } else {
+        HostEngine::execute_greater_equal_than_scalar<T>(left, right, result);
+      }
+    };
+
+    dispatch(left.dtype(), greater_than_op);
+    return result;
+  }
+
+  // equal
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_equal(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator==(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  // not equal
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_not_equal(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_not_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator!=(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_not_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  // less than
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_less_than(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_less_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator<(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_less_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  // less equal than
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_less_equal_than(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_less_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator<=(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_less_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  // greater than
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_greater_than(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_greater_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator>(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_greater_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
+  // greater equal than
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::is_greater_equal_than(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_greater_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator>=(const Scalar& other) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::is_greater_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
+  }
+
   // --- Inplace logical operators --- //
 
   template <ArrayLike Left, ArrayLike Right>
