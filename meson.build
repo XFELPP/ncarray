@@ -15,8 +15,6 @@ if nca_has_cuda
     add_project_arguments('-DNCA_HAS_CUDA', language: ['cpp', 'cuda'])
 endif
 
-add_project_arguments('-frtti', language: 'cpp')
-
 #### Main Python Setup ####
 ###########################
 
@@ -265,7 +263,7 @@ test_index = executable(
     install: false,
     include_directories: ncarray_headers,
 )
-test('Testing array indexing.', test_index)
+test('Testing array indexing.', test_index, verbose: true)
 
 test_ops = executable(
     'test_array_operations',
@@ -273,10 +271,33 @@ test_ops = executable(
         'tests/cxx/test_operations.cc',
     ],
     dependencies: deps_for_tests,
-    install: false,
+    install: true,
     include_directories: ncarray_headers,
 )
-test('Testing array operations.', test_ops)
+test('Testing array operations.', test_ops, verbose: true)
+
+test_gpu_ops = executable(
+    'test_gpu_array_operations',
+    [
+        'tests/cxx/test_gpu_operations.cu',
+    ],
+    dependencies: deps_for_tests,
+    install: true,
+    include_directories: ncarray_headers,
+    cuda_args: [
+        '--extended-lambda',
+        '--expt-relaxed-constexpr',
+        # silence warning: declared but not referenced (e.g. pybind, stl...)
+        '-Xcudafe', '--diag_suppress=445',
+        # silence warning: long double treated as double
+        '-Xcudafe', '--diag_suppress=20208',
+        '-gencode', 'arch=compute_75,code=sm_75',
+        '-gencode', 'arch=compute_80,code=sm_80',
+        '-gencode', 'arch=compute_89,code=sm_89',
+        '-gencode', 'arch=compute_90,code=sm_90',
+    ],
+)
+test('Testing array operations.', test_gpu_ops, verbose: true)
 
 test_float_vecs = executable(
     'test_float_vecs',
@@ -287,4 +308,4 @@ test_float_vecs = executable(
     install: false,
     include_directories: ncarray_headers,
 )
-test('Testing custom float/double vectors.', test_float_vecs)
+test('Testing custom float/double vectors.', test_float_vecs, verbose: true)

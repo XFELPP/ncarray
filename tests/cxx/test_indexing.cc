@@ -6,6 +6,13 @@
 #include "ncarray/ncdevarrays.cuh"
 #endif
 
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 #include <cstdint>
 #include <vector>
 
@@ -38,6 +45,41 @@ TEST(NCArrayIndexingTest, RefCreationAndShape) {
   EXPECT_EQ(ref.shape(1), 5);
   EXPECT_EQ(ref.size(), 10);
   EXPECT_EQ(ref.itemsize(), sizeof(int32_t));
+}
+
+TEST(NCArrayIndexingTest, ElementAccess) {
+  std::vector<ssize_t> shape { 2, 2 };
+  ncarray::NCArray arr(shape, ncarray::DType::int32);
+
+  arr.fill(1);
+
+  // Test point access
+  std::int32_t& item00 = arr(0, 0);
+  std::int32_t& item01 = arr(0, 1);
+  std::int32_t& item10 = arr(1, 0);
+  std::int32_t& item11 = arr(1, 1);
+  EXPECT_EQ(item00, 1);
+  EXPECT_EQ(item01, 1);
+  EXPECT_EQ(item10, 1);
+  EXPECT_EQ(item11, 1);
+
+  // Test point access and assignment
+  arr(0, 0) = 10;
+  arr(0, 1) = 20;
+  arr(1, 0) = 30;
+  arr(1, 1) = 40;
+  // NOTE: In this case, a cast is needed since it won't deduce automatically
+  // A comparison between ArrayElementProxy and integers won't work
+  EXPECT_EQ(static_cast<std::int32_t>(arr(0, 0)), 10);
+  EXPECT_EQ(static_cast<std::int32_t>(arr(0, 1)), 20);
+  EXPECT_EQ(static_cast<std::int32_t>(arr(1, 0)), 30);
+  EXPECT_EQ(static_cast<std::int32_t>(arr(1, 1)), 40);
+
+  // Test linearized indexing
+  // NOTE: MUST be a ssize_t, or wrong operator[] overload will be selected
+  // TODO: Work on making this less confusing
+  std::int32_t& lin_item = arr[static_cast<ssize_t>(3)];
+  EXPECT_EQ(lin_item, 40);
 }
 
 TEST(SOArrayIndexingTest, OwnerCreationAndShape) {
