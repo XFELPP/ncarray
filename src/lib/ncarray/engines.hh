@@ -588,7 +588,7 @@ namespace ncarray {
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
     static void execute_mul_scalar(const Left& left,
                                    const Scalar& right,
-                                   ResultType result) {
+                                   ResultType& result) {
       host::mul_scalar_recursive<T>(left, right, result);
     }
 

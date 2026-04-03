@@ -126,7 +126,7 @@ namespace ncarray {
     NCA_HD static bool greater(const T& a, const T& b) { return a > b; }
     NCA_HD static bool ge(const T& a, const T& b) { return a >= b; }
     NCA_HD static bool less(const T& a, const T& b) { return a < b; }
-    NCA_HD static bool le(const T& a, const T& b) { return a >= b; }
+    NCA_HD static bool le(const T& a, const T& b) { return a <= b; }
     NCA_HD static T lowest() { return std::numeric_limits<T>::lowest(); }
     NCA_HD static T max() { return std::numeric_limits<T>::max(); }
 
