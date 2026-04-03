@@ -17,6 +17,7 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -41,6 +42,10 @@ typedef SSIZE_T ssize_t;
 #endif
 
 namespace ncarray {
+#ifdef NCA_HAS_CUDA
+  static std::atomic<bool> NCA_STREAMS_INIT { false };
+  static cudaStream_t alloc_stream;
+#endif
   struct MemTag {};
   struct HostTag : MemTag {};
   struct DevTag : MemTag {};
@@ -191,8 +196,15 @@ namespace ncarray {
 
     NCA_H inline void allocate(ssize_t nbytes) {
 #ifdef NCA_HAS_CUDA
+      if (!NCA_STREAMS_INIT.exchange(true)) {
+        CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&alloc_stream,
+                                                   cudaStreamNonBlocking));
+      }
       std::uint8_t* devPtr { nullptr };
-      CHECK_CUDA_ERROR(cudaMallocManaged(reinterpret_cast<void**>(&devPtr), nbytes));
+      CHECK_CUDA_ERROR(cudaMallocAsync(reinterpret_cast<void**>(&devPtr),
+                                       nbytes,
+                                       alloc_stream));
+      cudaDeviceSynchronize();
       m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
 #endif
     }
@@ -208,6 +220,10 @@ namespace ncarray {
 
   protected:
     std::unique_ptr<std::uint8_t[], DevDeleter> m_storage;
+  private:
+#ifdef NCA_HAS_CUDA
+    cudaStream_t m_stream;
+#endif
   };
 
   template <class MemTag>

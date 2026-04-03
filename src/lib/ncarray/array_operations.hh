@@ -1346,7 +1346,11 @@ namespace ncarray {
   inline void copy_into(const A& arr, OutputType*& dest) {
     auto copy_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-        // TODO: GPU copy_into
+#ifdef __CUDACC__
+        GPUEngine::execute_copy_into<T>(arr, dest);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
       } else {
         HostEngine::execute_copy_into<T>(arr, dest);
       }

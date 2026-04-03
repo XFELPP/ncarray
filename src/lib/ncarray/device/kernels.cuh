@@ -237,6 +237,15 @@ namespace ncarray {
       out[idx] = val;
     }
   }
+
+  // TODO: Only supports copying into a contiguous buffer.
+  template <typename T, typename DestT, ViewArrayLike SrcT>
+  __global__ void copy_into_kernel(DestT* dest, const SrcT src) {
+    ssize_t idx { static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x) };
+    if (idx < src.size()) {
+      dest[idx] = op_traits<T>::template cast<DestT>(src[idx]);
+    }
+  }
 } // namespace ncarray
 
 #endif // NCARRAY_DEVICE_KERNELS_HH

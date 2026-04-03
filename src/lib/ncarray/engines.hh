@@ -14,6 +14,7 @@
 #include "ncarray/device/kernels.cuh"
 #endif
 #include "ncarray/device/mem_pool.cuh"
+#include "ncarray/device/utilities.cuh"
 #include "ncarray/host/elementwise.hh"
 #include "ncarray/host/reductions.hh"
 
@@ -504,6 +505,38 @@ namespace ncarray {
 
       fill_kernel<<<blocks, TPB>>>(arr.view(), val);
       cudaDeviceSynchronize();
+    }
+
+    template <typename T, ArrayLike ArrayT, typename OutputType>
+    static void execute_copy_into(const ArrayT& arr, OutputType*& dest) {
+      if constexpr (std::is_same_v<T, OutputType>) {
+        CHECK_CUDA_ERROR(cudaMemcpy(dest,
+                                    arr.data(),
+                                    arr.size() * sizeof(T),
+                                    cudaMemcpyDefault));
+      } else {
+        // Requires casting - but need to check if host or device pointer
+        cudaPointerAttributes attrs;
+        CHECK_CUDA_ERROR(cudaPointerGetAttributes(&attrs, dest));
+        if (attrs.type == cudaMemoryTypeDevice || attrs.type == cudaMemoryTypeManaged) {
+          // Have a casting kernel for device-to-device
+          int TPB { 256 };
+          int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
+          copy_into_kernel<T, OutputType><<<blocks, TPB>>>(dest, arr.view());
+          cudaDeviceSynchronize();
+        } else {
+          // Pure host pointer - allocate first, then copy
+          T* h_tmp { new T[arr.size()] };
+          CHECK_CUDA_ERROR(cudaMemcpy(h_tmp,
+                                      arr.data(),
+                                      arr.size() * sizeof(T),
+                                      cudaMemcpyDefault));
+          for (ssize_t i = 0; i < arr.size(); ++i) {
+            dest[i] = static_cast<OutputType>(h_tmp[i]);
+          }
+          delete[] h_tmp;
+        }
+      }
     }
   };
 #endif

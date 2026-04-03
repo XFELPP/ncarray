@@ -59,7 +59,10 @@ namespace ncarray {
 
     NCA_H ~CircularDevicePool() {
 #ifdef NCA_HAS_CUDA
-      CHECK_CUDA_ERROR(cudaFreeHost(m_h_data));
+      if (m_h_data != nullptr) {
+        CHECK_CUDA_ERROR(cudaFreeHost(m_h_data));
+        m_h_data = nullptr;
+      }
 #endif
     }
 
@@ -81,8 +84,8 @@ namespace ncarray {
     }
 
   private:
-    T* m_h_data;
-    T* m_d_data;
+    T* m_h_data { nullptr };
+    T* m_d_data { nullptr };
     std::size_t m_idx { 0 };
   };
 } // namespace ncarray
