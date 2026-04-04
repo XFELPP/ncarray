@@ -631,7 +631,7 @@ namespace ncarray {
         attrs.type == cudaMemoryTypeDevice || attrs.type == cudaMemoryTypeManaged
       };
 
-      if (arr.is_contiguous() && sizeof(T) == sizeof(OutputType)) {
+      if (arr.is_contiguous() && std::is_same_v<T, OutputType>) {
         auto copy_kind = dev_compatible ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
 
         CHECK_CUDA_ERROR(cudaMemcpy(dest,

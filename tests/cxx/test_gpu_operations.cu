@@ -106,7 +106,7 @@ TEST(NCArrayOperationsTest, GPUCrossTypeCopy) {
 
   // Copy float array into integer host array with casts
   std::vector<std::int32_t> host_buffer(10);
-  dev_arr.copy_into(host_buffer.data());
+  dev_arr.copy_into_astype<std::int32_t>(host_buffer.data());
 
   for (int i = 0; i < 10; ++i) {
     EXPECT_EQ(host_buffer[i], 5);

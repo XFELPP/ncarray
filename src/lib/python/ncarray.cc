@@ -515,6 +515,7 @@ namespace {
     .def("__array__", [](const ArrayT& self,
                          const py::object& dtype,
                          const py::object& copy) {
+      // If this is on GPU, the internal copy structures will figure it out
       return ncarr_to_numpy(self);
     },
          py::arg("dtype") = py::none(),

@@ -36,6 +36,8 @@ $(basename "$0"):
           Re-run the meson setup. This is only required if meson.build files have been
           modified, or meson options/the install prefix have changed since the last
           time it was run.
+        -t|--tests
+          Run test suite.
 EOF
 }
 
@@ -57,6 +59,11 @@ do
     -r|--reconfigure)
         NEED_RECONFIG=1
         shift
+        ;;
+    -t|--tests)
+        RUN_TESTS=1
+        shift
+
         ;;
     -h|--help)
         usage
@@ -207,9 +214,11 @@ print_banner "${LINES[@]}"
 meson compile -C "${BUILD_DIR}"
 
 # Test...
-LINES=("Running test cases...")
-print_banner "${LINES[@]}"
-meson test -C "${BUILD_DIR}"
+if [[ ${RUN_TESTS} ]]; then
+    LINES=("Running test cases...")
+    print_banner "${LINES[@]}"
+    meson test -C "${BUILD_DIR}"
+fi
 
 # Installation - this always needs to run. This does do the installation of
 # the Python source code as well

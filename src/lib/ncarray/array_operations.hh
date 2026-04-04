@@ -1608,7 +1608,11 @@ namespace ncarray {
 
     auto assign_op = [&]<typename DestT>() {
       if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
-        // TODO: GPU assign
+#ifdef __CUDACC__
+        GPUEngine::execute_copy_into<typename Src::value_type>(src, dest.data());
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
       } else {
         HostEngine::execute_assign<DestT>(dest, src);
       }
