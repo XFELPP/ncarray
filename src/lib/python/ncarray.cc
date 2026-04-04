@@ -32,6 +32,7 @@ typedef SSIZE_T ssize_t;
 #include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <sstream>
 #include <vector>
 
@@ -481,6 +482,60 @@ namespace {
            }
          },
          py::is_operator())
+    // --- Array copy/assignment/fill methods --- //
+    .def("fill", &ArrayT::fill, "Broadcast a scalar value into an array.")
+    //.def("assign", &ArrayT::assign, "Assign (copy) another array into this one.")
+    .def("to_host", [](const ArrayT& self,
+                       std::optional<ncarray::DType> dtype) {
+#ifdef NCA_HAS_CUDA
+      ncarray::DType out_dtype = dtype.value_or(self.dtype());
+
+      using MemType = typename std::decay_t<ArrayT>::MemType;
+      if (std::is_same_v<MemType, ncarray::DevTag>) {
+        using LayoutType = typename ArrayT::LayoutPolicy;
+        ncarray::ArrayImpl<LayoutType, ncarray::OwnerPolicy> h_arr(self.ndim(),
+                                                                   self.shape(),
+                                                                   out_dtype);
+        auto copy_into = [&] <typename DestT> () {
+          self.template copy_into_astype<DestT>(reinterpret_cast<DestT*>(h_arr.data()));
+        };
+
+        ncarray::dispatch(out_dtype, copy_into);
+
+        return h_arr;
+      }
+#endif
+      throw std::runtime_error("Array is already on host!");
+    },
+      py::arg("dtype") = py::none(),
+      "Transfer a device array to host. If already on the host, return the same array.")
+    .def("to_device", [](const ArrayT& self,
+                         std::optional<ncarray::DType> dtype) {
+#ifdef NCA_HAS_CUDA
+      ncarray::DType out_dtype = dtype.value_or(self.dtype());
+
+      using MemType = typename std::decay_t<ArrayT>::MemType;
+      if (std::is_same_v<MemType, ncarray::HostTag>) {
+        using LayoutType = typename ArrayT::LayoutPolicy;
+        ncarray::ArrayImpl<LayoutType, ncarray::DevOwnerPolicy> d_arr(self.ndim(),
+                                                                      self.shape(),
+                                                                      out_dtype);
+
+        // Host type arrays don't have device copy semantics -- we do the opposite
+        // to above. The destination (on device) pulls in the data from host.
+        // The device version of assigning is more general and can handle the transfer
+        d_arr.assign(self);
+
+        return d_arr;
+      } else {
+        throw std::runtime_error("Array is already on device!");
+      }
+#else
+      throw std::runtime_error("Device transfer not available on this platform!");
+#endif
+    },
+      py::arg("dtype") = py::none(),
+      "Transfer a host array to device. If already on device, return the same array.")
     // --- Array Reduction Methods (Reduce to scalar) --- //
     .def("sum", &ArrayT::sum)
     .def("max", &ArrayT::max)
