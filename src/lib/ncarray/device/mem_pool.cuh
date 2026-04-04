@@ -15,7 +15,6 @@
 #include "cuda_runtime_api.h"
 #endif
 
-#include <atomic>
 #include <cstddef>
 
 #ifndef NCA_HD
@@ -52,10 +51,14 @@ namespace ncarray {
       T* d_ptr;
     };
     NCA_H static CircularDevicePool& instance() {
-      static CircularDevicePool<T, Capacity> pool;
-
-      return pool;
+      if (m_pool == nullptr) {
+        m_pool = new CircularDevicePool<T, Capacity>();
+      }
+      return *m_pool;
     }
+
+    CircularDevicePool(CircularDevicePool&) = delete;
+    void operator=(const CircularDevicePool&) = delete;
 
     NCA_H ~CircularDevicePool() {
 #ifdef NCA_HAS_CUDA
@@ -73,7 +76,7 @@ namespace ncarray {
       return { &m_h_data[idx], &m_d_data[idx] };
     }
 
-  protected:
+  private:
     NCA_H CircularDevicePool() {
 #ifdef NCA_HAS_CUDA
       CHECK_CUDA_ERROR(cudaHostAlloc(&m_h_data,
@@ -83,10 +86,11 @@ namespace ncarray {
 #endif
     }
 
-  private:
     T* m_h_data { nullptr };
     T* m_d_data { nullptr };
     std::size_t m_idx { 0 };
+
+    inline static CircularDevicePool* m_pool { nullptr };
   };
 } // namespace ncarray
 

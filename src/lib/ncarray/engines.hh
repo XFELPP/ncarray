@@ -546,10 +546,9 @@ namespace ncarray {
     template <typename T, class ArrayT>
     static Scalar execute_sum(const ArrayT& arr) {
       using AccumT = typename op_traits<T>::sum_type;
-      static CircularDevicePool<AccumT> mem_pool {
-        CircularDevicePool<AccumT>::instance()
-      };
+      CircularDevicePool<AccumT>& mem_pool = CircularDevicePool<AccumT>::instance();
       using MemEntry = typename CircularDevicePool<AccumT>::MemEntry;
+
       MemEntry ptrs { mem_pool.next() };
 
       constexpr int TPB { 256 };
@@ -566,10 +565,9 @@ namespace ncarray {
       using AccumT = typename op_traits<T>::sum_type;
       using ResultT = typename op_traits<T>::truediv_type;
 
-      static CircularDevicePool<AccumT> mem_pool {
-        CircularDevicePool<AccumT>::instance()
-      };
+      CircularDevicePool<AccumT>& mem_pool = CircularDevicePool<AccumT>::instance();
       using MemEntry = typename CircularDevicePool<AccumT>::MemEntry;
+
       MemEntry ptrs { mem_pool.next() };
 
       constexpr int TPB { 256 };
@@ -585,10 +583,9 @@ namespace ncarray {
 
     template <typename T, class ArrayT>
     static Scalar execute_max(const ArrayT& arr) {
-      static CircularDevicePool<T> mem_pool {
-        CircularDevicePool<T>::instance()
-      };
+      CircularDevicePool<T>& mem_pool = CircularDevicePool<T>::instance();
       using MemEntry = typename CircularDevicePool<T>::MemEntry;
+
       MemEntry ptrs { mem_pool.next() };
 
       constexpr int TPB { 256 };
@@ -602,10 +599,9 @@ namespace ncarray {
 
     template <typename T, class ArrayT>
     static Scalar execute_min(const ArrayT& arr) {
-      static CircularDevicePool<T> mem_pool {
-        CircularDevicePool<T>::instance()
-      };
+      CircularDevicePool<T>& mem_pool = CircularDevicePool<T>::instance();
       using MemEntry = typename CircularDevicePool<T>::MemEntry;
+
       MemEntry ptrs { mem_pool.next() };
 
       constexpr int TPB { 256 };
@@ -628,33 +624,38 @@ namespace ncarray {
     }
 
     template <typename T, ArrayLike ArrayT, typename OutputType>
-    static void execute_copy_into(const ArrayT& arr, OutputType*& dest) {
-      if constexpr (std::is_same_v<T, OutputType>) {
+    static void execute_copy_into(const ArrayT& arr, OutputType* dest) {
+      cudaPointerAttributes attrs;
+      CHECK_CUDA_ERROR(cudaPointerGetAttributes(&attrs, dest));
+      bool dev_compatible {
+        attrs.type == cudaMemoryTypeDevice || attrs.type == cudaMemoryTypeManaged
+      };
+
+      if (arr.is_contiguous() && sizeof(T) == sizeof(OutputType)) {
+        auto copy_kind = dev_compatible ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+
         CHECK_CUDA_ERROR(cudaMemcpy(dest,
                                     arr.data(),
                                     arr.size() * sizeof(T),
-                                    cudaMemcpyDefault));
+                                    copy_kind));
       } else {
-        // Requires casting - but need to check if host or device pointer
-        cudaPointerAttributes attrs;
-        CHECK_CUDA_ERROR(cudaPointerGetAttributes(&attrs, dest));
-        if (attrs.type == cudaMemoryTypeDevice || attrs.type == cudaMemoryTypeManaged) {
-          // Have a casting kernel for device-to-device
-          int TPB { 256 };
-          int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
+        int TPB { 256 };
+        int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
+        if (dev_compatible) {
           copy_into_kernel<T, OutputType><<<blocks, TPB>>>(dest, arr.view());
           cudaDeviceSynchronize();
         } else {
-          // Pure host pointer - allocate first, then copy
-          T* h_tmp { new T[arr.size()] };
-          CHECK_CUDA_ERROR(cudaMemcpy(h_tmp,
-                                      arr.data(),
-                                      arr.size() * sizeof(T),
-                                      cudaMemcpyDefault));
-          for (ssize_t i = 0; i < arr.size(); ++i) {
-            dest[i] = static_cast<OutputType>(h_tmp[i]);
-          }
-          delete[] h_tmp;
+          // TODO: Make this more optimized...
+          // Create a temporary contiguous buffer then cudaMemcpy
+          OutputType* d_tmp { nullptr };
+          CHECK_CUDA_ERROR(cudaMalloc(&d_tmp, arr.size() * sizeof(OutputType)));
+          copy_into_kernel<T, OutputType><<<blocks, TPB>>>(d_tmp, arr.view());
+          cudaDeviceSynchronize();
+          CHECK_CUDA_ERROR(cudaMemcpy(dest,
+                                      d_tmp,
+                                      arr.size() * sizeof(OutputType),
+                                      cudaMemcpyDeviceToHost));
+          CHECK_CUDA_ERROR(cudaFree(d_tmp));
         }
       }
     }

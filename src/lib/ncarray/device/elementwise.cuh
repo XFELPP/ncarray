@@ -67,8 +67,8 @@ namespace ncarray {
                                                     const RightT& right,
                                                     OutT& result,
                                                     Op op) {
-        unsigned tid { threadIdx.x };
-        unsigned stride { blockDim.x };
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
           ssize_t coords[NCARRAY_MAX_NDIM];
@@ -104,8 +104,8 @@ namespace ncarray {
 
       template <typename T, typename ResultT, class ArrayT, class Op>
       __device__ inline void block_inplace_unary_transform(ArrayT& arr, Op op) {
-        unsigned tid { threadIdx.x };
-        unsigned stride { blockDim.x };
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
           ssize_t coords[NCARRAY_MAX_NDIM];
@@ -129,8 +129,8 @@ namespace ncarray {
       __device__ inline void block_inplace_binary_transform(LeftT& left,
                                                             const RightT& right,
                                                             Op op) {
-        unsigned tid { threadIdx.x };
-        unsigned stride { blockDim.x };
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
           ssize_t coords[NCARRAY_MAX_NDIM];
@@ -166,8 +166,8 @@ namespace ncarray {
                                                            const T& scalar_val,
                                                            OutT& result,
                                                            Op op) {
-        unsigned tid { threadIdx.x };
-        unsigned stride { blockDim.x };
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
           ssize_t coords[NCARRAY_MAX_NDIM];
@@ -195,8 +195,8 @@ namespace ncarray {
       __device__ inline void block_inplace_binary_scalar_transform(LeftT& left,
                                                                    const T& scalar_val,
                                                                    Op op) {
-        unsigned tid { threadIdx.x };
-        unsigned stride { blockDim.x };
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
           ssize_t coords[NCARRAY_MAX_NDIM];

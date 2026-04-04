@@ -106,6 +106,23 @@ namespace ncarray {
     }
 
     /**
+     * Check if any pointer axes exist.
+     *
+     * For simplicity a loop is used here. NCOffsets could optimize, but its a fairly
+     * fast operation anyway.
+     */
+    NCA_HD inline bool is_contiguous() const {
+      bool is_contiguous { true };
+      for (ssize_t axis = 0; axis < this->ndim(); ++axis) {
+        if (this->is_pointer_axis(axis)) {
+          is_contiguous = false;
+          break;
+        }
+      }
+      return is_contiguous;
+    }
+
+    /**
      * The advance function takes a pointer to the current position in the array
      * as well as an axis and index. Using this information, and the knowledge
      * of the array layout it will move the pointer forward one data unit,

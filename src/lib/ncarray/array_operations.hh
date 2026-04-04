@@ -38,7 +38,7 @@ namespace ncarray {
   // --------------------------
 
   template <ArrayLike A>
-  Scalar sum(const A& arr) {
+  inline Scalar sum(const A& arr) {
     auto sum_operation = [&]<typename T>() -> Scalar {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -55,7 +55,7 @@ namespace ncarray {
   }
 
   template <ArrayLike A>
-  Scalar mean(const A& arr) {
+  inline Scalar mean(const A& arr) {
     auto sum_operation = [&]<typename T>() -> Scalar {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -72,8 +72,8 @@ namespace ncarray {
   }
 
   template <ArrayLike A>
-  Scalar max(const A& arr) {
-    auto max_operation = [&]<typename T>() {
+  inline Scalar max(const A& arr) {
+    auto max_operation = [&]<typename T>() -> Scalar {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
         return GPUEngine::execute_max<T>(arr);
@@ -89,8 +89,8 @@ namespace ncarray {
   }
 
   template <ArrayLike A>
-  Scalar min(const A& arr) {
-    auto min_operation = [&]<typename T>() {
+  inline Scalar min(const A& arr) {
+    auto min_operation = [&]<typename T>() -> Scalar {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
         return GPUEngine::execute_min<T>(arr);
@@ -106,22 +106,22 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  Scalar ArrayImpl<L, S>::sum() const {
+  inline Scalar ArrayImpl<L, S>::sum() const {
     return ncarray::sum(*this);
   }
 
   template <class L, class S>
-  Scalar ArrayImpl<L, S>::max() const {
+  inline Scalar ArrayImpl<L, S>::max() const {
     return ncarray::max(*this);
   }
 
   template <class L, class S>
-  Scalar ArrayImpl<L, S>::min() const {
+  inline Scalar ArrayImpl<L, S>::min() const {
     return ncarray::min(*this);
   }
 
   template <class L, class S>
-  Scalar ArrayImpl<L, S>::mean() const {
+  inline Scalar ArrayImpl<L, S>::mean() const {
     return ncarray::mean(*this);
   }
 
@@ -132,7 +132,7 @@ namespace ncarray {
   // TODO: Handle different shape, types and so on for left/right. Not dealt with atm
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto add(const Left& left, const Right& right) {
+  inline auto add(const Left& left, const Right& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using AccumT = typename op_traits<T>::sum_type;
       return dtype_traits<AccumT>::value;
@@ -145,7 +145,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_add<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_add<T>(left, right, result);
@@ -157,7 +157,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto sub(const Left& left, const Right& right) {
+  inline auto sub(const Left& left, const Right& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using DiffT = typename op_traits<T>::diff_type;
       return dtype_traits<DiffT>::value;
@@ -170,7 +170,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_sub<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_sub<T>(left, right, result);
@@ -182,7 +182,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto mul(const Left& left, const Right& right) {
+  inline auto mul(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
     auto mul_operation = [&]<typename T>() {
@@ -190,7 +190,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_mul<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_mul<T>(left, right, result);
@@ -202,7 +202,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto truediv(const Left& left, const Right& right) {
+  inline auto truediv(const Left& left, const Right& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
       return dtype_traits<ResultT>::value;
@@ -215,7 +215,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_truediv<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_truediv<T>(left, right, result);
@@ -229,7 +229,7 @@ namespace ncarray {
   // --- Inplace binary operations --- //
 
   template <ArrayLike Left, ArrayLike Right>
-  void inplace_add(Left& left, const Right& right) {
+  inline void inplace_add(Left& left, const Right& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -245,7 +245,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  void inplace_sub(Left& left, const Right& right) {
+  inline void inplace_sub(Left& left, const Right& right) {
     auto sub_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -261,7 +261,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  void inplace_mul(Left& left, const Right& right) {
+  inline void inplace_mul(Left& left, const Right& right) {
     auto mul_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -277,7 +277,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  void inplace_truediv(Left& left, const Right& right) {
+  inline void inplace_truediv(Left& left, const Right& right) {
     auto div_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -295,14 +295,16 @@ namespace ncarray {
 
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::add(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::add(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator+(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator+(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
@@ -324,14 +326,16 @@ namespace ncarray {
 
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::sub(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::sub(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator-(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator-(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
@@ -355,14 +359,16 @@ namespace ncarray {
 
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::mul(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::mul(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator*(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator*(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
@@ -386,14 +392,16 @@ namespace ncarray {
 
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::truediv(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::truediv(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator/(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator/(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
     return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
@@ -418,7 +426,7 @@ namespace ncarray {
   // --- Binary operations with a scalar broadcast --- //
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  ResultType add_scalar(const Left& left, const Scalar& right) {
+  inline ResultType add_scalar(const Left& left, const Scalar& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using AccumT = typename op_traits<T>::sum_type;
 
@@ -444,7 +452,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  ResultType sub_scalar(const Left& left, const Scalar& right) {
+  inline ResultType sub_scalar(const Left& left, const Scalar& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using DiffT = typename op_traits<T>::diff_type;
       return dtype_traits<DiffT>::value;
@@ -469,7 +477,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto mul_scalar(const Left& left, const Scalar& right) {
+  inline auto mul_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
     auto mul_operation = [&]<typename T>() {
@@ -489,7 +497,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto truediv_scalar(const Left& left, const Scalar& right) {
+  inline auto truediv_scalar(const Left& left, const Scalar& right) {
     DType result_dtype = dispatch(left.dtype(), []<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
       return dtype_traits<ResultT>::value;
@@ -516,7 +524,7 @@ namespace ncarray {
   // --- Inplace binary operations with a scalar broadcast --- //
 
   template <ArrayLike Left>
-  void inplace_add_scalar(Left& left, const Scalar& right) {
+  inline void inplace_add_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -532,7 +540,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left>
-  void inplace_sub_scalar(Left& left, const Scalar& right) {
+  inline void inplace_sub_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -547,7 +555,7 @@ namespace ncarray {
     dispatch(left.dtype(), add_op);
   }
   template <ArrayLike Left>
-  void inplace_mul_scalar(Left& left, const Scalar& right) {
+  inline void inplace_mul_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -563,7 +571,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left>
-  void inplace_truediv_scalar(Left& left, const Scalar& right) {
+  inline void inplace_truediv_scalar(Left& left, const Scalar& right) {
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -579,13 +587,15 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::add(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::add(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::add_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator+(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator+(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::add_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
@@ -604,13 +614,15 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::sub(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::sub(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::sub_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator-(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator-(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::sub_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
@@ -629,13 +641,15 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::mul(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::mul(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::mul_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator*(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator*(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::mul_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
@@ -654,13 +668,15 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::truediv(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::truediv(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::truediv_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator/(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator/(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::truediv_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
@@ -681,7 +697,7 @@ namespace ncarray {
   // --- Logical and boolean operators --- //
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto is_equal(const Left& left, const Right& right) {
+  inline auto is_equal(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto equal_op = [&]<typename T>() {
@@ -689,7 +705,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_equal<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_equal<T>(left, right, result);
@@ -701,7 +717,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto is_not_equal(const Left& left, const Right& right) {
+  inline auto is_not_equal(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto not_equal_op = [&]<typename T>() {
@@ -709,7 +725,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_not_equal<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_not_equal<T>(left, right, result);
@@ -721,7 +737,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto is_less_than(const Left& left, const Right& right) {
+  inline auto is_less_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto less_than_op = [&]<typename T>() {
@@ -729,7 +745,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_less_than<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_less_than<T>(left, right, result);
@@ -741,7 +757,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto is_less_equal_than(const Left& left, const Right& right) {
+  inline auto is_less_equal_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto less_than_op = [&]<typename T>() {
@@ -749,7 +765,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_less_equal_than<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_less_equal_than<T>(left, right, result);
@@ -761,7 +777,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto is_greater_than(const Left& left, const Right& right) {
+  inline auto is_greater_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto greater_than_op = [&]<typename T>() {
@@ -769,7 +785,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_greater_than<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_greater_than<T>(left, right, result);
@@ -781,7 +797,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto is_greater_equal_than(const Left& left, const Right& right) {
+  inline auto is_greater_equal_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto greater_than_op = [&]<typename T>() {
@@ -789,7 +805,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_greater_equal_than<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_greater_equal_than<T>(left, right, result);
@@ -801,7 +817,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto logical_and(const Left& left, const Right& right) {
+  inline auto logical_and(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto logical_and_op = [&]<typename T>() {
@@ -809,7 +825,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_logical_and<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_logical_and<T>(left, right, result);
@@ -821,7 +837,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  auto logical_or(const Left& left, const Right& right) {
+  inline auto logical_or(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto logical_or_op = [&]<typename T>() {
@@ -829,7 +845,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_logical_or<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_logical_or<T>(left, right, result);
@@ -841,7 +857,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Array, OwningArrayLike ResultType>
-  auto logical_not(const Array& arr) {
+  inline auto logical_not(const Array& arr) {
     ResultType result(arr.ndim(), arr.shape(), DType::bool_);
 
     auto logical_not_op = [&] <typename T> () {
@@ -849,7 +865,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_logical_not<T>(arr, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_logical_not<T>(arr, result);
@@ -863,7 +879,7 @@ namespace ncarray {
   // equal
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_equal(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -872,7 +888,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator==(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -883,7 +899,7 @@ namespace ncarray {
   // not equal
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_not_equal(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -892,7 +908,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator!=(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -903,7 +919,7 @@ namespace ncarray {
   // less than
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_less_than(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -912,7 +928,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator<(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -923,7 +939,7 @@ namespace ncarray {
   // less equal than
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_less_equal_than(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -932,7 +948,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator<=(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -943,7 +959,7 @@ namespace ncarray {
   // greater than
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_greater_than(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -952,7 +968,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator>(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -963,7 +979,7 @@ namespace ncarray {
   // greater equal than
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_greater_equal_than(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -972,7 +988,8 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator>=(const OtherType& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator>=(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -982,7 +999,7 @@ namespace ncarray {
   // logical and
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::logical_and(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -991,7 +1008,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator&&(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -1002,7 +1019,7 @@ namespace ncarray {
   // logical or
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::logical_or(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -1011,7 +1028,7 @@ namespace ncarray {
   }
   template <class L, class S>
   template <ArrayLike OtherType>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator||(const OtherType& other) const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
@@ -1021,14 +1038,14 @@ namespace ncarray {
 
   // logical not
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_not() const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_not() const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_not<ViewType, OwnerType>(*this);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator!() const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator!() const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1038,7 +1055,7 @@ namespace ncarray {
   // --- Comparison operators with scalar broadcast --- //
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto is_equal_scalar(const Left& left, const Scalar& right) {
+  inline auto is_equal_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto equal_op = [&]<typename T>() {
@@ -1046,7 +1063,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_equal_scalar<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_equal_scalar<T>(left, right, result);
@@ -1058,7 +1075,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto is_not_equal_scalar(const Left& left, const Scalar& right) {
+  inline auto is_not_equal_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto not_equal_op = [&]<typename T>() {
@@ -1066,7 +1083,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_not_equal_scalar<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_not_equal_scalar<T>(left, right, result);
@@ -1078,7 +1095,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto is_less_than_scalar(const Left& left, const Scalar& right) {
+  inline auto is_less_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto less_than_op = [&]<typename T>() {
@@ -1086,7 +1103,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_less_than_scalar<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_less_than_scalar<T>(left, right, result);
@@ -1098,7 +1115,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto is_less_equal_than_scalar(const Left& left, const Scalar& right) {
+  inline auto is_less_equal_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto less_than_op = [&]<typename T>() {
@@ -1106,7 +1123,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_less_equal_than_scalar<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_less_equal_than_scalar<T>(left, right, result);
@@ -1118,7 +1135,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto is_greater_than_scalar(const Left& left, const Scalar& right) {
+  inline auto is_greater_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto greater_than_op = [&]<typename T>() {
@@ -1126,7 +1143,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_greater_than_scalar<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_greater_than_scalar<T>(left, right, result);
@@ -1138,7 +1155,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto is_greater_equal_than_scalar(const Left& left, const Scalar& right) {
+  inline auto is_greater_equal_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
     auto greater_than_op = [&]<typename T>() {
@@ -1146,7 +1163,7 @@ namespace ncarray {
 #ifdef __CUDACC__
         GPUEngine::execute_greater_equal_than_scalar<T>(left, right, result);
 #else
-        throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_greater_equal_than_scalar<T>(left, right, result);
@@ -1159,14 +1176,14 @@ namespace ncarray {
 
   // equal
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_equal(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::is_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator==(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1175,14 +1192,14 @@ namespace ncarray {
 
   // not equal
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_not_equal(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::is_not_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator!=(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1191,14 +1208,14 @@ namespace ncarray {
 
   // less than
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_less_than(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::is_less_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator<(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1207,14 +1224,14 @@ namespace ncarray {
 
   // less equal than
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_less_equal_than(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::is_less_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator<=(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1223,14 +1240,14 @@ namespace ncarray {
 
   // greater than
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_greater_than(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::is_greater_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator>(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1239,14 +1256,14 @@ namespace ncarray {
 
   // greater equal than
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::is_greater_equal_than(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::is_greater_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType
+  inline typename ArrayImpl<L, S>::OwnerType
   ArrayImpl<L, S>::operator>=(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
@@ -1256,14 +1273,14 @@ namespace ncarray {
   // --- Inplace logical operators --- //
 
   template <ArrayLike Left, ArrayLike Right>
-  auto inplace_logical_and(Left& left, const Right& right) {
+  inline auto inplace_logical_and(Left& left, const Right& right) {
     auto logical_and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
           GPUEngine::execute_inplace_logical_and<T>(left, right);
 #else
-          throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
         } else {
           HostEngine::execute_inplace_logical_and<T>(left, right);
@@ -1275,14 +1292,14 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, ArrayLike Right>
-  auto inplace_logical_or(Left& left, const Right& right) {
+  inline auto inplace_logical_or(Left& left, const Right& right) {
     auto logical_or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
           GPUEngine::execute_inplace_logical_or<T>(left, right);
 #else
-          throw std::runtime_error("Fatal: tried to compile a CUDA GPU kernel with GCC.");
+          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
         } else {
           HostEngine::execute_inplace_logical_or<T>(left, right);
@@ -1332,7 +1349,7 @@ namespace ncarray {
   // --- Logical operators with scalar broadcast --- //
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto logical_and_scalar(const Left& left, const Scalar& right) {
+  inline auto logical_and_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
     auto and_op = [&]<typename T>() {
@@ -1352,7 +1369,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Left, OwningArrayLike ResultType>
-  auto logical_or_scalar(const Left& left, const Scalar& right) {
+  inline auto logical_or_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
     auto or_op = [&]<typename T>() {
@@ -1372,26 +1389,26 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_and(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_and(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator&&(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator&&(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_or(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_or(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator||(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator||(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
@@ -1400,7 +1417,7 @@ namespace ncarray {
   // --- Inplace logical operators with scalar broadcast --- //
   // logical and
   template <ArrayLike Left>
-  void inplace_logical_and_scalar(Left& left, const Scalar& right) {
+  inline void inplace_logical_and_scalar(Left& left, const Scalar& right) {
     auto and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
@@ -1419,7 +1436,7 @@ namespace ncarray {
 
   // logical or
   template <ArrayLike Left>
-  void inplace_logical_or_scalar(Left& left, const Scalar& right) {
+  inline void inplace_logical_or_scalar(Left& left, const Scalar& right) {
     auto or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
@@ -1471,7 +1488,7 @@ namespace ncarray {
   // --- Iterators --- //
 
   template <typename L, typename S>
-  typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::begin() {
+  inline typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::begin() {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using Iterator = typename ArrayImpl<L, S>::Iterator;
 
@@ -1486,7 +1503,7 @@ namespace ncarray {
   }
 
   template <typename L, typename S>
-  typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::end() {
+  inline typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::end() {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using Iterator = typename ArrayImpl<L, S>::Iterator;
 
@@ -1503,7 +1520,7 @@ namespace ncarray {
   }
 
   template <typename L, typename S>
-  typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::begin() const {
+  inline typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::begin() const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using ConstIterator = typename ArrayImpl<L, S>::ConstIterator;
 
@@ -1518,7 +1535,7 @@ namespace ncarray {
   }
 
   template <typename L, typename S>
-  typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::end() const {
+  inline typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::end() const {
     using ViewType = typename ArrayImpl<L, S>::ViewType;
     using ConstIterator = typename ArrayImpl<L, S>::ConstIterator;
 
@@ -1550,7 +1567,7 @@ namespace ncarray {
         T target_val = std::visit(cast_op, val);
         GPUEngine::execute_fill<T>(arr, target_val);
 #else
-        throw std::runtime_error("Fatal: tried to compile a cuda GPU kernel with as C++.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
         HostEngine::execute_fill<T>(arr, val);
@@ -1561,7 +1578,7 @@ namespace ncarray {
   }
 
   template <ArrayLike A, typename OutputType>
-  inline void copy_into(const A& arr, OutputType*& dest) {
+  inline void copy_into(const A& arr, OutputType* dest) {
     auto copy_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
@@ -1600,7 +1617,7 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  void ArrayImpl<L, S>::copy_into(void* dest_buffer) const {
+  inline void ArrayImpl<L, S>::copy_into(void* dest_buffer) const {
     auto copy_op = [&]<typename T>() {
       T* dest_ptr = reinterpret_cast<T*>(dest_buffer);
       ncarray::copy_into(*this, dest_ptr);
@@ -1611,12 +1628,12 @@ namespace ncarray {
 
   template <class L, class S>
   template <typename OutT>
-  void ArrayImpl<L, S>::copy_into_astype(OutT* dest_buffer) const {
+  inline void ArrayImpl<L, S>::copy_into_astype(OutT* dest_buffer) const {
     ncarray::copy_into(*this, dest_buffer);
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::to_contiguous() const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::to_contiguous() const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     OwnerType result(this->m_shape, this->m_dtype);
@@ -1632,7 +1649,7 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::astype(DType& dtype_out) const {
+  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::astype(DType& dtype_out) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     OwnerType result(this->m_shape, this->m_dtype);
@@ -1648,7 +1665,7 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  void ArrayImpl<L, S>::assign(ArrayLike auto arr) {
+  inline void ArrayImpl<L, S>::assign(ArrayLike auto arr) {
     if (this->m_read_only) {
       throw type_error("Cannot modify a read-only view!");
     }
@@ -1657,7 +1674,7 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  void ArrayImpl<L, S>::fill(Scalar val) {
+  inline void ArrayImpl<L, S>::fill(Scalar val) {
     if (this->m_read_only) {
       throw type_error("Cannot modify a read-only view!");
     }

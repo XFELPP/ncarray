@@ -17,7 +17,6 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -43,8 +42,17 @@ typedef SSIZE_T ssize_t;
 
 namespace ncarray {
 #ifdef NCA_HAS_CUDA
-  inline std::atomic<bool> NCA_STREAMS_INIT { false };
-  inline cudaStream_t alloc_stream;
+  inline cudaStream_t alloc_stream() {
+    static cudaStream_t stream = []() {
+      cudaStream_t s;
+
+      CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+
+      return s;
+    }();
+
+    return stream;
+  }
 #endif
   struct MemTag {};
   struct HostTag : MemTag {};
@@ -196,14 +204,11 @@ namespace ncarray {
 
     NCA_H inline void allocate(ssize_t nbytes) {
 #ifdef NCA_HAS_CUDA
-      if (!NCA_STREAMS_INIT.exchange(true)) {
-        CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&alloc_stream,
-                                                   cudaStreamNonBlocking));
-      }
       std::uint8_t* devPtr { nullptr };
+
       CHECK_CUDA_ERROR(cudaMallocAsync(reinterpret_cast<void**>(&devPtr),
                                        nbytes,
-                                       alloc_stream));
+                                       alloc_stream()));
       cudaDeviceSynchronize();
       m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
 #endif

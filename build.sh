@@ -206,6 +206,11 @@ LINES=("Compiling...")
 print_banner "${LINES[@]}"
 meson compile -C "${BUILD_DIR}"
 
+# Test...
+LINES=("Running test cases...")
+print_banner "${LINES[@]}"
+meson test -C "${BUILD_DIR}"
+
 # Installation - this always needs to run. This does do the installation of
 # the Python source code as well
 LINES=("Installing files in ${INSTALL_DIR}...")
