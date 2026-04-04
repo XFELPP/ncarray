@@ -271,7 +271,7 @@ test_ops = executable(
         'tests/cxx/test_operations.cc',
     ],
     dependencies: deps_for_tests,
-    install: true,
+    install: false,
     include_directories: ncarray_headers,
 )
 test('Testing array operations.', test_ops, verbose: true)
@@ -282,7 +282,7 @@ test_gpu_ops = executable(
         'tests/cxx/test_gpu_operations.cu',
     ],
     dependencies: deps_for_tests,
-    install: true,
+    install: false,
     include_directories: ncarray_headers,
     cuda_args: [
         '--extended-lambda',

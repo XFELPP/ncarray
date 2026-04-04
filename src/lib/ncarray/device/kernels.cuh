@@ -253,7 +253,7 @@ namespace ncarray {
     T block_res_max = ncarray::device::block_max<BlockSize, ArrayT, T>(arr);
 
     if (threadIdx.x == 0) {
-      device::nca_atomic_min(res, block_res_max);
+      device::nca_atomic_max(res, block_res_max);
     }
   }
 

@@ -90,6 +90,22 @@ TEST(NCArrayIndexingTest, ElementAccess) {
   EXPECT_EQ(lin_item, 40);
 }
 
+TEST(NCArrayIndexingTest, VariadicSlices) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
+  arr1.fill(1.0f);
+  arr2.fill(2.0f);
+
+  using sl = ncarray::Slice;
+  auto view1 = arr1[sl(1,3), sl(1,3), sl(1,3)];
+  EXPECT_EQ(view1.ndim(), 3);
+  EXPECT_EQ(view1.size(), 8);
+  EXPECT_EQ(view1.shape(0), 2);
+  EXPECT_EQ(view1.shape(1), 2);
+  EXPECT_EQ(view1.shape(2), 2);
+}
+
 TEST(SOArrayIndexingTest, OwnerCreationAndShape) {
   std::vector<ssize_t> shape { 3, 3, 3 };
   ncarray::SOArray arr(shape, ncarray::dtype_traits<float>::value);
