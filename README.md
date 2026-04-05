@@ -79,7 +79,7 @@ from typing import List
 import numpy as np
 import numpy.typing as npt
 
-import ncarray # Alias it if you'd like :)
+import ncarray as nca # Alias it if you'd like
 
 # Construct a disjoint set of arrays - subarrays that are really part of 1 larger one
 subarray_list: List[npt.NDArray[np.uint32]] = [
@@ -87,27 +87,27 @@ subarray_list: List[npt.NDArray[np.uint32]] = [
 ]
 
 # Create a wrapped reference
-ncarr: ncarray.NCArrayRef = ncarray.NCArrayRef(subarray_list)
+ncarr: nca.NCArrayRef = nca.NCArrayRef(subarray_list)
 
 # Index it
-first_two_ptrs: ncarray.NCArrayView = ncarr[:2]
+first_two_ptrs: nca.NCArrayView = ncarr[:2]
 
 # Down to scalar if you'd like
 my_int: int = ncarr[2, 1, 2]
 
 # Scalar broadcasts -- This creates a new OWNING array! (NCArray)
 # Supported: +, -, *, / (Will provide % and //, i.e. int division in the future)
-scalar_bcast_res: ncarray.NCArray = ncarr + 2
+scalar_bcast_res: nca.NCArray = ncarr + 2
 
 # Array arithmetic, supporting +, -, *, / as above
 # Require identical shapes, currently!
 # Supportable broadcasts may come later (E.g. a row/col into a 2D array)
-other_res: ncarray.NCArray = ncarr + ncarr
+other_res: nca.NCArray = ncarr + ncarr
 
 # Perform operations on it -- also create new OWNING arrays
 # Any ufunc *should* work -- this builds NumPy arrays, however.
 # Because of this, these operations are rather slow.
-result: ncarray.NCArray = np.sin(ncarr)
+result: nca.NCArray = np.sin(ncarr)
 ```
 
 ## Concepts and Terminology
@@ -155,17 +155,26 @@ Array **views** can be passed directly into kernels and device functions. Additi
 
 **NOTE:** Owner type arrays **cannot** be created in device code, even if they are managing device memory. I.e. `NCDevArray` and `SODevArray` are not constructible inside kernels or device functions. This is due to their use of dynamic memory allocation - the GPU heap for malloc based allocations is quite small, and synchronization of allocations is quite complex if creating an array in a running kernel (where many threads may be working in parallel). As such, these arrays use host APIs only.
 
+### Should I use `NCArray...` or `SOArray...` ?
+
+The answer to this question boils down to the use-case. If you only require a single "pointer axis", for example because you have a collection of otherwise contigiuous array-like objects, then the `NCArray...` style arrays are preferrable. In general, in this scenario your first axis will then be the "pointer axis". Using the NC-style arrays means you can perform operations like iterating over the first axis of the array where each step returns the contiguous sub-array. If, on the other hand, you require multiple "pointer axes", then the decision is already taken for you - you must use `SOArray...` style arrays.
+
 ## Similarities and Differences Between Python and C++ APIs
 
 For the most part, the Python bindings exactly mirror the C++ bindings. There are, however, a small number of (important) differences:
 
 - Array indexing is bounds checked in Python, while use of `operator[]` in C++ is not.
+- There are a number of indexing strategies in C++, whereas these styles and overloads do not exist in Python (only `__getitem__`, i.e. `arr[...]` is used.)
+- Some operators in C++ have additional named member or free functions that also implement the behaviour as alternatives to the operator overloads. In Python, only the operator overloads are provided.
+- In Python, 0-D (i.e. scalar) arrays are cast to the corresponding scalar. This is not done automatically in C++.
 
 ## For C++ Developers
 ### Headers
-The main array specializations are exposed through `ncarrays.hh`, `soarrays.hh` (and `ncdevarrays.hh` and `sodevarrays.hh` for CUDA-supported platforms). These are paired with corresponding cc files to provide shared libraries for linking (this is a (very) template heavy library - compilation times can be long). If including only these headers, the library should be safe for usage across releases. The internal headers described below may be reorganized at any moment though.
+The main array specializations are exposed through `ncarrays.hh`, `soarrays.hh` (and `ncdevarrays.cuh` and `sodevarrays.cuh` for CUDA-supported platforms). These are paired with corresponding `.cc` (`.cu`) files to provide shared libraries for linking (this is a (very) template heavy library - compilation times can be long). If including only these headers, the library should be safe for usage across releases. The internal headers described below may be reorganized at any moment through the period of releases outlined in the timeline below (after which, some stability can be expected).
 
 #### Architecture
+The principle components of the library are defined in:
+
 - `layout.hh`: Describes memory layout of arrays
 - `storage.hh`: Describes the storage policies of arrays (view-like, or owner, e.g.)
 - `dtype.hh`: Contains the the type system for the library
@@ -190,7 +199,6 @@ typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 #endif
-
 
 #include <cstdint>
 #include <vector>
@@ -218,8 +226,8 @@ auto view = ncarray::NCArrayView(ptrs.data(),
 
 // NOTE: You can also use SOArrayView if needed. This implements PEP3118 compliant
 // suboffsets. It is more flexible (arbitrary number of pointer axes, while above is limited to 1).
-// however, it may be more difficult to reason about. That said, the library deals
-// with the complexities for you (after proper creation, that is.)
+// However, it may be more difficult to reason about. That said, the library deals
+// with the complexities for you (after proper creation, that is).
 
 // Get general information about your array
 view.ndim(); // 2

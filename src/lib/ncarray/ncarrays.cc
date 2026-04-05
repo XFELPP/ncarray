@@ -14,6 +14,10 @@ INSTANTIATE_NC_BASE_OPS(NCOffsetsPolicy, ViewPolicy)
 INSTANTIATE_NC_BASE_OPS(NCOffsetsPolicy, RefPolicy)
 INSTANTIATE_NC_BASE_OPS(NCOffsetsPolicy, OwnerPolicy)
 
-INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, RefPolicy, NCOffsetsPolicy, ViewPolicy)
+INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, RefPolicy,   NCOffsetsPolicy, ViewPolicy)
 INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, ViewPolicy)
 INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, RefPolicy)
+
+INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, ViewPolicy,  NCOffsetsPolicy, RefPolicy)
+INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, ViewPolicy,  NCOffsetsPolicy, OwnerPolicy)
+INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, RefPolicy,   NCOffsetsPolicy, OwnerPolicy)
