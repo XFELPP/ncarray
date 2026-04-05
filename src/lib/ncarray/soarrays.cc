@@ -16,8 +16,7 @@ INSTANTIATE_NC_BASE_OPS(SOArrayPolicy, OwnerPolicy)
 
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, RefPolicy,   SOArrayPolicy, ViewPolicy)
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, ViewPolicy)
-INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, RefPolicy)
-
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, ViewPolicy,  SOArrayPolicy, RefPolicy)
-INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, ViewPolicy,  SOArrayPolicy, OwnerPolicy)
+INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, ViewPolicy,   SOArrayPolicy, OwnerPolicy)
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, RefPolicy,   SOArrayPolicy, OwnerPolicy)
+INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, RefPolicy)

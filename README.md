@@ -26,6 +26,8 @@ path_to_libs: str = ncarray.get_lib_dir()
 
 The above can be incorporated into your build system as needed.
 
+**NOTE:** In the C++ headers, many operator overloads have a corresponding named alternative. E.g. `operator+()` and `add()` both exist and have the same functionality. The distributed shared libraries do NOT have template specializations for the latter named variants. This helps keep the size of the files down (and helps reduce compile time a bit). The Python bindings only use the `operator+` style calls. This is just to keep it in mind should you prefer using them - they will need to be compiled from scratch.
+
 ### Building from source
 You can also build directly from source in this repo. The `build.sh` script may or may not work on your platform (likely yes on Linux/Mac, likely no on Windows). The project uses meson, though, and building yourself is essentially:
 ```bash
@@ -164,9 +166,9 @@ The answer to this question boils down to the use-case. If you only require a si
 For the most part, the Python bindings exactly mirror the C++ bindings. There are, however, a small number of (important) differences:
 
 - Array indexing is bounds checked in Python, while use of `operator[]` in C++ is not.
-- There are a number of indexing strategies in C++, whereas these styles and overloads do not exist in Python (only `__getitem__`, i.e. `arr[...]` is used.)
-- Some operators in C++ have additional named member or free functions that also implement the behaviour as alternatives to the operator overloads. In Python, only the operator overloads are provided.
+- There are a number of indexing strategies in C++, whereas these styles and overloads do not exist in Python (only `__getitem__`, i.e. `arr[...]` is used).
 - In Python, 0-D (i.e. scalar) arrays are cast to the corresponding scalar. This is not done automatically in C++.
+- In C++, in addition to the operator overloads (like `operator+`), there are named functions if you find them easier (e.g. `NCArrayView::add(other)`). For keeping binary sizes down, though, these are NOT pre-instantiated and compiled into the shared libs.
 
 ## For C++ Developers
 ### Headers

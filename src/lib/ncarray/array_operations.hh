@@ -140,15 +140,20 @@ namespace ncarray {
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto add_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_add<T>(left, right, result);
+        GPUEngine::execute_add<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_add<T>(left, right, result);
+        HostEngine::execute_add<T>(left_view, right_view, result_view);
       }
     };
 
@@ -165,15 +170,20 @@ namespace ncarray {
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto sub_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub<T>(left, right, result);
+        GPUEngine::execute_sub<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_sub<T>(left, right, result);
+        HostEngine::execute_sub<T>(left_view, right_view, result_view);
       }
     };
 
@@ -185,15 +195,20 @@ namespace ncarray {
   inline auto mul(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto mul_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_mul<T>(left, right, result);
+        GPUEngine::execute_mul<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_mul<T>(left, right, result);
+        HostEngine::execute_mul<T>(left_view, right_view, result_view);
       }
     };
 
@@ -210,15 +225,20 @@ namespace ncarray {
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto truediv_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_truediv<T>(left, right, result);
+        GPUEngine::execute_truediv<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_truediv<T>(left, right, result);
+        HostEngine::execute_truediv<T>(left_view, right_view, result_view);
       }
     };
 
@@ -230,15 +250,19 @@ namespace ncarray {
 
   template <ArrayLike Left, ArrayLike Right>
   inline void inplace_add(Left& left, const Right& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_add<T>(left, right);
+        GPUEngine::execute_inplace_add<T>(left_view, right_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_add<T>(left, right);
+        HostEngine::execute_inplace_add<T>(left_view, right_view);
       }
     };
     dispatch(left.dtype(), add_op);
@@ -246,15 +270,19 @@ namespace ncarray {
 
   template <ArrayLike Left, ArrayLike Right>
   inline void inplace_sub(Left& left, const Right& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+
     auto sub_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_sub<T>(left, right);
+        GPUEngine::execute_inplace_sub<T>(left_view, right_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_sub<T>(left, right);
+        HostEngine::execute_inplace_sub<T>(left_view, right_view);
       }
     };
     dispatch(left.dtype(), sub_op);
@@ -262,15 +290,19 @@ namespace ncarray {
 
   template <ArrayLike Left, ArrayLike Right>
   inline void inplace_mul(Left& left, const Right& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+
     auto mul_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_mul<T>(left, right);
+        GPUEngine::execute_inplace_mul<T>(left_view, right_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_mul<T>(left, right);
+        HostEngine::execute_inplace_mul<T>(left_view, right_view);
       }
     };
     dispatch(left.dtype(), mul_op);
@@ -278,15 +310,19 @@ namespace ncarray {
 
   template <ArrayLike Left, ArrayLike Right>
   inline void inplace_truediv(Left& left, const Right& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+
     auto div_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_truediv<T>(left, right);
+        GPUEngine::execute_inplace_truediv<T>(left_view, right_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_truediv<T>(left, right);
+        HostEngine::execute_inplace_truediv<T>(left_view, right_view);
       }
     };
 
@@ -435,15 +471,19 @@ namespace ncarray {
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto add_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_add_scalar<T>(left, right, result);
+        GPUEngine::execute_add_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_add_scalar<T>(left, right, result);
+        HostEngine::execute_add_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -460,15 +500,19 @@ namespace ncarray {
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto sub_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub_scalar<T>(left, right, result);
+        GPUEngine::execute_sub_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_sub_scalar<T>(left, right, result);
+        HostEngine::execute_sub_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -480,15 +524,19 @@ namespace ncarray {
   inline auto mul_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto mul_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_mul_scalar<T>(left, right, result);
+        GPUEngine::execute_mul_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_mul_scalar<T>(left, right, result);
+        HostEngine::execute_mul_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -505,15 +553,19 @@ namespace ncarray {
 
     ResultType result(left.ndim(), left.shape(), result_dtype);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto truediv_operation = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_truediv_scalar<T>(left, right, result);
+        GPUEngine::execute_truediv_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_truediv_scalar<T>(left, right, result);
+        HostEngine::execute_truediv_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -525,15 +577,18 @@ namespace ncarray {
 
   template <ArrayLike Left>
   inline void inplace_add_scalar(Left& left, const Scalar& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+
     auto add_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_add_scalar<T>(left, right);
+        GPUEngine::execute_inplace_add_scalar<T>(left_view, right);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_add_scalar<T>(left, right);
+        HostEngine::execute_inplace_add_scalar<T>(left_view, right);
       }
     };
     dispatch(left.dtype(), add_op);
@@ -541,49 +596,58 @@ namespace ncarray {
 
   template <ArrayLike Left>
   inline void inplace_sub_scalar(Left& left, const Scalar& right) {
-    auto add_op = [&]<typename T>() {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+
+    auto sub_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_sub_scalar<T>(left, right);
+        GPUEngine::execute_inplace_sub_scalar<T>(left_view, right);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_sub_scalar<T>(left, right);
+        HostEngine::execute_inplace_sub_scalar<T>(left_view, right);
       }
     };
-    dispatch(left.dtype(), add_op);
+    dispatch(left.dtype(), sub_op);
   }
   template <ArrayLike Left>
   inline void inplace_mul_scalar(Left& left, const Scalar& right) {
-    auto add_op = [&]<typename T>() {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+
+    auto mul_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_mul_scalar<T>(left, right);
+        GPUEngine::execute_inplace_mul_scalar<T>(left_view, right);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_mul_scalar<T>(left, right);
+        HostEngine::execute_inplace_mul_scalar<T>(left_view, right);
       }
     };
-    dispatch(left.dtype(), add_op);
+    dispatch(left.dtype(), mul_op);
   }
 
   template <ArrayLike Left>
   inline void inplace_truediv_scalar(Left& left, const Scalar& right) {
-    auto add_op = [&]<typename T>() {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+
+    auto truediv_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_inplace_truediv_scalar<T>(left, right);
+        GPUEngine::execute_inplace_truediv_scalar<T>(left_view, right);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_inplace_truediv_scalar<T>(left, right);
+        HostEngine::execute_inplace_truediv_scalar<T>(left_view, right);
       }
     };
-    dispatch(left.dtype(), add_op);
+    dispatch(left.dtype(), truediv_op);
   }
 
   template <class L, class S>
@@ -700,15 +764,20 @@ namespace ncarray {
   inline auto is_equal(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto equal_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_equal<T>(left, right, result);
+        GPUEngine::execute_equal<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_equal<T>(left, right, result);
+        HostEngine::execute_equal<T>(left_view, right_view, result_view);
       }
     };
 
@@ -720,15 +789,20 @@ namespace ncarray {
   inline auto is_not_equal(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto not_equal_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_not_equal<T>(left, right, result);
+        GPUEngine::execute_not_equal<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_not_equal<T>(left, right, result);
+        HostEngine::execute_not_equal<T>(left_view, right_view, result_view);
       }
     };
 
@@ -740,15 +814,20 @@ namespace ncarray {
   inline auto is_less_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto less_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_less_than<T>(left, right, result);
+        GPUEngine::execute_less_than<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_less_than<T>(left, right, result);
+        HostEngine::execute_less_than<T>(left_view, right_view, result_view);
       }
     };
 
@@ -760,15 +839,20 @@ namespace ncarray {
   inline auto is_less_equal_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto less_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_less_equal_than<T>(left, right, result);
+        GPUEngine::execute_less_equal_than<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_less_equal_than<T>(left, right, result);
+        HostEngine::execute_less_equal_than<T>(left_view, right_view, result_view);
       }
     };
 
@@ -780,15 +864,20 @@ namespace ncarray {
   inline auto is_greater_than(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto greater_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_greater_than<T>(left, right, result);
+        GPUEngine::execute_greater_than<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_greater_than<T>(left, right, result);
+        HostEngine::execute_greater_than<T>(left_view, right_view, result_view);
       }
     };
 
@@ -820,15 +909,20 @@ namespace ncarray {
   inline auto logical_and(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto logical_and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_and<T>(left, right, result);
+        GPUEngine::execute_logical_and<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_logical_and<T>(left, right, result);
+        HostEngine::execute_logical_and<T>(left_view, right_view, result_view);
       }
     };
 
@@ -840,15 +934,20 @@ namespace ncarray {
   inline auto logical_or(const Left& left, const Right& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+    auto result_view = result.view();
+
     auto logical_or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_or<T>(left, right, result);
+        GPUEngine::execute_logical_or<T>(left_view, right_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_logical_or<T>(left, right, result);
+        HostEngine::execute_logical_or<T>(left_view, right_view, result_view);
       }
     };
 
@@ -860,15 +959,19 @@ namespace ncarray {
   inline auto logical_not(const Array& arr) {
     ResultType result(arr.ndim(), arr.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto arr_view = arr.view();
+    auto result_view = result.view();
+
     auto logical_not_op = [&] <typename T> () {
       if constexpr (std::is_same_v<typename std::decay_t<Array>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_not<T>(arr, result);
+        GPUEngine::execute_logical_not<T>(arr_view, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_logical_not<T>(arr, result);
+        HostEngine::execute_logical_not<T>(arr_view, result_view);
       }
     };
 
@@ -1058,15 +1161,19 @@ namespace ncarray {
   inline auto is_equal_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto equal_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_equal_scalar<T>(left, right, result);
+        GPUEngine::execute_equal_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_equal_scalar<T>(left, right, result);
+        HostEngine::execute_equal_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1078,15 +1185,19 @@ namespace ncarray {
   inline auto is_not_equal_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto not_equal_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_not_equal_scalar<T>(left, right, result);
+        GPUEngine::execute_not_equal_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_not_equal_scalar<T>(left, right, result);
+        HostEngine::execute_not_equal_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1098,15 +1209,19 @@ namespace ncarray {
   inline auto is_less_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto less_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_less_than_scalar<T>(left, right, result);
+        GPUEngine::execute_less_than_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_less_than_scalar<T>(left, right, result);
+        HostEngine::execute_less_than_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1118,15 +1233,19 @@ namespace ncarray {
   inline auto is_less_equal_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto less_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_less_equal_than_scalar<T>(left, right, result);
+        GPUEngine::execute_less_equal_than_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_less_equal_than_scalar<T>(left, right, result);
+        HostEngine::execute_less_equal_than_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1138,15 +1257,19 @@ namespace ncarray {
   inline auto is_greater_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto greater_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_greater_than_scalar<T>(left, right, result);
+        GPUEngine::execute_greater_than_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_greater_than_scalar<T>(left, right, result);
+        HostEngine::execute_greater_than_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1158,15 +1281,19 @@ namespace ncarray {
   inline auto is_greater_equal_than_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), DType::bool_);
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto greater_than_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_greater_equal_than_scalar<T>(left, right, result);
+        GPUEngine::execute_greater_equal_than_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_greater_equal_than_scalar<T>(left, right, result);
+        HostEngine::execute_greater_equal_than_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1274,16 +1401,20 @@ namespace ncarray {
 
   template <ArrayLike Left, ArrayLike Right>
   inline auto inplace_logical_and(Left& left, const Right& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+
     auto logical_and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_and<T>(left, right);
+          GPUEngine::execute_inplace_logical_and<T>(left_view, right_view);
 #else
           throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
         } else {
-          HostEngine::execute_inplace_logical_and<T>(left, right);
+          HostEngine::execute_inplace_logical_and<T>(left_view, right_view);
         }
       }
     };
@@ -1293,16 +1424,20 @@ namespace ncarray {
 
   template <ArrayLike Left, ArrayLike Right>
   inline auto inplace_logical_or(Left& left, const Right& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto right_view = right.view();
+
     auto logical_or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_or<T>(left, right);
+          GPUEngine::execute_inplace_logical_or<T>(left_view, right_view);
 #else
           throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
         } else {
-          HostEngine::execute_inplace_logical_or<T>(left, right);
+          HostEngine::execute_inplace_logical_or<T>(left_view, right_view);
         }
       }
     };
@@ -1352,15 +1487,19 @@ namespace ncarray {
   inline auto logical_and_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_and_scalar<T>(left, right, result);
+        GPUEngine::execute_logical_and_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_logical_and_scalar<T>(left, right, result);
+        HostEngine::execute_logical_and_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1372,15 +1511,19 @@ namespace ncarray {
   inline auto logical_or_scalar(const Left& left, const Scalar& right) {
     ResultType result(left.ndim(), left.shape(), left.dtype());
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+    auto result_view = result.view();
+
     auto or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_logical_or_scalar<T>(left, right, result);
+        GPUEngine::execute_logical_or_scalar<T>(left_view, right, result_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_logical_or_scalar<T>(left, right, result);
+        HostEngine::execute_logical_or_scalar<T>(left_view, right, result_view);
       }
     };
 
@@ -1422,16 +1565,19 @@ namespace ncarray {
   // logical and
   template <ArrayLike Left>
   inline void inplace_logical_and_scalar(Left& left, const Scalar& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+
     auto and_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_and_scalar<T>(left, right);
+          GPUEngine::execute_inplace_logical_and_scalar<T>(left_view, right);
 #else
           throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
         } else {
-          HostEngine::execute_inplace_logical_and_scalar<T>(left, right);
+          HostEngine::execute_inplace_logical_and_scalar<T>(left_view, right);
         }
       }
     };
@@ -1441,16 +1587,19 @@ namespace ncarray {
   // logical or
   template <ArrayLike Left>
   inline void inplace_logical_or_scalar(Left& left, const Scalar& right) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto left_view = left.view();
+
     auto or_op = [&]<typename T>() {
       if constexpr (std::is_same_v<T, bool>) {
         if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
 #ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_or_scalar<T>(left, right);
+          GPUEngine::execute_inplace_logical_or_scalar<T>(left_view, right);
 #else
           throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
         } else {
-          HostEngine::execute_inplace_logical_or_scalar<T>(left, right);
+          HostEngine::execute_inplace_logical_or_scalar<T>(left_view, right);
         }
       }
     };
@@ -1558,15 +1707,18 @@ namespace ncarray {
   // --- Copy and Modification --- //
   template <ArrayLike A>
   inline void fill(A& arr, Scalar val) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto arr_view = arr.view();
+
     auto fill_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_fill<T>(arr, val);
+        GPUEngine::execute_fill<T>(arr_view, val);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_fill<T>(arr, val);
+        HostEngine::execute_fill<T>(arr_view, val);
       }
     };
 
@@ -1575,15 +1727,18 @@ namespace ncarray {
 
   template <ArrayLike A, typename OutputType>
   inline void copy_into(const A& arr, OutputType* dest) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto arr_view = arr.view();
+
     auto copy_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_copy_into<T>(arr, dest);
+        GPUEngine::execute_copy_into<T>(arr_view, dest);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_copy_into<T>(arr, dest);
+        HostEngine::execute_copy_into<T>(arr_view, dest);
       }
     };
 
@@ -1602,16 +1757,20 @@ namespace ncarray {
       }
     }
 
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto dest_view = dest.view();
+    auto src_view = src.view();
+
     auto assign_op = [&] <typename DestT> () {
       // Dispatch dest type - the engines do the double dispatch to get the src type
       if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_assign<DestT>(dest, src);
+        GPUEngine::execute_assign<DestT>(dest_view, src_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
       } else {
-        HostEngine::execute_assign<DestT>(dest, src);
+        HostEngine::execute_assign<DestT>(dest_view, src_view);
       }
     };
     dispatch(dest.dtype(), assign_op);

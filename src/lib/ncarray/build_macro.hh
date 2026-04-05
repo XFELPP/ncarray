@@ -126,98 +126,6 @@ namespace ncarray {
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&=(const ncarray::Scalar&);                  \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(const ncarray::Scalar&);                  \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::add(                                                 \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::add(const ncarray::Scalar&) const;                   \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::sub(                                                 \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::sub(const ncarray::Scalar&) const;                   \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::mul(                                                 \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::mul(const ncarray::Scalar&) const;                   \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::truediv(                                             \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::truediv(const ncarray::Scalar&) const;               \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::iadd(                                                \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::iadd(const ncarray::Scalar&);                        \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::isub(                                                \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::isub(const ncarray::Scalar&);                        \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::imul(                                                \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::imul(const ncarray::Scalar&);                        \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::itruediv(                                            \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::itruediv(const ncarray::Scalar&);                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_equal(                                            \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_equal(const ncarray::Scalar&) const;              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_not_equal(                                        \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_not_equal(const ncarray::Scalar&) const;          \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_less_than(                                        \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_less_than(const ncarray::Scalar&) const;          \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_less_equal_than(                                  \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_less_equal_than(const ncarray::Scalar&) const;    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_greater_than(                                     \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_greater_than(const ncarray::Scalar&) const;       \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_greater_equal_than(                               \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::is_greater_equal_than(const ncarray::Scalar&) const; \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::logical_not() const;                                 \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::logical_and(                                         \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::logical_and(const ncarray::Scalar&) const;           \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::logical_or(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::logical_or(const ncarray::Scalar&) const;            \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::ilogical_and(                                        \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::ilogical_and(const ncarray::Scalar&);                \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::ilogical_or(                                         \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::ilogical_or(const ncarray::Scalar&);                 \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::sum() const;                  \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::max() const;                  \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::min() const;                  \
@@ -242,6 +150,12 @@ namespace ncarray {
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::begin() const;                                       \
   ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::ConstIterator                        \
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::end() const;                                         \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ViewType                                      \
+  ncarray::ArrayImpl<ncarray::L, ncarray::S>::view() const;                                        \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ViewType                                      \
+  ncarray::ArrayImpl<ncarray::L, ncarray::S>::squeeze() const;                                     \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<char>(                  \
+      char*) const;                                                                                \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint8_t>(          \
       std::uint8_t*) const;                                                                        \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint16_t>(         \
@@ -282,6 +196,8 @@ namespace ncarray {
       ncarray::Double3*) const;                                                                    \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double4>(      \
       ncarray::Double4*) const;                                                                    \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<char>(         \
+      std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;                                \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<std::uint8_t>( \
       std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;                                \
   ACTION void                                                                                      \
@@ -391,60 +307,6 @@ namespace ncarray {
           const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
   ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
       ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator|=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::add(                                           \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::sub(                                           \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::mul(                                           \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::truediv(                                       \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::iadd(                                          \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::isub(                                          \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::imul(                                          \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::itruediv(                                      \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::is_equal(                                      \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::is_not_equal(                                  \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::is_less_than(                                  \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::is_less_equal_than(                            \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::is_greater_than(                               \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::is_greater_equal_than(                         \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::logical_and(                                   \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::logical_or(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::ilogical_and(                                  \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::ilogical_or(                                   \
           const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
   ACTION void ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::assign(                                \
       ncarray::ArrayImpl<ncarray::L2, ncarray::S2>);
