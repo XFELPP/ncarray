@@ -591,7 +591,7 @@ namespace ncarray {
       }
     }
 
-    NCA_HD inline ssize_t nbytes() const {
+    NCA_HD ssize_t nbytes() const {
       return this->size() * this->itemsize();
     }
 
@@ -614,7 +614,7 @@ namespace ncarray {
 
     // --- Linearized indexing to reference (non-const and const) --- //
 
-    NCA_HD inline ArrayElementProxy operator[](ssize_t idx) {
+    NCA_HD ArrayElementProxy operator[](ssize_t idx) {
       void* out_data = const_cast<void*>(this->data());
       ssize_t lin_idx { idx };
 
@@ -637,7 +637,7 @@ namespace ncarray {
       return { out_data, this->dtype() };
     }
 
-    NCA_HD inline const ArrayElementProxy operator[](ssize_t idx) const {
+    NCA_HD const ArrayElementProxy operator[](ssize_t idx) const {
       const void* out_data = this->data();
       ssize_t lin_idx { idx };
 
@@ -665,7 +665,7 @@ namespace ncarray {
     // with one index.
     template <typename... Args>
     requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
-    NCA_HD inline ArrayElementProxy operator()(Args... args) {
+    NCA_HD ArrayElementProxy operator()(Args... args) {
       assert(sizeof...(Args) == this->ndim());
 
       void* ptr = const_cast<void*>(this->data());
@@ -678,7 +678,7 @@ namespace ncarray {
 
     template <typename... Args>
     requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
-    NCA_HD inline const ArrayElementProxy operator()(Args... args) const {
+    NCA_HD const ArrayElementProxy operator()(Args... args) const {
       assert(sizeof...(Args) == this->ndim());
 
       const void* ptr = this->data();
@@ -887,24 +887,24 @@ namespace ncarray {
 
     // --- Binary inplace operations --- //
     template <ArrayLike OtherType>
-    inline ArrayImpl& iadd(const OtherType& other);
+    ArrayImpl& iadd(const OtherType& other);
     template <ArrayLike OtherType>
-    inline ArrayImpl& operator+=(const OtherType& other);
+    ArrayImpl& operator+=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    inline ArrayImpl& isub(const OtherType& other);
+    ArrayImpl& isub(const OtherType& other);
     template <ArrayLike OtherType>
-    inline ArrayImpl& operator-=(const OtherType& other);
+    ArrayImpl& operator-=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    inline ArrayImpl& imul(const OtherType& other);
+    ArrayImpl& imul(const OtherType& other);
     template <ArrayLike OtherType>
-    inline ArrayImpl& operator*=(const OtherType& other);
+    ArrayImpl& operator*=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    inline ArrayImpl& itruediv(const OtherType& other);
+    ArrayImpl& itruediv(const OtherType& other);
     template <ArrayLike OtherType>
-    inline ArrayImpl& operator/=(const OtherType& other);
+    ArrayImpl& operator/=(const OtherType& other);
 
     // --- Binary Operations Overloads for Scalar Broadcasts --- //
     OwnerType add(const Scalar& other) const;
@@ -921,17 +921,17 @@ namespace ncarray {
 
     // --- Inplace binary operations with scalar broadcasts --- //
 
-    inline ArrayImpl& iadd(const Scalar& other);
-    inline ArrayImpl& operator+=(const Scalar& other);
+    ArrayImpl& iadd(const Scalar& other);
+    ArrayImpl& operator+=(const Scalar& other);
 
-    inline ArrayImpl& isub(const Scalar& other);
-    inline ArrayImpl& operator-=(const Scalar& other);
+    ArrayImpl& isub(const Scalar& other);
+    ArrayImpl& operator-=(const Scalar& other);
 
-    inline ArrayImpl& imul(const Scalar& other);
-    inline ArrayImpl& operator*=(const Scalar& other);
+    ArrayImpl& imul(const Scalar& other);
+    ArrayImpl& operator*=(const Scalar& other);
 
-    inline ArrayImpl& itruediv(const Scalar& other);
-    inline ArrayImpl& operator/=(const Scalar& other);
+    ArrayImpl& itruediv(const Scalar& other);
+    ArrayImpl& operator/=(const Scalar& other);
 
     // --- Logical and boolean operators --- //
 
@@ -1001,14 +1001,14 @@ namespace ncarray {
     // --- Inplace logical operators --- //
 
     template <ArrayLike OtherType>
-    inline ArrayImpl& ilogical_and(const OtherType& other);
+    ArrayImpl& ilogical_and(const OtherType& other);
     template <ArrayLike OtherType>
-    inline ArrayImpl& operator&=(const OtherType& other);
+    ArrayImpl& operator&=(const OtherType& other);
 
     template <ArrayLike OtherType>
-    inline ArrayImpl& ilogical_or(const OtherType& other);
+    ArrayImpl& ilogical_or(const OtherType& other);
     template <ArrayLike OtherType>
-    inline ArrayImpl& operator|=(const OtherType& other);
+    ArrayImpl& operator|=(const OtherType& other);
 
     // --- Logical operators with scalar broadcast --- //
 
@@ -1020,11 +1020,11 @@ namespace ncarray {
 
     // --- Inplace logical operators with scalar broadcast --- //
 
-    inline ArrayImpl& ilogical_and(const Scalar& other);
-    inline ArrayImpl& operator&=(const Scalar& other);
+    ArrayImpl& ilogical_and(const Scalar& other);
+    ArrayImpl& operator&=(const Scalar& other);
 
-    inline ArrayImpl& ilogical_or(const Scalar& other);
-    inline ArrayImpl& operator|=(const Scalar& other);
+    ArrayImpl& ilogical_or(const Scalar& other);
+    ArrayImpl& operator|=(const Scalar& other);
 
     // -- Iterators --- //
 

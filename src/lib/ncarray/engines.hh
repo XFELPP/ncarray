@@ -429,7 +429,7 @@ namespace ncarray {
       cudaDeviceSynchronize();
     }
 
-    template <typename T, class Left, class Right, class Result>
+    template <typename T, class Left, class Result>
     static void execute_greater_equal_than_scalar(const Left& left,
                                                   const Scalar& right,
                                                   Result& result) {
@@ -615,11 +615,18 @@ namespace ncarray {
 
     // --- Copy and modification --- //
     template <typename T, class ArrayT>
-    static void execute_fill(const ArrayT& arr, T val) {
+    static void execute_fill(const ArrayT& arr, Scalar val) {
+      auto cast_op = [](auto&& arg) -> T {
+        using FromT = std::decay_t<decltype(arg)>;
+
+        return ncarray::op_traits<FromT>::template cast<T>(arg);
+      };
+      T target_val = std::visit(cast_op, val);
+
       int TPB { 256 };
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
-      fill_kernel<<<blocks, TPB>>>(arr.view(), val);
+      fill_kernel<<<blocks, TPB>>>(arr.view(), target_val);
       cudaDeviceSynchronize();
     }
 
@@ -658,6 +665,16 @@ namespace ncarray {
           CHECK_CUDA_ERROR(cudaFree(d_tmp));
         }
       }
+    }
+
+    template <typename DestT, ArrayLike Dest, ArrayLike Src>
+    static void execute_assign(Dest& dest, const Src& src) {
+      auto assign_op_internal = [&] <typename SrcT> () {
+        GPUEngine::execute_copy_into<SrcT>(src,
+                                           reinterpret_cast<DestT*>(dest.data()));
+      };
+
+      dispatch(src.dtype(), assign_op_internal);
     }
   };
 #endif
@@ -946,15 +963,15 @@ namespace ncarray {
                                                      dest);
     }
 
-    template <typename T, ArrayLike Dest, ArrayLike Src>
+    template <typename DestT, ArrayLike Dest, ArrayLike Src>
     static void execute_assign(Dest& dest, const Src& src) {
       auto assign_op_internal = [&]<typename SrcT>() {
         ssize_t starting_axis { 0 };
-        host::impl::assign_recursive<Dest, Src>(dest,
-                                                src,
-                                                dest.data(),
-                                                src.data(),
-                                                starting_axis);
+        host::impl::assign_recursive<DestT, SrcT>(dest,
+                                                  src,
+                                                  dest.data(),
+                                                  src.data(),
+                                                  starting_axis);
       };
 
       dispatch(src.dtype(), assign_op_internal);

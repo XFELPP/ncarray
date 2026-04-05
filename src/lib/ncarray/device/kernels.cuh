@@ -202,7 +202,7 @@ namespace ncarray {
   // --- Inplace logical operators --- //
 
   template <typename T, ViewArrayLike LeftT, ViewArrayLike RightT>
-  __global__ void inplace_logical_and_kernel(LeftT left, const T right) {
+  __global__ void inplace_logical_and_kernel(LeftT left, const RightT right) {
     ncarray::device::inplace_block_logical_and<T, LeftT, RightT>(left, right);
   }
 

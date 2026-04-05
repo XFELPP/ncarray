@@ -15,6 +15,21 @@ if nca_has_cuda
     add_project_arguments('-DNCA_HAS_CUDA', language: ['cpp', 'cuda'])
 endif
 
+nca_cuda_args = [
+    '--extended-lambda',
+    '--expt-relaxed-constexpr',
+    # silence warning: declared but not referenced (e.g. pybind, stl...)
+    '-Xcudafe', '--diag_suppress=445',
+    # silence warning: long double treated as double
+    '-Xcudafe', '--diag_suppress=20208',
+    # We make a fat binary for Turing, Ampere, Ada and Hopper
+    '-gencode', 'arch=compute_75,code=sm_75',
+    #'-gencode', 'arch=compute_86,code=sm_86',
+    '-gencode', 'arch=compute_80,code=sm_80',
+    '-gencode', 'arch=compute_89,code=sm_89',
+    '-gencode', 'arch=compute_90,code=sm_90',
+]
+
 #### Main Python Setup ####
 ###########################
 
@@ -140,18 +155,7 @@ if nca_has_cuda
             'src/lib/ncarray/ncdevarrays.cu',
             'src/lib/ncarray/sodevarrays.cu',
         ],
-        cuda_args: [
-            '--extended-lambda',
-            '--expt-relaxed-constexpr',
-            # silence warning: declared but not referenced (e.g. pybind, stl...)
-            '-Xcudafe', '--diag_suppress=445',
-             # silence warning: long double treated as double
-            '-Xcudafe', '--diag_suppress=20208',
-            '-gencode', 'arch=compute_75,code=sm_75',
-            '-gencode', 'arch=compute_80,code=sm_80',
-            '-gencode', 'arch=compute_89,code=sm_89',
-            '-gencode', 'arch=compute_90,code=sm_90',
-        ],
+        cuda_args: nca_cuda_args,
         include_directories: ncarray_headers,
         install: true,
         install_dir: libncarray_install_dir,
@@ -218,6 +222,30 @@ py_mod = py3.extension_module(
     build_rpath: py_to_lib_install_rpath,
 )
 
+if nca_has_cuda
+    # NOTE: For faster/more efficient compilation, each GPU specialization is
+    # split off into its own translation unit.
+    py_dev_mod = py3.extension_module(
+        '_pyncdevarray',
+        [
+            'src/lib/python/ncdevarray.cu',
+            'src/lib/python/ncdevarray_view.cu',
+            'src/lib/python/ncdevarray_ref.cu',
+            'src/lib/python/ncdevarray_owner.cu',
+            'src/lib/python/sodevarray_view.cu',
+            'src/lib/python/sodevarray_ref.cu',
+            'src/lib/python/sodevarray_owner.cu',
+        ],
+        install: true,
+        install_dir: pyncarray_install_dir,
+        include_directories: ncarray_headers,
+        dependencies : deps_for_py_mod,
+        install_rpath: py_to_lib_install_rpath,
+        build_rpath: py_to_lib_install_rpath,
+        cuda_args: nca_cuda_args,
+    )
+endif
+
 py_sources = [
     'src/ncarray/__init__.py',
 ]
@@ -248,7 +276,6 @@ if not gtest_dep.found()
 endif
 
 deps_for_tests = [gtest_dep, ncarray_dep]
-
 if nca_has_cuda
     deps_for_tests += cuda_dep
     deps_for_tests += ncdevarray_dep
@@ -276,29 +303,6 @@ test_ops = executable(
 )
 test('Testing array operations.', test_ops, verbose: true)
 
-test_gpu_ops = executable(
-    'test_gpu_array_operations',
-    [
-        'tests/cxx/test_gpu_operations.cu',
-    ],
-    dependencies: deps_for_tests,
-    install: false,
-    include_directories: ncarray_headers,
-    cuda_args: [
-        '--extended-lambda',
-        '--expt-relaxed-constexpr',
-        # silence warning: declared but not referenced (e.g. pybind, stl...)
-        '-Xcudafe', '--diag_suppress=445',
-        # silence warning: long double treated as double
-        '-Xcudafe', '--diag_suppress=20208',
-        '-gencode', 'arch=compute_75,code=sm_75',
-        '-gencode', 'arch=compute_80,code=sm_80',
-        '-gencode', 'arch=compute_89,code=sm_89',
-        '-gencode', 'arch=compute_90,code=sm_90',
-    ],
-)
-test('Testing array operations.', test_gpu_ops, verbose: true)
-
 test_float_vecs = executable(
     'test_float_vecs',
     [
@@ -309,3 +313,17 @@ test_float_vecs = executable(
     include_directories: ncarray_headers,
 )
 test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
+
+if nca_has_cuda
+    test_gpu_ops = executable(
+        'test_gpu_array_operations',
+        [
+            'tests/cxx/test_gpu_operations.cu',
+        ],
+        dependencies: deps_for_tests,
+        install: false,
+        include_directories: ncarray_headers,
+        cuda_args: nca_cuda_args,
+    )
+    test('Testing array operations.', test_gpu_ops, verbose: true)
+endif

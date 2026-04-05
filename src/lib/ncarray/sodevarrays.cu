@@ -7,7 +7,13 @@
  */
 
 #include "ncarray/sodevarrays.cuh"
+#include "ncarray/array_operations.hh"
+#include "ncarray/build_macro.hh"
 
-template class ncarray::ArrayImpl<ncarray::SOArrayPolicy, ncarray::DevViewPolicy>;
-template class ncarray::ArrayImpl<ncarray::SOArrayPolicy, ncarray::DevRefPolicy>;
-template class ncarray::ArrayImpl<ncarray::SOArrayPolicy, ncarray::DevOwnerPolicy>;
+INSTANTIATE_NC_BASE_OPS(SOArrayPolicy, DevViewPolicy)
+INSTANTIATE_NC_BASE_OPS(SOArrayPolicy, DevRefPolicy)
+INSTANTIATE_NC_BASE_OPS(SOArrayPolicy, DevOwnerPolicy)
+
+INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, DevRefPolicy,   SOArrayPolicy, DevViewPolicy)
+INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevViewPolicy)
+INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevRefPolicy)

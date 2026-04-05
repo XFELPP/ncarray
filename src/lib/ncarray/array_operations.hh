@@ -1389,26 +1389,30 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_and(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::logical_and(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator&&(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator&&(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
 
   template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_or(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::logical_or(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
   }
   template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator||(const Scalar& other) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::operator||(const Scalar& other) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
@@ -1557,15 +1561,7 @@ namespace ncarray {
     auto fill_op = [&]<typename T>() {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        // NOTE: We do the cast here instead of in engine to keep the variant
-        // Far away
-        auto cast_op = [](auto&& arg) -> T {
-          using FromT = std::decay_t<decltype(arg)>;
-
-          return ncarray::op_traits<FromT>::template cast<T>(arg);
-        };
-        T target_val = std::visit(cast_op, val);
-        GPUEngine::execute_fill<T>(arr, target_val);
+        GPUEngine::execute_fill<T>(arr, val);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
@@ -1606,10 +1602,11 @@ namespace ncarray {
       }
     }
 
-    auto assign_op = [&]<typename DestT>() {
+    auto assign_op = [&] <typename DestT> () {
+      // Dispatch dest type - the engines do the double dispatch to get the src type
       if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_copy_into<typename Src::value_type>(src, dest.data());
+        GPUEngine::execute_assign<DestT>(dest, src);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
@@ -1653,7 +1650,8 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::astype(DType& dtype_out) const {
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::astype(DType& dtype_out) const {
     using OwnerType = typename ArrayImpl<L, S>::OwnerType;
 
     OwnerType result(this->m_shape, this->m_dtype);

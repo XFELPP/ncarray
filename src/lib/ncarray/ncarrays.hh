@@ -10,16 +10,20 @@
 #define NCARRAY_NCARRAYS_HH
 
 #include "ncarray/array_impl.hh"
-#include "ncarray/array_operations.hh"
+#include "ncarray/build_macro.hh"
 
 namespace ncarray {
   using NCArrayView = ArrayImpl<NCOffsetsPolicy, ViewPolicy>;
   using NCArrayRef = ArrayImpl<NCOffsetsPolicy, RefPolicy>;
   using NCArray = ArrayImpl<NCOffsetsPolicy, OwnerPolicy>;
 
-  extern template class ArrayImpl<NCOffsetsPolicy, ViewPolicy>;
-  extern template class ArrayImpl<NCOffsetsPolicy, RefPolicy>;
-  extern template class ArrayImpl<NCOffsetsPolicy, OwnerPolicy>;
+  EXTERN_NC_BASE_OPS(NCOffsetsPolicy, ViewPolicy)
+  EXTERN_NC_BASE_OPS(NCOffsetsPolicy, RefPolicy)
+  EXTERN_NC_BASE_OPS(NCOffsetsPolicy, OwnerPolicy)
+
+  EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, RefPolicy, NCOffsetsPolicy, ViewPolicy)
+  EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, ViewPolicy)
+  EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, RefPolicy)
 } // namespace ncarray
 
 #endif // NCARRAY_NCARRAYS_HH
