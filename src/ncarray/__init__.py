@@ -7,7 +7,10 @@
 import os
 
 from ncarray.core._pyncarray import *
-
+try:
+    from ncarray.core._pyncdevarray import *
+except (ModuleNotFoundError, ImportError):
+    ...
 
 def get_include() -> str:
     return os.path.join(os.path.dirname(__file__), "include")
