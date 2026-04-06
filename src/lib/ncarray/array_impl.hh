@@ -1082,6 +1082,20 @@ namespace ncarray {
     ConstIterator end() const;
 
     std::string repr() const {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+        std::ostringstream oss;
+        oss << "(";
+        for (ssize_t i = 0; i < this->ndim(); ++i) {
+          oss << this->m_shape[i];
+          if (i < this->ndim() - 1) {
+            oss << ", ";
+          }
+        }
+        oss << ")";
+        return
+          class_name() + "([<...(on device)...>], shape=" + oss.str() +
+          ", shape=" + ncarray::to_string(this->m_dtype) + ")";
+      }
       if (this->m_shape.ndim == 0) {
         return class_name() + "([], dtype=" + ncarray::to_string(this->m_dtype) + ")";
       }
