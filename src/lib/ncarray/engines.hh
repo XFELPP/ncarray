@@ -28,6 +28,305 @@ typedef SSIZE_T ssize_t;
 #include <type_traits>
 
 namespace ncarray {
+  struct HostEngine {
+    // --- Unary reductions --- //
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_sum(const A& arr) {
+      return host::sum_recursive<T>(arr);
+    }
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_mean(const A& arr) {
+      return host::mean_recursive<T>(arr);
+    }
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_max(const A& arr) {
+      return host::max_recursive<T>(arr);
+    }
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_min(const A& arr) {
+      return host::min_recursive<T>(arr);
+    }
+
+    // --- Binary non-broadcast operations --- //
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    static void execute_add(const Left& left, const Right& right, ResultType& result) {
+      host::add_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    static void execute_sub(const Left& left, const Right& right, ResultType& result) {
+      host::sub_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    static void execute_mul(const Left& left, const Right& right, ResultType& result) {
+      host::mul_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
+    static void execute_truediv(const Left& left,
+                                const Right& right,
+                                ResultType& result) {
+      host::truediv_recursive<T>(left, right, result);
+    }
+
+    // --- Inplace binary operations --- //
+
+    template <typename T, ArrayLike Left, ArrayLike Right>
+    static void execute_inplace_add(Left& left, const Right& right) {
+      host::inplace_add_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right>
+    static void execute_inplace_sub(Left& left, const Right& right) {
+      host::inplace_sub_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right>
+    static void execute_inplace_mul(Left& left, const Right& right) {
+      host::inplace_mul_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left, ArrayLike Right>
+    static void execute_inplace_truediv(Left& left, const Right& right) {
+      host::inplace_truediv_recursive<T>(left, right);
+    }
+
+    // --- Binary operations with a scalar broadcast --- //
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_add_scalar(const Left& left,
+                                   const Scalar& right,
+                                   ResultType& result) {
+      host::add_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_sub_scalar(const Left& left,
+                                   const Scalar& right,
+                                   ResultType& result) {
+      host::sub_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_mul_scalar(const Left& left,
+                                   const Scalar& right,
+                                   ResultType& result) {
+      host::mul_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_truediv_scalar(const Left& left,
+                                       const Scalar& right,
+                                       ResultType& result) {
+      host::truediv_scalar_recursive<T>(left, right, result);
+    }
+
+    // --- Inplace binary operations with a scalar broadcast --- //
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_add_scalar(Left& left, const Scalar& right) {
+      host::inplace_add_scalar_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_sub_scalar(Left& left, const Scalar& right) {
+      host::inplace_sub_scalar_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_mul_scalar(Left& left, const Scalar& right) {
+      host::inplace_mul_scalar_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_truediv_scalar(Left& left, const Scalar& right) {
+      host::inplace_truediv_scalar_recursive<T>(left, right);
+    }
+
+    // --- Logical and boolean operators --- //
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_equal(const Left& left, const Right& right, Result& result) {
+      host::equal_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_not_equal(const Left& left,
+                                  const Right& right,
+                                  Result& result) {
+      host::not_equal_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_less_than(const Left& left,
+                                  const Right& right,
+                                  Result& result) {
+      host::less_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_less_equal_than(const Left& left,
+                                        const Right& right,
+                                        Result& result) {
+      host::less_equal_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_than(const Left& left,
+                                     const Right& right,
+                                     Result& result) {
+      host::greater_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_greater_equal_than(const Left& left,
+                                           const Right& right,
+                                           Result& result) {
+      host::greater_equal_than_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_logical_and(const Left& left, const Right& right, Result& result) {
+      host::logical_and_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Right, class Result>
+    static void execute_logical_or(const Left& left, const Right& right, Result& result) {
+      host::logical_or_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Array, class Result>
+    static void execute_logical_not(const Array& arr, Result& result) {
+      host::logical_not_recursive<T>(arr, result);
+    }
+
+    // --- Comparison operators with scalar broadcast --- //
+
+    template <typename T, class Left, class Result>
+    static void execute_equal_scalar(const Left& left,
+                                     const Scalar& right,
+                                     Result& result) {
+      host::equal_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_not_equal_scalar(const Left& left,
+                                         const Scalar& right,
+                                         Result& result) {
+      host::not_equal_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_less_than_scalar(const Left& left,
+                                         const Scalar& right,
+                                         Result& result) {
+      host::less_than_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_less_equal_than_scalar(const Left& left,
+                                               const Scalar& right,
+                                               Result& result) {
+      host::less_equal_than_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_greater_than_scalar(const Left& left,
+                                            const Scalar& right,
+                                            Result& result) {
+      host::greater_than_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, class Left, class Result>
+    static void execute_greater_equal_than_scalar(const Left& left,
+                                                  const Scalar& right,
+                                                  Result& result) {
+      host::greater_equal_than_scalar_recursive<T>(left, right, result);
+    }
+
+    // --- Inplace logical operators --- //
+
+    template <typename T, class Left, class Right>
+    static void execute_inplace_logical_and(Left& left, const Right& right) {
+      host::inplace_logical_and_recursive<T>(left, right);
+    }
+
+    template <typename T, class Left, class Right>
+    static void execute_inplace_logical_or(Left& left, const Right& right) {
+      host::inplace_logical_or_recursive<T>(left, right);
+    }
+
+    // --- Logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_logical_and_scalar(const Left& left,
+                                           const Scalar& right,
+                                           ResultType& result) {
+      host::logical_and_scalar_recursive<T>(left, right, result);
+    }
+
+    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
+    static void execute_logical_or_scalar(const Left& left,
+                                          const Scalar& right,
+                                          ResultType& result) {
+      host::logical_or_scalar_recursive<T>(left, right, result);
+    }
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_logical_and_scalar(Left& left, const Scalar& right) {
+      host::inplace_logical_and_scalar_recursive<T>(left, right);
+    }
+
+    template <typename T, ArrayLike Left>
+    static void execute_inplace_logical_or_scalar(Left& left, const Scalar& right) {
+      host::inplace_logical_or_scalar_recursive<T>(left, right);
+    }
+
+    // --- Copy and Modification --- //
+
+    template <typename T, ArrayLike Left>
+    static void execute_fill(Left& left, const Scalar& val) {
+      ssize_t starting_axis { 0 };
+      auto fill_op_internal = [](auto&& arg) -> T {
+        using FromT = std::decay_t<decltype(arg)>;
+        return ncarray::op_traits<FromT>::template cast<T>(arg);
+      };
+      T target_val = std::visit(fill_op_internal, val);
+      host::impl::fill_recursive<T>(left, left.data(), starting_axis, target_val);
+    }
+
+    template <typename T, ArrayLike Left, typename OutputType>
+    static void execute_copy_into(Left& left, OutputType*& dest) {
+      ssize_t starting_axis { 0 };
+      host::impl::copy_into_recursive<T, OutputType>(left,
+                                                     left.data(),
+                                                     starting_axis,
+                                                     dest);
+    }
+
+    template <typename DestT, ArrayLike Dest, ArrayLike Src>
+    static void execute_assign(Dest& dest, const Src& src) {
+      auto assign_op_internal = [&]<typename SrcT>() {
+        ssize_t starting_axis { 0 };
+        host::impl::assign_recursive<DestT, SrcT>(dest,
+                                                  src,
+                                                  dest.data(),
+                                                  src.data(),
+                                                  starting_axis);
+      };
+
+      dispatch(src.dtype(), assign_op_internal);
+    }
+  };
+
 #ifdef __CUDACC__
   struct GPUEngine {
     // --- Binary non-broadcast operations --- //
@@ -632,14 +931,28 @@ namespace ncarray {
 
     template <typename T, ArrayLike ArrayT, typename OutputType>
     static void execute_copy_into(const ArrayT& arr, OutputType* dest) {
-      cudaPointerAttributes attrs;
-      CHECK_CUDA_ERROR(cudaPointerGetAttributes(&attrs, dest));
+      cudaPointerAttributes dest_attrs;
+      CHECK_CUDA_ERROR(cudaPointerGetAttributes(&dest_attrs, dest));
       bool dev_compatible {
-        attrs.type == cudaMemoryTypeDevice || attrs.type == cudaMemoryTypeManaged
+        dest_attrs.type == cudaMemoryTypeDevice || dest_attrs.type == cudaMemoryTypeManaged
+      };
+
+      // We also use this for host->device transfers to make sure CPU-bound
+      // implementations don't need to know about CUDA. This means we have to
+      // check src attributes as well, though.
+      cudaPointerAttributes src_attrs;
+      CHECK_CUDA_ERROR(cudaPointerGetAttributes(&src_attrs, arr.data()));
+      bool src_is_dev {
+        src_attrs.type == cudaMemoryTypeDevice || src_attrs.type == cudaMemoryTypeManaged
       };
 
       if (arr.is_contiguous() && std::is_same_v<T, OutputType>) {
-        auto copy_kind = dev_compatible ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+        auto copy_kind = [src_is_dev, dev_compatible] () {
+          if (src_is_dev) {
+            return dev_compatible ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+          }
+          return cudaMemcpyHostToDevice;
+        }();
 
         CHECK_CUDA_ERROR(cudaMemcpy(dest,
                                     arr.data(),
@@ -648,10 +961,10 @@ namespace ncarray {
       } else {
         int TPB { 256 };
         int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-        if (dev_compatible) {
+        if (dev_compatible && src_is_dev) {
           copy_into_kernel<T, OutputType><<<blocks, TPB>>>(dest, arr.view());
           cudaDeviceSynchronize();
-        } else {
+        } else if (src_is_dev) {
           // TODO: Make this more optimized...
           // Create a temporary contiguous buffer then cudaMemcpy
           OutputType* d_tmp { nullptr };
@@ -663,6 +976,10 @@ namespace ncarray {
                                       arr.size() * sizeof(OutputType),
                                       cudaMemcpyDeviceToHost));
           CHECK_CUDA_ERROR(cudaFree(d_tmp));
+        } else {
+          // This shouldn't happen... but somehow ended up with host-to-host
+          // transfer in GPUEngine...
+          HostEngine::execute_copy_into<T>(arr, dest);
         }
       }
     }
@@ -678,306 +995,6 @@ namespace ncarray {
     }
   };
 #endif
-
-  struct HostEngine {
-    // --- Unary reductions --- //
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_sum(const A& arr) {
-      return host::sum_recursive<T>(arr);
-    }
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_mean(const A& arr) {
-      return host::mean_recursive<T>(arr);
-    }
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_max(const A& arr) {
-      return host::max_recursive<T>(arr);
-    }
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_min(const A& arr) {
-      return host::min_recursive<T>(arr);
-    }
-
-    // --- Binary non-broadcast operations --- //
-
-    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-    static void execute_add(const Left& left, const Right& right, ResultType& result) {
-      host::add_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-    static void execute_sub(const Left& left, const Right& right, ResultType& result) {
-      host::sub_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-    static void execute_mul(const Left& left, const Right& right, ResultType& result) {
-      host::mul_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-    static void execute_truediv(const Left& left,
-                                const Right& right,
-                                ResultType& result) {
-      host::truediv_recursive<T>(left, right, result);
-    }
-
-    // --- Inplace binary operations --- //
-
-    template <typename T, ArrayLike Left, ArrayLike Right>
-    static void execute_inplace_add(Left& left, const Right& right) {
-      host::inplace_add_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left, ArrayLike Right>
-    static void execute_inplace_sub(Left& left, const Right& right) {
-      host::inplace_sub_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left, ArrayLike Right>
-    static void execute_inplace_mul(Left& left, const Right& right) {
-      host::inplace_mul_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left, ArrayLike Right>
-    static void execute_inplace_truediv(Left& left, const Right& right) {
-      host::inplace_truediv_recursive<T>(left, right);
-    }
-
-    // --- Binary operations with a scalar broadcast --- //
-
-    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_add_scalar(const Left& left,
-                                   const Scalar& right,
-                                   ResultType& result) {
-      host::add_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_sub_scalar(const Left& left,
-                                   const Scalar& right,
-                                   ResultType& result) {
-      host::sub_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_mul_scalar(const Left& left,
-                                   const Scalar& right,
-                                   ResultType& result) {
-      host::mul_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_truediv_scalar(const Left& left,
-                                       const Scalar& right,
-                                       ResultType& result) {
-      host::truediv_scalar_recursive<T>(left, right, result);
-    }
-
-    // --- Inplace binary operations with a scalar broadcast --- //
-
-    template <typename T, ArrayLike Left>
-    static void execute_inplace_add_scalar(Left& left, const Scalar& right) {
-      host::inplace_add_scalar_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left>
-    static void execute_inplace_sub_scalar(Left& left, const Scalar& right) {
-      host::inplace_sub_scalar_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left>
-    static void execute_inplace_mul_scalar(Left& left, const Scalar& right) {
-      host::inplace_mul_scalar_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left>
-    static void execute_inplace_truediv_scalar(Left& left, const Scalar& right) {
-      host::inplace_truediv_scalar_recursive<T>(left, right);
-    }
-
-    // --- Logical and boolean operators --- //
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_equal(const Left& left, const Right& right, Result& result) {
-      host::equal_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_not_equal(const Left& left,
-                                  const Right& right,
-                                  Result& result) {
-      host::not_equal_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_less_than(const Left& left,
-                                  const Right& right,
-                                  Result& result) {
-      host::less_than_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_less_equal_than(const Left& left,
-                                        const Right& right,
-                                        Result& result) {
-      host::less_equal_than_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_greater_than(const Left& left,
-                                     const Right& right,
-                                     Result& result) {
-      host::greater_than_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_greater_equal_than(const Left& left,
-                                           const Right& right,
-                                           Result& result) {
-      host::greater_equal_than_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_logical_and(const Left& left, const Right& right, Result& result) {
-      host::logical_and_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Right, class Result>
-    static void execute_logical_or(const Left& left, const Right& right, Result& result) {
-      host::logical_or_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Array, class Result>
-    static void execute_logical_not(const Array& arr, Result& result) {
-      host::logical_not_recursive<T>(arr, result);
-    }
-
-    // --- Comparison operators with scalar broadcast --- //
-
-    template <typename T, class Left, class Result>
-    static void execute_equal_scalar(const Left& left,
-                                     const Scalar& right,
-                                     Result& result) {
-      host::equal_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Result>
-    static void execute_not_equal_scalar(const Left& left,
-                                         const Scalar& right,
-                                         Result& result) {
-      host::not_equal_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Result>
-    static void execute_less_than_scalar(const Left& left,
-                                         const Scalar& right,
-                                         Result& result) {
-      host::less_than_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Result>
-    static void execute_less_equal_than_scalar(const Left& left,
-                                               const Scalar& right,
-                                               Result& result) {
-      host::less_equal_than_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Result>
-    static void execute_greater_than_scalar(const Left& left,
-                                            const Scalar& right,
-                                            Result& result) {
-      host::greater_than_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, class Left, class Result>
-    static void execute_greater_equal_than_scalar(const Left& left,
-                                                  const Scalar& right,
-                                                  Result& result) {
-      host::greater_equal_than_scalar_recursive<T>(left, right, result);
-    }
-
-    // --- Inplace logical operators --- //
-
-    template <typename T, class Left, class Right>
-    static void execute_inplace_logical_and(Left& left, const Right& right) {
-      host::inplace_logical_and_recursive<T>(left, right);
-    }
-
-    template <typename T, class Left, class Right>
-    static void execute_inplace_logical_or(Left& left, const Right& right) {
-      host::inplace_logical_or_recursive<T>(left, right);
-    }
-
-    // --- Logical operators with scalar broadcast --- //
-
-    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_logical_and_scalar(const Left& left,
-                                           const Scalar& right,
-                                           ResultType& result) {
-      host::logical_and_scalar_recursive<T>(left, right, result);
-    }
-
-    template <typename T, ArrayLike Left, OwningArrayLike ResultType>
-    static void execute_logical_or_scalar(const Left& left,
-                                          const Scalar& right,
-                                          ResultType& result) {
-      host::logical_or_scalar_recursive<T>(left, right, result);
-    }
-
-    // --- Inplace logical operators with scalar broadcast --- //
-
-    template <typename T, ArrayLike Left>
-    static void execute_inplace_logical_and_scalar(Left& left, const Scalar& right) {
-      host::inplace_logical_and_scalar_recursive<T>(left, right);
-    }
-
-    template <typename T, ArrayLike Left>
-    static void execute_inplace_logical_or_scalar(Left& left, const Scalar& right) {
-      host::inplace_logical_or_scalar_recursive<T>(left, right);
-    }
-
-    // --- Copy and Modification --- //
-
-    template <typename T, ArrayLike Left>
-    static void execute_fill(Left& left, const Scalar& val) {
-      ssize_t starting_axis { 0 };
-      auto fill_op_internal = [](auto&& arg) -> T {
-        using FromT = std::decay_t<decltype(arg)>;
-        return ncarray::op_traits<FromT>::template cast<T>(arg);
-      };
-      T target_val = std::visit(fill_op_internal, val);
-      host::impl::fill_recursive<T>(left, left.data(), starting_axis, target_val);
-    }
-
-    template <typename T, ArrayLike Left, typename OutputType>
-    static void execute_copy_into(Left& left, OutputType*& dest) {
-      ssize_t starting_axis { 0 };
-      host::impl::copy_into_recursive<T, OutputType>(left,
-                                                     left.data(),
-                                                     starting_axis,
-                                                     dest);
-    }
-
-    template <typename DestT, ArrayLike Dest, ArrayLike Src>
-    static void execute_assign(Dest& dest, const Src& src) {
-      auto assign_op_internal = [&]<typename SrcT>() {
-        ssize_t starting_axis { 0 };
-        host::impl::assign_recursive<DestT, SrcT>(dest,
-                                                  src,
-                                                  dest.data(),
-                                                  src.data(),
-                                                  starting_axis);
-      };
-
-      dispatch(src.dtype(), assign_op_internal);
-    }
-  };
-
 } // namespace ncarray
 
 #endif // NCARRAY_ENGINES_HH

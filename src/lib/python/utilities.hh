@@ -420,7 +420,7 @@ namespace pyncarray {
 
     using ViewOrScalar = std::variant<ncarray::Scalar,ViewType>;
 
-    arr_cl.def("__repr__", &ArrayT::repr)
+    arr_cl.def("__repr__", &ArrayT::repr, py::is_operator())
     .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
       auto* shape = self.shape();
       py::list l;
@@ -509,10 +509,13 @@ namespace pyncarray {
 
            ViewType view = self.view_from_indices(indices.data(), num_indices);
            // For convenience convert scalars to... scalars (as opposed to 0-D array)
-           if (view.ndim() == 0) {
-             return view.get_scalar(view.data());
+           // But -- check if using GPU memory though
+           using MemType = typename std::decay_t<ArrayT>::MemType;
+           if constexpr (!std::is_same_v<MemType, ncarray::DevTag>) {
+             if (view.ndim() == 0) {
+               return view.get_scalar(view.data());
+             }
            }
-
            return view;
          },
          py::is_operator(),
