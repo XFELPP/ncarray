@@ -1746,7 +1746,7 @@ namespace ncarray {
   }
 
   template <ArrayLike Dest, ArrayLike Src>
-  inline void assign(Dest dest, const Src src) {
+  inline void assign(Dest& dest, const Src& src) {
     // Only deal with identical shapes for now
     if (dest.ndim() != src.ndim()) {
       throw type_error("Shapes must match for assignment");
@@ -1826,7 +1826,7 @@ namespace ncarray {
   }
 
   template <class L, class S>
-  inline void ArrayImpl<L, S>::assign(ArrayLike auto arr) {
+  inline void ArrayImpl<L, S>::assign(const ArrayLike auto& arr) {
     if (this->m_read_only) {
       throw type_error("Cannot modify a read-only view!");
     }

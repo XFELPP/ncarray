@@ -373,6 +373,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_add_kernel<T><<<blocks, TPB>>>(left.view(), right.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, ArrayLike Right>
@@ -381,6 +382,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_sub_kernel<T><<<blocks, TPB>>>(left.view(), right.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, ArrayLike Right>
@@ -389,6 +391,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_mul_kernel<T><<<blocks, TPB>>>(left.view(), right.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, ArrayLike Right>
@@ -397,6 +400,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_truediv_kernel<T><<<blocks, TPB>>>(left.view(), right.view());
+      cudaDeviceSynchronize();
     }
 
     // --- Binary operations with a scalar broadcast --- //
@@ -416,6 +420,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1) / TPB) };
 
       add_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val, result.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
@@ -433,6 +438,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1) / TPB) };
 
       sub_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val, result.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
@@ -449,6 +455,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1) / TPB) };
 
       mul_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val, result.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
@@ -465,6 +472,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1) / TPB) };
 
       truediv_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val, result.view());
+      cudaDeviceSynchronize();
     }
 
     // --- Inplace binary operations with a scalar broadcast --- //
@@ -482,6 +490,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_add_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left>
@@ -497,6 +506,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_sub_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left>
@@ -512,6 +522,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_mul_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left>
@@ -527,6 +538,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_truediv_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+      cudaDeviceSynchronize();
     }
 
     // --- Logical and boolean operators --- //
@@ -787,6 +799,7 @@ namespace ncarray {
       logical_and_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
                                                     scalar_val,
                                                     result.view());
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left, OwningArrayLike ResultType>
@@ -806,6 +819,7 @@ namespace ncarray {
       logical_or_scalar_kernel<T><<<blocks, TPB>>>(left.view(),
                                                    scalar_val,
                                                    result.view());
+      cudaDeviceSynchronize();
     }
 
     // --- Inplace logical operators with scalar broadcast --- //
@@ -823,6 +837,7 @@ namespace ncarray {
       int blocks { static_cast<int>((left.size() + TPB - 1)) / TPB };
 
       inplace_logical_and_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+      cudaDeviceSynchronize();
     }
 
     template <typename T, ArrayLike Left>
@@ -838,6 +853,7 @@ namespace ncarray {
       int blocks{static_cast<int>((left.size() + TPB - 1)) / TPB};
 
       inplace_logical_or_scalar_kernel<T><<<blocks, TPB>>>(left.view(), scalar_val);
+      cudaDeviceSynchronize();
     }
 
     // --- Reductions --- //
@@ -940,19 +956,23 @@ namespace ncarray {
     template <typename T, ArrayLike ArrayT, typename OutputType>
     static void execute_copy_into(const ArrayT& arr, OutputType* dest) {
       cudaPointerAttributes dest_attrs;
-      CHECK_CUDA_ERROR(cudaPointerGetAttributes(&dest_attrs, dest));
-      bool dest_is_dev {
-        dest_attrs.type == cudaMemoryTypeDevice || dest_attrs.type == cudaMemoryTypeManaged
-      };
+      cudaError_t err = cudaPointerGetAttributes(&dest_attrs, dest);
+      bool dest_is_dev { false };
+      if (err == cudaSuccess) {
+        dest_is_dev =
+          dest_attrs.type == cudaMemoryTypeDevice ||
+          dest_attrs.type == cudaMemoryTypeManaged;
+      } else {
+        cudaGetLastError();
+      }
 
+      // NOTE: cudaMemcpyDefault can presumably hide some of this complexity
+      //       however, it hasn't been working realiably, seemingly, so manual it is.
       // We also use this for host->device transfers to make sure CPU-bound
       // implementations don't need to know about CUDA. This means we have to
-      // check src attributes as well, though.
-      cudaPointerAttributes src_attrs;
-      CHECK_CUDA_ERROR(cudaPointerGetAttributes(&src_attrs, arr.data()));
-      bool src_is_dev {
-        src_attrs.type == cudaMemoryTypeDevice || src_attrs.type == cudaMemoryTypeManaged
-      };
+      // check src memory type as well, though.
+      using SrcMemType = typename ArrayT::MemType;
+      bool src_is_dev = std::is_same_v<SrcMemType, DevTag>;
 
       if (arr.is_contiguous() && std::is_same_v<T, OutputType>) {
         // Simplest case, the array is contiguous and there are no casts
@@ -960,7 +980,7 @@ namespace ncarray {
           if (src_is_dev) {
             return dest_is_dev ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
           }
-          return cudaMemcpyHostToDevice;
+          return dest_is_dev ? cudaMemcpyHostToDevice : cudaMemcpyHostToHost;
         }();
 
         CHECK_CUDA_ERROR(cudaMemcpy(dest,
@@ -994,16 +1014,26 @@ namespace ncarray {
           // TODO: Optimize this since it implies TWO copies atm...
 
           // Create temporary contiguous buffer like (casting into it)
-          OutputType* h_tmp = new OutputType[arr.size()];
-          OutputType* h_ref = h_tmp; // Copy routine takes *& - so pass a second one
+          // NOTE: I suspect that an issue arises only when you have integrated and
+          //       dedicated GPUs (like on a laptop)
+          //       There is some issue where pageable host memory is not working in DMAs
+          //       Switch to using mapped and pinned memory
+          cudaGetLastError(); // Flush any hidden errors
+          OutputType* h_tmp { nullptr };
+          std::size_t nbytes {
+            static_cast<std::size_t>(arr.size()) * sizeof(OutputType)
+          };
+          CHECK_CUDA_ERROR(cudaMallocHost(reinterpret_cast<void**>(&h_tmp), nbytes));
+          OutputType* h_ref = h_tmp; // Host copy routine takes *& - so pass a second
           HostEngine::execute_copy_into<T>(arr, h_ref);
 
+          cudaGetLastError(); // Flush any hidden errors...
+
           // Now copy into destination on device
-          CHECK_CUDA_ERROR(cudaMemcpy(dest,
-                                      h_tmp,
-                                      arr.size() * sizeof(OutputType),
-                                      cudaMemcpyHostToDevice));
-          delete[] h_tmp;
+          CHECK_CUDA_ERROR(cudaMemcpy(dest, h_tmp, nbytes, cudaMemcpyHostToDevice));
+          cudaDeviceSynchronize();
+          cudaGetLastError(); // Flush any hidden errors...
+          CHECK_CUDA_ERROR(cudaFreeHost(h_tmp));
         } else {
           // This shouldn't happen... but somehow ended up with host-to-host
           // transfer in GPUEngine...

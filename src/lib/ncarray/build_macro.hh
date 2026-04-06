@@ -135,7 +135,7 @@ namespace ncarray {
   ACTION ncarray::Scalar ncarray::min(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
   ACTION ncarray::Scalar ncarray::mean(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);         \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::assign(                                  \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>);                                                 \
+      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::fill(ncarray::Scalar);                   \
   ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::astype(ncarray::DType&) const;                       \
@@ -309,7 +309,7 @@ namespace ncarray {
       ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator|=(                                    \
           const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
   ACTION void ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::assign(                                \
-      ncarray::ArrayImpl<ncarray::L2, ncarray::S2>);
+      const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);
 
 #define INSTANTIATE_NC_BASE_OPS(L, S) BASE_OPS_LIST(template, L, S)
 #define INSTANTIATE_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(template, L1, S1, L2, S2)

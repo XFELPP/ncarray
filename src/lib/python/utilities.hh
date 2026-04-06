@@ -463,6 +463,9 @@ namespace pyncarray {
     .def_property_readonly("dtype",
                            &ArrayT::dtype,
                            "The data type of the underlying elements.")
+    .def_property_readonly("is_contiguous",
+                           &ArrayT::is_contiguous,
+                           "Check if the underlying data is contiguous")
     .def("squeeze",
          &ArrayT::squeeze,
          "Collapse and remove all axes of length 1.")

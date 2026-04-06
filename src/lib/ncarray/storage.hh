@@ -44,6 +44,11 @@ namespace ncarray {
 #ifdef NCA_HAS_CUDA
   inline cudaStream_t alloc_stream() {
     static cudaStream_t stream = []() {
+      // NOTE: There are seemingly issues with ensuring host writes to pinned memory
+      //       are visible on device. This setting below is actually for the mem_pool
+      //       but hiding it here is straightforward and it only gets called once
+      cudaSetDeviceFlags(cudaDeviceMapHost); // Hide this setting here
+
       cudaStream_t s;
 
       CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));

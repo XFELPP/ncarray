@@ -99,7 +99,7 @@ TEST(NCArrayOperationsTest, GPUSlicedReduction) {
   EXPECT_EQ(std::get<float>(total_sum), 52.0f);
 }
 
-TEST(NCArrayOperationsTest, GPUCrossTypeCopy) {
+TEST(NCArrayOperationsTest, GPUToHostCopy) {
   std::vector<ssize_t> shape { 10 };
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
   dev_arr.fill(5.7f);
@@ -113,6 +113,41 @@ TEST(NCArrayOperationsTest, GPUCrossTypeCopy) {
   }
 }
 
+TEST(NCArrayOperationsTest, HostToGPUCopyCast) {
+  std::vector<ssize_t> shape { 10 };
+  ncarray::NCArray host_arr(shape, ncarray::DType::float32);
+  host_arr.fill(5.7f);
+
+  // Copy float array into the device array with casts
+  ncarray::NCDevArray dev_arr(shape, ncarray::DType::uint32);
+  dev_arr.assign(host_arr);
+
+  // Now copy back to see if it survived the round trip
+  std::vector<std::uint32_t> result_buffer(10);
+  dev_arr.copy_into(result_buffer.data());
+
+  for (int i = 0; i < 10; ++i) {
+    EXPECT_EQ(result_buffer[i], 5);
+  }
+}
+
+TEST(NCArrayOperationsTest, HostToGPUCopyNoCast) {
+  std::vector<ssize_t> shape { 10 };
+  ncarray::NCArray host_arr(shape, ncarray::DType::float32);
+  host_arr.fill(5.7f);
+
+  // Copy float array into the device array without casts
+  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
+  dev_arr.assign(host_arr);
+
+  // Now copy back to see if it survived the round trip
+  std::vector<float> result_buffer(10);
+  dev_arr.copy_into(result_buffer.data());
+
+  for (int i = 0; i < 10; ++i) {
+    EXPECT_FLOAT_EQ(result_buffer[i], 5.7f);
+  }
+}
 
 TEST(NCArrayOperationsTest, GPUScalarArithmetic) {
   std::vector<ssize_t> shape { 100 };

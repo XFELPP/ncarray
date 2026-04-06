@@ -837,7 +837,7 @@ namespace ncarray {
 
     void fill(Scalar val);
 
-    void assign(ArrayLike auto arr);
+    void assign(const ArrayLike auto& arr);
 
     ViewType squeeze() const {
       void* new_data = this->m_data;
@@ -1114,7 +1114,7 @@ namespace ncarray {
         oss << ")";
         return
           class_name() + "([<...(on device)...>], shape=" + oss.str() +
-          ", shape=" + ncarray::to_string(this->m_dtype) + ")";
+          ", dtype=" + ncarray::to_string(this->m_dtype) + ")";
       }
       if (this->m_shape.ndim == 0) {
         return class_name() + "([], dtype=" + ncarray::to_string(this->m_dtype) + ")";
