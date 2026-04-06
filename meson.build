@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.3.0',
+    version: '0.4.0',
     default_options: [
         'cpp_std=c++23',
         'cuda_std=c++20',
@@ -127,6 +127,7 @@ installed_headers = [
     'src/lib/ncarray/array_impl.hh',
     'src/lib/ncarray/array_operations.hh',
     'src/lib/ncarray/array_traits.hh',
+    'src/lib/ncarray/build_macro.hh',
     'src/lib/ncarray/custom_types.hh',
     'src/lib/ncarray/dtype.hh',
     'src/lib/ncarray/engines.hh',
@@ -208,6 +209,15 @@ if nca_has_cuda
     deps_for_py_mod += cuda_dep
     deps_for_py_mod += ncdevarray_dep
 endif
+
+bindings_headers = [
+    'src/lib/python/utilities.hh',
+]
+py3.install_sources(
+    py_bindings_headers',
+    pure: false,
+    subdir: 'ncarray/include/python',
+)
 
 py_mod = py3.extension_module(
     '_pyncarray',
