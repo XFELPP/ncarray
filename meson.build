@@ -210,11 +210,11 @@ if nca_has_cuda
     deps_for_py_mod += ncdevarray_dep
 endif
 
-bindings_headers = [
+py_bindings_headers = [
     'src/lib/python/utilities.hh',
 ]
 py3.install_sources(
-    py_bindings_headers',
+    py_bindings_headers,
     pure: false,
     subdir: 'ncarray/include/python',
 )
