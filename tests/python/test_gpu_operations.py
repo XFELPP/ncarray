@@ -147,8 +147,8 @@ def test_gpu_comparisons():
     d_mask_ge0: nca.NCDevArray = d_ncarr >= 5.0
     # Expected: [F, F, F, F, F, F, T, T, T, T]
     # Expected: [F, F, F, F, F, T, T, T, T, T]
-    assert d_mask_gt1.dtype == nca.DType.bool_
-    assert d_mask_ge0.dtype == nca.DType.bool_
+    assert d_mask_gt1.dtype == nca.DType.bool
+    assert d_mask_ge0.dtype == nca.DType.bool
 
     h_res_gt1: npt.NDArray[np.bool_] = np.array(d_mask_gt1)
     h_res_ge0: npt.NDArray[np.bool_] = np.array(d_mask_ge0)

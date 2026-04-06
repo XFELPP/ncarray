@@ -933,7 +933,7 @@ namespace ncarray {
     static void execute_copy_into(const ArrayT& arr, OutputType* dest) {
       cudaPointerAttributes dest_attrs;
       CHECK_CUDA_ERROR(cudaPointerGetAttributes(&dest_attrs, dest));
-      bool dev_compatible {
+      bool dest_is_dev {
         dest_attrs.type == cudaMemoryTypeDevice || dest_attrs.type == cudaMemoryTypeManaged
       };
 
@@ -947,9 +947,10 @@ namespace ncarray {
       };
 
       if (arr.is_contiguous() && std::is_same_v<T, OutputType>) {
-        auto copy_kind = [src_is_dev, dev_compatible] () {
+        // Simplest case, the array is contiguous and there are no casts
+        auto copy_kind = [src_is_dev, dest_is_dev] () {
           if (src_is_dev) {
-            return dev_compatible ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+            return dest_is_dev ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
           }
           return cudaMemcpyHostToDevice;
         }();
@@ -959,12 +960,15 @@ namespace ncarray {
                                     arr.size() * sizeof(T),
                                     copy_kind));
       } else {
+        // Non-contiguous or we have to cast
         int TPB { 256 };
         int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-        if (dev_compatible && src_is_dev) {
+        if (dest_is_dev && src_is_dev) {
+          // Casting copy from device to device
           copy_into_kernel<T, OutputType><<<blocks, TPB>>>(dest, arr.view());
           cudaDeviceSynchronize();
         } else if (src_is_dev) {
+          // Casting copy from device to host
           // TODO: Make this more optimized...
           // Create a temporary contiguous buffer then cudaMemcpy
           OutputType* d_tmp { nullptr };
@@ -976,6 +980,22 @@ namespace ncarray {
                                       arr.size() * sizeof(OutputType),
                                       cudaMemcpyDeviceToHost));
           CHECK_CUDA_ERROR(cudaFree(d_tmp));
+        } else if (dest_is_dev) {
+          // Casting copy from host to device
+          // Copy to a contiguous buffer first for simplicity...
+          // TODO: Optimize this since it implies TWO copies atm...
+
+          // Create temporary contiguous buffer like (casting into it)
+          OutputType* h_tmp = new OutputType[arr.size()];
+          OutputType* h_ref = h_tmp; // Copy routine takes *& - so pass a second one
+          HostEngine::execute_copy_into<T>(arr, h_ref);
+
+          // Now copy into destination on device
+          CHECK_CUDA_ERROR(cudaMemcpy(dest,
+                                      h_tmp,
+                                      arr.size() * sizeof(OutputType),
+                                      cudaMemcpyHostToDevice));
+          delete[] h_tmp;
         } else {
           // This shouldn't happen... but somehow ended up with host-to-host
           // transfer in GPUEngine...

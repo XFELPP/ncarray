@@ -111,15 +111,11 @@ namespace ncarray {
      * For simplicity a loop is used here. NCOffsets could optimize, but its a fairly
      * fast operation anyway.
      */
-    NCA_HD inline bool is_contiguous() const {
-      bool is_contiguous { true };
-      for (ssize_t axis = 0; axis < this->ndim(); ++axis) {
-        if (this->is_pointer_axis(axis)) {
-          is_contiguous = false;
-          break;
-        }
+    NCA_HD inline bool is_contiguous_impl() const {
+      if constexpr (requires { static_cast<const Derived*>(this)->is_contiguous_impl(); }) {
+        return static_cast<const Derived*>(this)->is_contiguous_impl();
       }
-      return is_contiguous;
+      return false;
     }
 
     /**
@@ -369,6 +365,15 @@ namespace ncarray {
 
     NCA_HD inline const char* layout_repr() const { return "NCArray"; }
 
+    NCA_HD inline bool is_contiguous_impl() const {
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if (this->m_offsets[i] != 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+
   protected:
     Metadata m_offsets;
   };
@@ -437,6 +442,15 @@ namespace ncarray {
     }
 
     NCA_HD inline const char* layout_repr() const { return "SOArray"; }
+
+    NCA_HD inline bool is_contiguous_impl() const {
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if (this->m_suboffsets[i] >= 0) {
+          return false;
+        }
+      }
+      return true;
+    }
 
   protected:
     Metadata m_suboffsets;

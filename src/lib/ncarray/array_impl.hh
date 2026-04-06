@@ -813,6 +813,26 @@ namespace ncarray {
     //       contiguous?
     OwnerType to_contiguous() const;
 
+    NCA_HD inline bool is_contiguous() const {
+      ssize_t expected_stride { this->itemsize() };
+      for (ssize_t axis = this->ndim() - 1; axis >= 0; --axis) {
+        if (this->is_pointer_axis(axis)) {
+          // Check for pointer axes
+          return false;
+        }
+
+        auto dim_shape { this->m_shape[axis] };
+        if (dim_shape > 1 && this->m_strides[axis] != expected_stride) {
+          // Check for sliced views with steps (e.g. ncarr[::4])
+          return false;
+        }
+        expected_stride *= dim_shape;
+      }
+
+      // Finally, check layout classes helper (which looks at offsets etc.)
+      return this->is_contiguous_impl();
+    }
+
     OwnerType astype(DType& dtype_out) const;
 
     void fill(Scalar val);
