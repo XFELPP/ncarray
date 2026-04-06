@@ -850,6 +850,8 @@ namespace ncarray {
 
       MemEntry ptrs { mem_pool.next() };
 
+      *ptrs.h_ptr = AccumT { 0 };
+
       constexpr int TPB { 256 };
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
@@ -869,6 +871,8 @@ namespace ncarray {
 
       MemEntry ptrs { mem_pool.next() };
 
+      *ptrs.h_ptr = AccumT { 0 };
+
       constexpr int TPB { 256 };
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
@@ -887,6 +891,8 @@ namespace ncarray {
 
       MemEntry ptrs { mem_pool.next() };
 
+      *ptrs.h_ptr = op_traits<T>::lowest();
+
       constexpr int TPB { 256 };
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
@@ -902,6 +908,8 @@ namespace ncarray {
       using MemEntry = typename CircularDevicePool<T>::MemEntry;
 
       MemEntry ptrs { mem_pool.next() };
+
+      *ptrs.h_ptr = op_traits<T>::max();
 
       constexpr int TPB { 256 };
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
