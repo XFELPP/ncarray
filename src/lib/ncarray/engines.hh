@@ -1044,12 +1044,57 @@ namespace ncarray {
 
     template <typename DestT, ArrayLike Dest, ArrayLike Src>
     static void execute_assign(Dest& dest, const Src& src) {
-      auto assign_op_internal = [&] <typename SrcT> () {
-        GPUEngine::execute_copy_into<SrcT>(src,
-                                           reinterpret_cast<DestT*>(dest.data()));
-      };
+      // TODO: Make this more efficient!!
+      // This function handles non-contiguous copies
+      using DestMemType = typename Dest::MemType;
+      using SrcMemType = typename Src::MemType;
 
-      dispatch(src.dtype(), assign_op_internal);
+      constexpr bool dest_is_dev = std::is_same_v<DestMemType, DevTag>;
+      constexpr bool src_is_dev = std::is_same_v<SrcMemType, DevTag>;
+
+      using NCDevArray = ArrayImpl<NCOffsetsPolicy, DevOwnerPolicy>;
+
+      int TPB { 256 };
+      int blocks { static_cast<int>((src.size() + TPB - 1)) / TPB };
+      // Build a temporary contiguous device array
+      auto dest_dtype = dtype_traits<DestT>::value;
+      if constexpr (dest_is_dev) {
+        if constexpr (src_is_dev) {
+          // Device to device
+          auto dev_dev_op = [&] <typename SrcT> () {
+            copy_view_into_view_kernel<DestT, SrcT><<<blocks, TPB>>>(dest, src);
+          };
+          dispatch(src.dtype(), dev_dev_op);
+          cudaDeviceSynchronize();
+        } else {
+          // Host to device
+          NCDevArray tmp(dest.ndim(), dest.shape(), dest_dtype);
+          auto tmp_view = tmp.view();
+
+          auto host_dev_op = [&] <typename SrcT> () {
+            GPUEngine::execute_copy_into<SrcT>(src, reinterpret_cast<DestT*>(tmp.data()));
+          };
+          dispatch(src.dtype(), host_dev_op);
+
+          copy_view_into_view_kernel<DestT, DestT><<<blocks, TPB>>>(dest, tmp_view);
+          cudaDeviceSynchronize();
+        }
+      } else if constexpr (src_is_dev) {
+        // Device to host
+        NCDevArray tmp(dest.ndim(), dest.shape(), dest_dtype);
+        auto tmp_view = tmp.view();
+
+        auto dev_host_op = [&]<typename SrcT>() {
+          copy_view_into_view_kernel<DestT, SrcT><<<blocks, TPB>>>(tmp_view, src);
+        };
+        dispatch(src.dtype(), dev_host_op);
+        cudaDeviceSynchronize();
+
+        GPUEngine::execute_copy_into<DestT>(tmp, reinterpret_cast<DestT*>(dest.data()));
+      } else {
+        // Shouldn't happen... but got host to host
+        HostEngine::execute_copy_into<DestT>(src, dest);
+      }
     }
   };
 #endif

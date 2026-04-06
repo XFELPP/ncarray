@@ -416,6 +416,8 @@ namespace pyncarray {
    */
   template <typename ArrayT>
   void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
+    using LayoutPolicy = typename ArrayT::LayoutPolicy;
+    using HostViewType = ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>;
     using ViewType = typename ArrayT::ViewType;
 
     using ViewOrScalar = std::variant<ncarray::Scalar,ViewType>;
@@ -556,18 +558,64 @@ namespace pyncarray {
            // overloads but it was prohibitively costly for compilation times
            ViewType view = self.view_from_indices(indices.data(), num_indices);
            if (py::isinstance<py::array>(val)) {
-             auto rhs_view = pyarray_to_view<ViewType>(val.cast<py::array>());
+             // Make sure that we always use a HOST view even with GPU support
+             auto rhs_view = pyarray_to_view<HostViewType>(val.cast<py::array>());
              view.assign(rhs_view);
            } else if (py::isinstance<ArrayT>(val)) {
              view.assign(val.cast<ArrayT&>());
            } else {
+             // See if its another nc/so array type
+             auto assign_op = [&] <typename LayoutP, typename STag> () {
+               using VP =
+                 typename ncarray::StoragePolicyTraits<STag>::View;
+               using RP =
+                 typename ncarray::StoragePolicyTraits<STag>::Ref;
+               using OP =
+                 typename ncarray::StoragePolicyTraits<STag>::Owner;
+               using ArrView = ncarray::ArrayImpl<LayoutP, VP>;
+               using ArrRef = ncarray::ArrayImpl<LayoutP, RP>;
+               using ArrOwner = ncarray::ArrayImpl<LayoutP, OP>;
+               if (py::isinstance<ArrView>(val) ||
+                   py::isinstance<ArrRef>(val)  ||
+                   py::isinstance<ArrOwner>(val)) {
+                 view.assign(val.cast<ArrView>());
+                 return true;
+               }
+               return false;
+             };
+#ifdef NCA_HAS_CUDA
+             // TODO: When cross-layouts are added to the shared libs add full matrix
+             // I.e. test NC to SOArray, SOArray to NC etc.
+             // For now, just use the single LayoutPolicy
+             if (assign_op.template operator()<LayoutPolicy, ncarray::DevTag>()) {
+               return;
+             }
+             /*
+             if (assign_op.template operator()<ncarray::NCOffsetsPolicy, ncarray::DevTag>()) {
+               return;
+             }
+             if (assign_op.template operator()<ncarray::SOArrayPolicy, ncarray::DevTag>()) {
+               return;
+             }
+             */
+#endif
+             if (assign_op.template operator()<LayoutPolicy, ncarray::HostTag>()) {
+               return;
+             }
+             /*
+             if (assign_op.template operator()<ncarray::NCOffsetsPolicy, ncarray::HostTag>()) {
+               return;
+             }
+             if (assign_op.template operator()<ncarray::SOArrayPolicy, ncarray::HostTag>()) {
+               return;
+             }
+             */
+             // Convertible to scalar
+             // Use the algorithm directly to avoid the variant gets
              try {
-               // See if its another nc/so array type
-               view.assign(val.cast<ViewType>());
-             } catch (...) {
-               // Convertible to scalar
-               // Use the algorithm directly to avoid the variant gets
                view.fill(val.cast<ncarray::Scalar>());
+             } catch (...) {
+               throw py::type_error("Unrecognized type for assignment!");
              }
            }
          },
