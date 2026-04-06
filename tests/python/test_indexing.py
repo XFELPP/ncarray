@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 import numpy.typing as npt
 
-import ncarray
+import ncarray as nca
 
 
 def test_getitem_integer_arr():
@@ -19,10 +19,10 @@ def test_getitem_integer_arr():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(10, dtype=np.int32)
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef(arr)
-    assert nca[0, 0] == 0
-    assert nca[0, 5] == 5
-    assert nca[0, -1] == 9
+    ncarr: nca.NCArrayRef = nca.NCArrayRef(arr)
+    assert ncarr[0, 0] == 0
+    assert ncarr[0, 5] == 5
+    assert ncarr[0, -1] == 9
 
 
 def test_getitem_integer_list_of_arrs():
@@ -33,10 +33,10 @@ def test_getitem_integer_list_of_arrs():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(10, dtype=np.int32)
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef([arr])
-    assert nca[0, 0] == 0
-    assert nca[0, 5] == 5
-    assert nca[0, -1] == 9
+    ncarr: nca.NCArrayRef = nca.NCArrayRef([arr])
+    assert ncarr[0, 0] == 0
+    assert ncarr[0, 5] == 5
+    assert ncarr[0, -1] == 9
 
 
 def test_getitem_slice_arr():
@@ -47,8 +47,8 @@ def test_getitem_slice_arr():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(10, dtype=np.int32)
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef(arr)
-    slc: ncarray.NCArrayView = nca[0, 2:7]
+    ncarr: nca.NCArrayRef = nca.NCArrayRef(arr)
+    slc: nca.NCArrayView = ncarr[0, 2:7]
     assert slc.shape == (5,)
     assert np.array_equal(np.array(slc), arr[2:7])
 
@@ -61,8 +61,8 @@ def test_getitem_slice_list_of_arrs():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(10, dtype=np.int32)
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef([arr])
-    slc: ncarray.NCArrayView = nca[0, 2:7]
+    ncarr: nca.NCArrayRef = nca.NCArrayRef([arr])
+    slc: nca.NCArrayView = ncarr[0, 2:7]
     assert slc.shape == (5,)
     assert np.array_equal(np.array(slc), arr[2:7])
 
@@ -75,10 +75,10 @@ def test_getitem_tuple_2d_arr():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(20, dtype=np.int32).reshape((4, 5))
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef(arr)
-    assert nca[0, 1, 2] == 7
+    ncarr: nca.NCArrayRef = nca.NCArrayRef(arr)
+    assert ncarr[0, 1, 2] == 7
 
-    slc: ncarray.NCArrayView = nca[0, 1:3, 2:4]
+    slc: nca.NCArrayView = ncarr[0, 1:3, 2:4]
     assert slc.shape == (2, 2)
     assert np.array_equal(np.array(slc), arr[1:3, 2:4])
 
@@ -91,10 +91,10 @@ def test_getitem_tuple_2d_list_of_arrs():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(20, dtype=np.int32).reshape((4, 5))
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef([arr])
-    assert nca[0, 1, 2] == 7
+    ncarr: nca.NCArrayRef = nca.NCArrayRef([arr])
+    assert ncarr[0, 1, 2] == 7
 
-    slc: ncarray.NCArrayView = nca[0, 1:3, 2:4]
+    slc: nca.NCArrayView = ncarr[0, 1:3, 2:4]
     assert slc.shape == (2, 2)
     assert np.array_equal(np.array(slc), arr[1:3, 2:4])
 
@@ -102,8 +102,8 @@ def test_getitem_tuple_2d_list_of_arrs():
 def test_squeeze():
     """Test the squeeze function."""
     arr: npt.NDArray[np.float32] = np.ones((1, 5, 1, 3), dtype=np.float32)
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef([arr])
-    sq: ncarray.NCArrayView = nca.squeeze()
+    ncarr: nca.NCArrayRef = nca.NCArrayRef([arr])
+    sq: nca.NCArrayView = ncarr.squeeze()
     assert sq.shape == (5, 3)
 
 
@@ -115,9 +115,9 @@ def test_setitem_integer():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(10, dtype=np.int32)
-    nca: ncarray.NCArrayRef = ncarray.NCArrayRef([arr])
-    nca[0, 5] = 42
-    assert nca[0, 5] == 42
+    ncarr: nca.NCArrayRef = nca.NCArrayRef([arr])
+    ncarr[0, 5] = 42
+    assert ncarr[0, 5] == 42
     assert arr[5] == 42  # Ref array modifies underneath numpy array
 
 
@@ -129,9 +129,10 @@ def test_soarray_indexing_arr():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(12, dtype=np.int32).reshape((3, 4))
-    soa: ncarray.SOArrayRef = ncarray.SOArrayRef(arr)
-    assert soa[0, 1, 2] == 6
-    slc: ncarray.SOArrayView = soa[0, 1:3, 0:2]
+    soarr: nca.SOArrayRef = nca.SOArrayRef(arr)
+    assert soarr[0, 1, 2] == 6
+
+    slc: nca.SOArrayView = soarr[0, 1:3, 0:2]
     assert slc.shape == (2, 2)
     assert np.array_equal(np.array(slc), arr[1:3, 0:2])
 
@@ -144,8 +145,9 @@ def test_soarray_indexing_list_of_arrs():
     axis.
     """
     arr: npt.NDArray[np.int32] = np.arange(12, dtype=np.int32).reshape((3, 4))
-    soa: ncarray.SOArrayRef = ncarray.SOArrayRef([arr])
-    assert soa[0, 1, 2] == 6
-    slc: ncarray.SOArrayView = soa[0, 1:3, 0:2]
+    soarr: nca.SOArrayRef = nca.SOArrayRef([arr])
+    assert soarr[0, 1, 2] == 6
+
+    slc: nca.SOArrayView = soarr[0, 1:3, 0:2]
     assert slc.shape == (2, 2)
     assert np.array_equal(np.array(slc), arr[1:3, 0:2])

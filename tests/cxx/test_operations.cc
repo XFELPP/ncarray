@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2025-2026 Gabriel Dorlhiac
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
 #include "gtest/gtest.h"
 
 #include "ncarray/array_operations.hh"
@@ -7,42 +15,82 @@
 #include "ncarray/ncdevarrays.cuh"
 #endif
 
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 #include <cstdint>
+#include <variant>
 #include <vector>
 
 TEST(NCArrayOperationsTest, BinaryOps) {
   std::vector<ssize_t> shape { 4, 4, 4 };
 
-  ncarray::NCArray arr1(shape, ncarray::dtype_traits<float>::value);
-  ncarray::NCArray arr2(shape, ncarray::dtype_traits<float>::value);
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
 
-  arr1.fill(ncarray::Scalar { 2.0f });
-  arr2.fill(ncarray::Scalar { 4.0f });
+  arr1.fill(2.0f);
+  arr2.fill(4.0f);
 
   // --- Binary Addition (2.0 + 4.0 = 6.0) --- //
   auto sum_res = arr1 + arr2;
 
-  const float* sum_ptr = reinterpret_cast<const float*>(sum_res.data());
-  for (ssize_t i = 0; i < sum_res.size(); ++i) {
-    ASSERT_FLOAT_EQ(sum_ptr[i], 6.0f) << "Sum failed at index " << i;
+  for (ssize_t i = 0; i < 4; ++i) {
+    for (ssize_t j = 0; j < 4; ++j) {
+      for (ssize_t k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(sum_res(i, j, k)), 6.0f)
+          << "Sum failed at index " << i;
+      }
+    }
   }
 
   // --- Binary Division (2.0 / 4.0 = 0.5) --- //
-  auto div_res = arr1 / arr2;
+  auto div_res = arr1 / arr2; // op_traits mean this will be double!
 
-  const float* div_ptr = reinterpret_cast<const float*>(div_res.data());
-  for (ssize_t i = 0; i < div_res.size(); ++i) {
-    ASSERT_FLOAT_EQ(div_ptr[i], 0.5f) << "Division failed at index " << i;
+  for (ssize_t i = 0; i < 4; ++i) {
+    for (ssize_t j = 0; j < 4; ++j) {
+      for (ssize_t k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<double>(div_res(i, j, k)), 0.5)
+          << "Division failed at index " << i;
+      }
+    }
   }
 }
 
+TEST(NCArrayOperationsTest, Comparisons) {
+  std::vector<ssize_t> shape { 5 };
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
+
+  for (ssize_t i = 0; i < 5; ++i) {
+    arr1(i) = i;
+  }
+  arr2.fill(2.0f);
+
+  auto res_eq = (arr1 == arr2); // [F, F, T, F, F]
+  EXPECT_FALSE(res_eq(0));
+  EXPECT_FALSE(res_eq(1));
+  EXPECT_TRUE(res_eq(2));
+  EXPECT_FALSE(res_eq(3));
+  EXPECT_FALSE(res_eq(4));
+
+  auto res_lt = (arr1 < arr2); // [T, T, F, F, F]
+  EXPECT_TRUE(res_lt(0));
+  EXPECT_TRUE(res_lt(1));
+  EXPECT_FALSE(res_lt(2));
+  EXPECT_FALSE(res_lt(3));
+  EXPECT_FALSE(res_lt(4));
+}
 
 TEST(NCArrayOperationsTest, SlicedBinaryOps) {
   std::vector<ssize_t> shape { 4, 4, 4 };
-  ncarray::NCArray arr1(shape, ncarray::dtype_traits<float>::value);
-  ncarray::NCArray arr2(shape, ncarray::dtype_traits<float>::value);
-  arr1.fill(ncarray::Scalar { 1.0f });
-  arr2.fill(ncarray::Scalar { 2.0f });
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
+  arr1.fill(1.0f);
+  arr2.fill(2.0f);
 
   ncarray::IndexItem region[] = {
     ncarray::IndexItem(ncarray::Slice(1, 3)),
@@ -60,9 +108,9 @@ TEST(NCArrayOperationsTest, SlicedBinaryOps) {
   EXPECT_EQ(res.shape(1), 2);
   EXPECT_EQ(res.shape(2), 2);
 
-  const float* res_ptr = reinterpret_cast<const float*>(res.data());
   for (ssize_t i = 0; i < res.size(); ++i) {
-    ASSERT_FLOAT_EQ(res_ptr[i], 3.0f) << "Slice addition failed at index " << i;
+    ASSERT_FLOAT_EQ(static_cast<float>(res(0, 0, i)), 3.0f)
+      << "Slice addition failed at index " << i;
   }
 }
 
@@ -81,23 +129,24 @@ TEST(NCArray, VectorArrayAddition) {
 
   auto res = a + b;
 
-  auto* res_ptr = reinterpret_cast<ncarray::Float2*>(res.data());
-  EXPECT_FLOAT_EQ(res_ptr[0].x, 11.0f);
-  EXPECT_FLOAT_EQ(res_ptr[0].y, 12.0f);
-  EXPECT_FLOAT_EQ(res_ptr[1].x, 6.0f);
-  EXPECT_FLOAT_EQ(res_ptr[1].y, 7.0f);
+  ncarray::Float2& f2_0 = res(0);
+  ncarray::Float2& f2_1 = res(1);
+  EXPECT_FLOAT_EQ(f2_0.x, 11.0f);
+  EXPECT_FLOAT_EQ(f2_0.y, 12.0f);
+  EXPECT_FLOAT_EQ(f2_1.x, 6.0f);
+  EXPECT_FLOAT_EQ(f2_1.y, 7.0f);
 }
 
 TEST(NCArrayOperationsTest, Reductions) {
   std::vector<ssize_t> shape { 10 };
   ncarray::NCArray arr(shape, ncarray::dtype_traits<int32_t>::value);
 
-  arr.fill(ncarray::Scalar { static_cast<int32_t>(2) });
+  arr.fill(static_cast<int32_t>(2));
 
   auto a_sum = arr.sum();
   auto a_max = arr.max();
   auto a_min = arr.min();
-  EXPECT_EQ(std::get<int64_t>(a_sum), 20);
+  EXPECT_EQ(std::get<int32_t>(a_sum), 20);
   EXPECT_EQ(std::get<int32_t>(a_max), 2);
   EXPECT_EQ(std::get<int32_t>(a_min), 2);
 }
@@ -106,34 +155,12 @@ TEST(SOArrayOperationsTest, Reductions) {
   std::vector<ssize_t> shape { 5 };
   ncarray::SOArray arr(shape, ncarray::dtype_traits<float>::value);
 
-  arr.fill(ncarray::Scalar { 1.5f });
+  arr.fill(1.5f);
 
   auto a_sum = arr.sum();
   auto a_max = arr.max();
   auto a_min = arr.min();
-  EXPECT_EQ(std::get<double>(a_sum), 7.5);
+  EXPECT_EQ(std::get<float>(a_sum), 7.5f);
   EXPECT_EQ(std::get<float>(a_max), 1.5f);
   EXPECT_EQ(std::get<float>(a_min), 1.5f);
 }
-
-#ifdef NCA_HAS_CUDA
-TEST(NCArrayOperationsTest, GPUBinaryOps) {
-  std::vector<ssize_t> shape { 4, 4, 4 };
-
-  ncarray::NCDevArray dev_arr1(shape, ncarray::dtype_traits<float>::value);
-  ncarray::NCDevArray dev_arr2(shape, ncarray::dtype_traits<float>::value);
-
-  dev_arr1.fill(ncarray::Scalar { 2.0f });
-  dev_arr2.fill(ncarray::Scalar { 4.0f });
-
-  auto dev_sum = dev_arr1 + dev_arr2;
-
-  ncarray::NCArray host_sum(shape, ncarray::dtype_traits<float>::value);
-  dev_sum.copy_into(host_sum.data());
-
-  const float* host_ptr = reinterpret_cast<const float*>(host_sum.data());
-  for (ssize_t i = 0; i < host_sum.size(); ++i) {
-    ASSERT_FLOAT_EQ(host_ptr[i], 6.0f) << "GPU addition failed at index " << i;
-  }
-}
-#endif

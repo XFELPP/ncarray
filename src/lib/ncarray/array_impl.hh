@@ -24,6 +24,7 @@ typedef SSIZE_T ssize_t;
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -69,6 +70,138 @@ namespace {
 } // anonymous namespace
 
 namespace ncarray {
+  // --- Dispatch operation --- //
+
+  template <typename Visitor>
+  NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
+    switch (type) {
+    case DType::bool_: {
+      return visitor.template operator()<bool>();
+    }
+    case DType::char_: {
+      return visitor.template operator()<char>();
+    }
+    // Stuck becuase of std::uint8_t
+    // case DType::uchar: {
+    //  return visitor.template operator()<unsigned char>();
+    //}
+    case DType::uint8: {
+      return visitor.template operator()<std::uint8_t>();
+    }
+    case DType::uint16: {
+      return visitor.template operator()<std::uint16_t>();
+    }
+    case DType::uint32: {
+      return visitor.template operator()<std::uint32_t>();
+    }
+    case DType::uint64: {
+      return visitor.template operator()<std::uint64_t>();
+    }
+    case DType::int8: {
+      return visitor.template operator()<std::int8_t>();
+    }
+    case DType::int16: {
+      return visitor.template operator()<std::int16_t>();
+    }
+    case DType::int32: {
+      return visitor.template operator()<std::int32_t>();
+    }
+    case DType::int64: {
+      return visitor.template operator()<std::int64_t>();
+    }
+    case DType::float32: {
+      return visitor.template operator()<float>();
+    }
+    case DType::float64: {
+      return visitor.template operator()<double>();
+    }
+    case DType::complex64: {
+      return visitor.template operator()<std::complex<float>>();
+    }
+    case DType::complex128: {
+      return visitor.template operator()<std::complex<double>>();
+    }
+    case DType::complex256: {
+      return visitor.template operator()<std::complex<long double>>();
+    }
+    case DType::vfloat2: {
+      return visitor.template operator()<Float2>();
+    }
+    case DType::vfloat3: {
+      return visitor.template operator()<Float3>();
+    }
+    case DType::vfloat4: {
+      return visitor.template operator()<Float4>();
+    }
+    case DType::vdouble2: {
+      return visitor.template operator()<Double2>();
+    }
+    case DType::vdouble3: {
+      return visitor.template operator()<Double3>();
+    }
+    case DType::vdouble4: {
+      return visitor.template operator()<Double4>();
+    }
+    default:
+      assert(false && "Invalid DType for operation!");
+      return visitor.template operator()<float>();
+    }
+  }
+
+  // --- Array Element Proxy --- //
+  /**
+   * The element proxy can be returned by arrays during indexing to provide
+   * reference based access to the underlying data.
+   *
+   * This mostly provides improved ergonomics.
+   *
+   * operator T& style functions do NOT type check. If you require type checking
+   * an `get<T>` function is provided.
+   */
+  struct ArrayElementProxy {
+    void* m_data;
+    DType m_dtype;
+
+    template <typename T>
+    NCA_HD inline operator T&() const {
+      return *reinterpret_cast<T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline operator const T&() const {
+      return *reinterpret_cast<const T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline ArrayElementProxy& operator=(const T& val) {
+      auto assign_op = [&]<typename ArrayT>() {
+        *reinterpret_cast<ArrayT*>(m_data) = op_traits<T>::template cast<ArrayT>(val);
+      };
+
+      ncarray::dispatch(m_dtype, assign_op);
+      return *this;
+    }
+
+    // --- Type checking versions --- //
+    template <typename T>
+    NCA_HD inline T& get() {
+      assert(m_dtype == dtype_traits<T>::value);
+      return *reinterpret_cast<T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline const T& get() const {
+      assert(m_dtype == dtype_traits<T>::value);
+      return *reinterpret_cast<const T*>(m_data);
+    }
+
+    template <typename T>
+    NCA_HD inline void set(const T& val) {
+      assert(m_dtype == dtype_traits<T>::value);
+      *reinterpret_cast<T*>(m_data) = val;
+    }
+  };
+
   // --- Array Implementations --- //
   /**
    * The ArrayImpl provides the mean entry point for all array types.
@@ -106,7 +239,8 @@ namespace ncarray {
     // knowing how much memory to allocate relies on information from Layout
     // This means that these constructors MUST be correct and initialize everything
     // --- Host-only copy constructor for owner types --- //
-    ArrayImpl(const ArrayImpl& other) requires std::is_base_of_v<OwnerTag, Storage>
+    ArrayImpl(const ArrayImpl& other)
+      requires std::is_base_of_v<OwnerTag, Storage>
       : Layout(static_cast<const Layout&>(other))
     {
       this->m_dtype = other.dtype();
@@ -117,9 +251,11 @@ namespace ncarray {
       this->m_data = reinterpret_cast<void*>(this->m_storage.get());
     }
 
-    ArrayImpl(ArrayImpl&& other) noexcept requires std::is_base_of_v<OwnerTag, Storage>
-        : Layout(std::move(static_cast<Layout&>(other))),
-          Storage(std::move(static_cast<Storage&>(other))) {
+    ArrayImpl(ArrayImpl&& other) noexcept
+      requires std::is_base_of_v<OwnerTag, Storage>
+      : Layout(std::move(static_cast<Layout&>(other)))
+      , Storage(std::move(static_cast<Storage&>(other)))
+    {
       // After move make sure to reset the data pointer
       this->m_data = reinterpret_cast<void*>(this->m_storage.get());
     }
@@ -455,12 +591,14 @@ namespace ncarray {
       }
     }
 
-    NCA_HD inline ssize_t nbytes() const {
+    NCA_HD ssize_t nbytes() const {
       return this->size() * this->itemsize();
     }
 
+    // --- Int/slice/ellipsis variadic indexing to view --- //
+
     template <typename... Args>
-      requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
+    requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
     NCA_HD ViewType operator[](Args&&... idx_args) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
 
@@ -474,13 +612,18 @@ namespace ncarray {
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
-    template <typename T>
-    NCA_HD inline T& operator[](ssize_t idx) {
+    // --- Linearized indexing to reference (non-const and const) --- //
+
+    NCA_HD ArrayElementProxy operator[](ssize_t idx) {
       void* out_data = const_cast<void*>(this->data());
       ssize_t lin_idx { idx };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__)
 #pragma unroll
+#elif defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC unroll 10
+#elif defined(__clang__)
+#pragma clang loop unroll(full)
 #endif
       for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
         ssize_t dim_shape = this->shape(dim);
@@ -491,16 +634,19 @@ namespace ncarray {
         out_data = this->advance(out_data, dim, local_idx);
       }
 
-      return *reinterpret_cast<T*>(out_data);
+      return { out_data, this->dtype() };
     }
 
-    template <typename T>
-    NCA_HD inline const T& operator[](ssize_t idx) const {
+    NCA_HD const ArrayElementProxy operator[](ssize_t idx) const {
       const void* out_data = this->data();
       ssize_t lin_idx { idx };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__)
 #pragma unroll
+#elif defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC unroll 10
+#elif defined(__clang__)
+#pragma clang loop unroll(full)
 #endif
       for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
         ssize_t dim_shape = this->shape(dim);
@@ -509,9 +655,51 @@ namespace ncarray {
         out_data = this->advance(out_data, dim, local_idx);
       }
 
-      return *reinterpret_cast<const T*>(out_data);
+      return { const_cast<void*>(out_data), this->dtype() };
     }
 
+    // --- Variadic indexing to reference --- //
+    // operator() overloads are intended for indexing down to a single point reference.
+    // For view semantics, use the variadic operator[] - a specialized version of that
+    // operator also accepts a "linearized" index to traverse the entire N-D array
+    // with one index.
+    template <typename... Args>
+    requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
+    NCA_HD ArrayElementProxy operator()(Args... args) {
+      assert(sizeof...(Args) == this->ndim());
+
+      void* ptr = const_cast<void*>(this->data());
+      ssize_t axis { 0 };
+
+      ((ptr = this->advance(ptr, axis++, static_cast<ssize_t>(args))), ...);
+
+      return { ptr, this->dtype() };
+    }
+
+    template <typename... Args>
+    requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
+    NCA_HD const ArrayElementProxy operator()(Args... args) const {
+      assert(sizeof...(Args) == this->ndim());
+
+      const void* ptr = this->data();
+      ssize_t axis { 0 };
+
+      ((ptr = this->advance(ptr, axis++, static_cast<ssize_t>(args))), ...);
+
+      return { const_cast<void*>(ptr), this->dtype() };
+    }
+
+    // --- Utilities for building new views --- //
+
+    /**
+     * Provided a set of indices, construct a new ViewType of array.
+     *
+     * @param[in] indices The index specification. Each item contains a type
+     *            (like Slice, or integer) and the axis it belongs to.
+     * @param[in] num_indices The number of indices that were provided for
+     *            traversing the pointer.
+     * @returns The new view of the data.
+     */
     NCA_HD ViewType view_from_indices(const IndexItem* indices,
                                       ssize_t num_indices) const {
       AxisDescr axes[NCARRAY_MAX_NDIM];
@@ -520,6 +708,20 @@ namespace ncarray {
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
+    /**
+     * Traverse a data pointer using per axis specifications for shapes, strides,
+     * and offsets/suboffsets etc.
+     *
+     * This function in general is not likely to be used directly. It correctly
+     * traverses the data pointer, accumulating offsets as needed, to produce a
+     * final view that matches the input axes specifications.
+     *
+     * Using the view_from_indices function is more user friendly.
+     *
+     * @param[in] data_ptr The data to traverse.
+     * @param[in] axes The specification for each axis in the new view.
+     * @returns The new view of the data.
+     */
     template <class VT>
     NCA_HD VT out_from_axes_ptr(void* data_ptr, const AxisDescr* axes) const {
       Metadata new_shape;
@@ -611,11 +813,31 @@ namespace ncarray {
     //       contiguous?
     OwnerType to_contiguous() const;
 
+    NCA_HD inline bool is_contiguous() const {
+      ssize_t expected_stride { this->itemsize() };
+      for (ssize_t axis = this->ndim() - 1; axis >= 0; --axis) {
+        if (this->is_pointer_axis(axis)) {
+          // Check for pointer axes
+          return false;
+        }
+
+        auto dim_shape { this->m_shape[axis] };
+        if (dim_shape > 1 && this->m_strides[axis] != expected_stride) {
+          // Check for sliced views with steps (e.g. ncarr[::4])
+          return false;
+        }
+        expected_stride *= dim_shape;
+      }
+
+      // Finally, check layout classes helper (which looks at offsets etc.)
+      return this->is_contiguous_impl();
+    }
+
     OwnerType astype(DType& dtype_out) const;
 
     void fill(Scalar val);
 
-    void assign(ArrayLike auto arr);
+    void assign(const ArrayLike auto& arr);
 
     ViewType squeeze() const {
       void* new_data = this->m_data;
@@ -683,6 +905,27 @@ namespace ncarray {
     template <ArrayLike OtherType>
     OwnerType operator/(const OtherType& other) const;
 
+    // --- Binary inplace operations --- //
+    template <ArrayLike OtherType>
+    ArrayImpl& iadd(const OtherType& other);
+    template <ArrayLike OtherType>
+    ArrayImpl& operator+=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    ArrayImpl& isub(const OtherType& other);
+    template <ArrayLike OtherType>
+    ArrayImpl& operator-=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    ArrayImpl& imul(const OtherType& other);
+    template <ArrayLike OtherType>
+    ArrayImpl& operator*=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    ArrayImpl& itruediv(const OtherType& other);
+    template <ArrayLike OtherType>
+    ArrayImpl& operator/=(const OtherType& other);
+
     // --- Binary Operations Overloads for Scalar Broadcasts --- //
     OwnerType add(const Scalar& other) const;
     OwnerType operator+(const Scalar& other) const;
@@ -695,6 +938,113 @@ namespace ncarray {
 
     OwnerType truediv(const Scalar& other) const;
     OwnerType operator/(const Scalar& other) const;
+
+    // --- Inplace binary operations with scalar broadcasts --- //
+
+    ArrayImpl& iadd(const Scalar& other);
+    ArrayImpl& operator+=(const Scalar& other);
+
+    ArrayImpl& isub(const Scalar& other);
+    ArrayImpl& operator-=(const Scalar& other);
+
+    ArrayImpl& imul(const Scalar& other);
+    ArrayImpl& operator*=(const Scalar& other);
+
+    ArrayImpl& itruediv(const Scalar& other);
+    ArrayImpl& operator/=(const Scalar& other);
+
+    // --- Logical and boolean operators --- //
+
+    template <ArrayLike OtherType>
+    OwnerType is_equal(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator==(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_not_equal(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator!=(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_less_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator<(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_less_equal_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator<=(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_greater_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator>(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType is_greater_equal_than(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator>=(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType logical_and(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator&&(const OtherType& other) const;
+
+    template <ArrayLike OtherType>
+    OwnerType logical_or(const OtherType& other) const;
+    template <ArrayLike OtherType>
+    OwnerType operator||(const OtherType& other) const;
+
+    OwnerType logical_not() const;
+    OwnerType operator!() const;
+
+    // --- Comparison operators with scalar broadcast --- //
+
+    OwnerType is_equal(const Scalar& other) const;
+    OwnerType operator==(const Scalar& other) const;
+
+    OwnerType is_not_equal(const Scalar& other) const;
+    OwnerType operator!=(const Scalar& other) const;
+
+    OwnerType is_less_than(const Scalar& other) const;
+    OwnerType operator<(const Scalar& other) const;
+
+    OwnerType is_less_equal_than(const Scalar& other) const;
+    OwnerType operator<=(const Scalar& other) const;
+
+    OwnerType is_greater_than(const Scalar& other) const;
+    OwnerType operator>(const Scalar& other) const;
+
+    OwnerType is_greater_equal_than(const Scalar& other) const;
+    OwnerType operator>=(const Scalar& other) const;
+
+    // --- Inplace logical operators --- //
+
+    template <ArrayLike OtherType>
+    ArrayImpl& ilogical_and(const OtherType& other);
+    template <ArrayLike OtherType>
+    ArrayImpl& operator&=(const OtherType& other);
+
+    template <ArrayLike OtherType>
+    ArrayImpl& ilogical_or(const OtherType& other);
+    template <ArrayLike OtherType>
+    ArrayImpl& operator|=(const OtherType& other);
+
+    // --- Logical operators with scalar broadcast --- //
+
+    OwnerType logical_and(const Scalar& other) const;
+    OwnerType operator&&(const Scalar& other) const;
+
+    OwnerType logical_or(const Scalar& other) const;
+    OwnerType operator||(const Scalar& other) const;
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    ArrayImpl& ilogical_and(const Scalar& other);
+    ArrayImpl& operator&=(const Scalar& other);
+
+    ArrayImpl& ilogical_or(const Scalar& other);
+    ArrayImpl& operator|=(const Scalar& other);
 
     // -- Iterators --- //
 
@@ -752,6 +1102,20 @@ namespace ncarray {
     ConstIterator end() const;
 
     std::string repr() const {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+        std::ostringstream oss;
+        oss << "(";
+        for (ssize_t i = 0; i < this->ndim(); ++i) {
+          oss << this->m_shape[i];
+          if (i < this->ndim() - 1) {
+            oss << ", ";
+          }
+        }
+        oss << ")";
+        return
+          class_name() + "([<...(on device)...>], shape=" + oss.str() +
+          ", dtype=" + ncarray::to_string(this->m_dtype) + ")";
+      }
       if (this->m_shape.ndim == 0) {
         return class_name() + "([], dtype=" + ncarray::to_string(this->m_dtype) + ")";
       }

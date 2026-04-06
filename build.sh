@@ -25,8 +25,12 @@ $(basename "$0"):
     Options:
         -c|--clean
           Clean up the build environment
+        -d|--debug
+          Create a debug release.
         -h|--help
           Display this message.
+        -t|--tests
+          Run test suite.
 
     Options that apply on subsequent runs of the build script:
         -e|--entry_points
@@ -50,6 +54,10 @@ do
         NEED_CLEANUP=1
         shift
         ;;
+    -d|--debug)
+        DEBUG_RELEASE=1
+        shift
+        ;;
     -e|--entry_points)
         NEED_ENTRYPOINTS=1
         shift
@@ -57,6 +65,11 @@ do
     -r|--reconfigure)
         NEED_RECONFIG=1
         shift
+        ;;
+    -t|--tests)
+        RUN_TESTS=1
+        shift
+
         ;;
     -h|--help)
         usage
@@ -139,7 +152,6 @@ INSTALL_DIR="${BASE_DIR}/install"
 BUILD_ENV="${HOME}/.cache/${PROJECT_NAME}_build_env_$(echo ${BASE_DIR} | md5sum | cut -d' ' -f1)"
 
 mkdir -p "${INSTALL_DIR}"
-mkdir -p "${BUILD_DIR}"
 mkdir -p "${HOME}/.cache"
 
 # On S3DF get a standard Python3 - otherwise you're on your own
@@ -183,9 +195,17 @@ print_banner "${LINES[@]}"
 # It generally only needs to rerun if install prefix has changed, or meson.build
 # files have been modified.
 if [ ! -d "${BUILD_DIR}" ]; then
-    LINES=("Running meson setup for build configuration")
+    mkdir -p "${BUILD_DIR}"
+
+    if [[ ${DEBUG_RELEASE} ]]; then
+        LINES=("Running meson setup for build configuration [DEBUG RELEASE]")
+        NCA_RELTYPE=debug
+    else
+        LINES=("Running meson setup for build configuration")
+        NCA_RELTYPE=release
+    fi
     print_banner "${LINES[@]}"
-    meson setup "${BUILD_DIR}" --prefix="${INSTALL_DIR}" -Dbuildtype=release
+    meson setup "${BUILD_DIR}" --prefix="${INSTALL_DIR}" -Dbuildtype=${NCA_RELTYPE}
 elif [[ ${FIRST_BUILD} || ${NEED_RECONFIG} ]]; then
     LINES=("Running meson setup reconfiguration")
     print_banner "${LINES[@]}"
@@ -205,6 +225,13 @@ fi
 LINES=("Compiling...")
 print_banner "${LINES[@]}"
 meson compile -C "${BUILD_DIR}"
+
+# Test...
+if [[ ${RUN_TESTS} ]]; then
+    LINES=("Running test cases...")
+    print_banner "${LINES[@]}"
+    meson test -C "${BUILD_DIR}"
+fi
 
 # Installation - this always needs to run. This does do the installation of
 # the Python source code as well

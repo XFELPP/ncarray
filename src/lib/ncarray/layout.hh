@@ -106,6 +106,19 @@ namespace ncarray {
     }
 
     /**
+     * Check if any pointer axes exist.
+     *
+     * For simplicity a loop is used here. NCOffsets could optimize, but its a fairly
+     * fast operation anyway.
+     */
+    NCA_HD inline bool is_contiguous_impl() const {
+      if constexpr (requires { static_cast<const Derived*>(this)->is_contiguous_impl(); }) {
+        return static_cast<const Derived*>(this)->is_contiguous_impl();
+      }
+      return false;
+    }
+
+    /**
      * The advance function takes a pointer to the current position in the array
      * as well as an axis and index. Using this information, and the knowledge
      * of the array layout it will move the pointer forward one data unit,
@@ -352,6 +365,15 @@ namespace ncarray {
 
     NCA_HD inline const char* layout_repr() const { return "NCArray"; }
 
+    NCA_HD inline bool is_contiguous_impl() const {
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if (this->m_offsets[i] != 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+
   protected:
     Metadata m_offsets;
   };
@@ -420,6 +442,15 @@ namespace ncarray {
     }
 
     NCA_HD inline const char* layout_repr() const { return "SOArray"; }
+
+    NCA_HD inline bool is_contiguous_impl() const {
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if (this->m_suboffsets[i] >= 0) {
+          return false;
+        }
+      }
+      return true;
+    }
 
   protected:
     Metadata m_suboffsets;

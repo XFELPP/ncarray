@@ -10,16 +10,20 @@
 #define NCARRAY_SOARRAYS_HH
 
 #include "ncarray/array_impl.hh"
-#include "ncarray/array_operations.hh"
+#include "ncarray/build_macro.hh"
 
 namespace ncarray {
   using SOArrayView = ArrayImpl<SOArrayPolicy, ViewPolicy>;
   using SOArrayRef = ArrayImpl<SOArrayPolicy, RefPolicy>;
   using SOArray = ArrayImpl<SOArrayPolicy, OwnerPolicy>;
 
-  extern template class ArrayImpl<SOArrayPolicy, ViewPolicy>;
-  extern template class ArrayImpl<SOArrayPolicy, RefPolicy>;
-  extern template class ArrayImpl<SOArrayPolicy, OwnerPolicy>;
+  EXTERN_NC_BASE_OPS(SOArrayPolicy, ViewPolicy)
+  EXTERN_NC_BASE_OPS(SOArrayPolicy, RefPolicy)
+  EXTERN_NC_BASE_OPS(SOArrayPolicy, OwnerPolicy)
+
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, RefPolicy, SOArrayPolicy, ViewPolicy)
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, ViewPolicy)
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, RefPolicy)
 } // namespace ncarray
 
 #endif // NCARRAY_SOARRAYS_HH

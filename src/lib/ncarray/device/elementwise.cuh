@@ -25,13 +25,50 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
   namespace device {
     namespace impl {
-      template <typename T, class LeftT, class RightT, class OutT, class Op>
+      template <typename T, typename ResultT, class ArrayT, class OutT, class Op>
+      __device__ inline void block_unary_transform(const ArrayT& arr,
+                                                   OutT& result,
+                                                   Op op) {
+        unsigned tid { threadIdx.x };
+        unsigned stride { blockDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+
+          for (ssize_t d = arr.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % arr.shape(d);
+            tmp_idx /= arr.shape(d);
+          }
+
+          const void* ptr = const_cast<void*>(arr.data());
+          for (int d = 0; d < arr.ndim(); ++d) {
+            ptr = arr.advance(ptr, d, coords[d]);
+          }
+
+          void* res_ptr = result.data();
+          for (int d = 0; d < result.ndim(); ++d) {
+            res_ptr = result.advance(res_ptr, d, coords[d]);
+          }
+
+          *static_cast<ResultT*>(res_ptr) = op(*static_cast<const T*>(ptr));
+        }
+      }
+
+      template <
+        typename T,
+        typename ResultT,
+        class LeftT,
+        class RightT,
+        class OutT,
+        class Op
+      >
       __device__ inline void block_binary_transform(const LeftT& left,
                                                     const RightT& right,
                                                     OutT& result,
                                                     Op op) {
-        unsigned tid { threadIdx.x };
-        unsigned stride { blockDim.x };
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
           ssize_t coords[NCARRAY_MAX_NDIM];
@@ -60,23 +97,138 @@ namespace ncarray {
             res_ptr = result.advance(res_ptr, d, coords[d]);
           }
 
-          *static_cast<T*>(res_ptr) =
+          *static_cast<ResultT*>(res_ptr) =
             op(*static_cast<const T*>(lhs_ptr), *static_cast<const T*>(rhs_ptr));
         }
       }
+
+      template <typename T, typename ResultT, class ArrayT, class Op>
+      __device__ inline void block_inplace_unary_transform(ArrayT& arr, Op op) {
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+
+          for (ssize_t d = arr.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % arr.shape(d);
+            tmp_idx /= arr.shape(d);
+          }
+
+          void* ptr = const_cast<void*>(arr.data());
+          for (int d = 0; d < arr.ndim(); ++d) {
+            ptr = arr.advance(ptr, d, coords[d]);
+          }
+
+          op(*static_cast<T*>(ptr));
+        }
+      }
+
+      template <typename T, class LeftT, class RightT, class Op>
+      __device__ inline void block_inplace_binary_transform(LeftT& left,
+                                                            const RightT& right,
+                                                            Op op) {
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+
+          for (ssize_t d = left.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % left.shape(d);
+            tmp_idx /= left.shape(d);
+          }
+
+          void* lhs_ptr = const_cast<void*>(left.data());
+          for (int d = 0; d < left.ndim(); ++d) {
+            lhs_ptr = left.advance(lhs_ptr, d, coords[d]);
+          }
+
+          void* rhs_ptr = const_cast<void*>(right.data());
+
+          ssize_t diff = left.ndim() - right.ndim();
+          for (int d = 0; d < right.ndim(); ++d) {
+            ssize_t r_coord = (right.shape(d) == 1) ? 0 : coords[d + diff];
+            rhs_ptr = right.advance(rhs_ptr, d, r_coord);
+          }
+
+          op(*static_cast<T*>(lhs_ptr), *static_cast<const T*>(rhs_ptr));
+        }
+      }
+
+      /**
+       * Scalar broadcast version of block_binary_transform.
+       */
+      template <typename T, typename ResultT, class LeftT, class OutT, class Op>
+      __device__ inline void block_binary_scalar_transform(const LeftT& left,
+                                                           const T& scalar_val,
+                                                           OutT& result,
+                                                           Op op) {
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+          for (ssize_t d = left.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % left.shape(d);
+            tmp_idx /= left.shape(d);
+          }
+
+          const void* lhs_ptr = left.data();
+          for (int d = 0; d < left.ndim(); ++d) {
+            lhs_ptr = left.advance(lhs_ptr, d, coords[d]);
+          }
+
+          void* res_ptr = result.data();
+          for (int d = 0; d < result.ndim(); ++d) {
+            res_ptr = result.advance(res_ptr, d, coords[d]);
+          }
+          *static_cast<ResultT*>(res_ptr) =
+            op(*static_cast<const T*>(lhs_ptr), scalar_val);
+        }
+      }
+
+      template <typename T, class LeftT, class Op>
+      __device__ inline void block_inplace_binary_scalar_transform(LeftT& left,
+                                                                   const T& scalar_val,
+                                                                   Op op) {
+        unsigned tid { blockIdx.x * blockDim.x + threadIdx.x };
+        unsigned stride { blockDim.x * gridDim.x };
+
+        for (ssize_t i = static_cast<ssize_t>(tid); i < left.size(); i += stride) {
+          ssize_t coords[NCARRAY_MAX_NDIM];
+          ssize_t tmp_idx { i };
+
+          for (ssize_t d = left.ndim() - 1; d >= 0; --d) {
+            coords[d] = tmp_idx % left.shape(d);
+            tmp_idx /= left.shape(d);
+          }
+
+          void* lhs_ptr = const_cast<void*>(left.data());
+          for (int d = 0; d < left.ndim(); ++d) {
+            lhs_ptr = left.advance(lhs_ptr, d, coords[d]);
+          }
+
+          op(*static_cast<T*>(lhs_ptr), scalar_val);
+        }
+      }
     } // namespace impl
+
+    // --- Binary non-broadcast operations (same shape) --- //
 
     template <typename T, class LeftT, class RightT, class OutT>
     __device__ inline void block_add(const LeftT& left,
                                      const RightT& right,
                                      OutT& out) {
+      using AccumT = typename op_traits<T>::sum_type;
+      auto add_op = [] __device__ (auto a, auto b) {
+        return static_cast<AccumT>(a) + b;
+      };
 
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__ (auto a, auto b) {
-                                                             return a + b;
-                                                           });
+      impl::block_binary_transform<T, AccumT>(left, right, out, add_op);
       //__syncthreads();
     }
 
@@ -84,13 +236,12 @@ namespace ncarray {
     __device__ inline void block_sub(const LeftT& left,
                                      const RightT& right,
                                      OutT& out) {
+      using DiffT = typename op_traits<T>::diff_type;
+      auto sub_op = [] __device__ (auto a, auto b) {
+        return static_cast<DiffT>(a) - b;
+      };
 
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__(auto a, auto b) {
-                                                             return a - b;
-                                                           });
+      impl::block_binary_transform<T, DiffT>(left, right, out, sub_op);
       //__syncthreads();
     }
 
@@ -98,13 +249,11 @@ namespace ncarray {
     __device__ inline void block_mul(const LeftT& left,
                                      const RightT& right,
                                      OutT& out) {
+      auto mul_op = [] __device__ (auto a, auto b) {
+        return a * b;
+      };
 
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__(auto a, auto b) {
-                                                             return a * b;
-                                                           });
+      impl::block_binary_transform<T, T>(left, right, out, mul_op);
       //__syncthreads();
     }
 
@@ -112,14 +261,443 @@ namespace ncarray {
     __device__ inline void block_truediv(const LeftT& left,
                                          const RightT& right,
                                          OutT& out) {
+      using ResultT = typename op_traits<T>::truediv_type;
+      auto div_op = [] __device__(auto a, auto b) {
+        using std::isfinite;
+        bool is_finite { false };
+        if (b == T(0)) {
+          if constexpr (requires { a.real(); }) {
+            is_finite = isfinite(a.real()) && isfinite(a.imag());
+          } else {
+            is_finite = isfinite(a);
+          }
+          return is_finite ? std::nan("") : static_cast<ResultT>(a);
+        } else {
+          return static_cast<ResultT>(a) / static_cast<ResultT>(b);
+        }
+      };
 
-      impl::block_binary_transform<T, LeftT, RightT, OutT>(left,
-                                                           right,
-                                                           out,
-                                                           [] __device__(auto a, auto b) {
-                                                             return a / b;
-                                                           });
+      impl::block_binary_transform<T, ResultT>(left, right, out, div_op);
       //__syncthreads();
+    }
+
+    // --- Inplace binary operations --- //
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_add(LeftT& left, const
+                                             RightT& right) {
+      using AccumT = typename op_traits<T>::sum_type;
+      auto add_op = [] __device__ (auto& a, auto b) {
+        a = static_cast<T>(static_cast<AccumT>(a) + b);
+      };
+
+      impl::block_inplace_binary_transform<T>(left, right, add_op);
+    }
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_sub(LeftT& left,
+                                             const RightT& right) {
+      using DiffT = typename op_traits<T>::diff_type;
+      auto sub_op = [] __device__ (auto& a, auto b) {
+        a = static_cast<T>(static_cast<DiffT>(a) - b);
+      };
+
+      impl::block_inplace_binary_transform<T>(left, right, sub_op);
+    }
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_mul(LeftT& left,
+                                             const RightT& right) {
+      auto mul_op = [] __device__(auto& a, auto b) {
+        a = a * b;
+      };
+
+      impl::block_inplace_binary_transform<T>(left, right, mul_op);
+    }
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_truediv(LeftT& left,
+                                             const RightT& right) {
+      using ResultT = typename op_traits<T>::truediv_type;
+      auto div_op = [] __device__ (auto& a, auto b) {
+        a = static_cast<T>(static_cast<ResultT>(a) / static_cast<ResultT>(b));
+      };
+
+      impl::block_inplace_binary_transform<T>(left, right, div_op);
+    }
+
+    // --- Binary operations with a scalar broadcast --- //
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_add(const LeftT& left,
+                                            const T& scalar_val,
+                                            OutT& out) {
+      using AccumT = typename op_traits<T>::sum_type;
+      auto add_op = [] __device__ (auto a, auto b) {
+        return static_cast<AccumT>(a) + b;
+      };
+
+      impl::block_binary_scalar_transform<T, AccumT>(left, scalar_val, out, add_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_sub(const LeftT& left,
+                                            const T& scalar_val,
+                                            OutT& out) {
+      using DiffT = typename op_traits<T>::diff_type;
+      auto sub_op = [] __device__ (auto a, auto b) {
+        return static_cast<DiffT>(a) - b;
+      };
+
+      impl::block_binary_scalar_transform<T, DiffT>(left, scalar_val, out, sub_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_mul(const LeftT& left,
+                                            const T& scalar_val,
+                                            OutT& out) {
+      auto mul_op = [] __device__ (auto a, auto b) {
+        return a * b;
+      };
+
+      impl::block_binary_scalar_transform<T, T>(left, scalar_val, out, mul_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_truediv(const LeftT& left,
+                                                const T& scalar_val,
+                                                OutT& out) {
+      using ResultT = typename op_traits<T>::truediv_type;
+      auto div_op = [] __device__(auto a, auto b) {
+        using std::isfinite;
+        bool is_finite { false };
+        if (b == T(0)) {
+          if constexpr (requires { a.real(); }) {
+            is_finite = isfinite(a.real()) && isfinite(a.imag());
+          } else {
+            is_finite = isfinite(a);
+          }
+          return is_finite ? std::nan("") : static_cast<ResultT>(a);
+        } else {
+          return static_cast<ResultT>(a) / static_cast<ResultT>(b);
+        }
+      };
+
+      impl::block_binary_scalar_transform<T, ResultT>(left, scalar_val, out, div_op);
+      //__syncthreads();
+    }
+
+    // --- Inplace binary operations with a scalar broadcast --- //
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_add(LeftT& left,
+                                                    const T& scalar_val) {
+      using AccumT = typename op_traits<T>::sum_type;
+      auto add_op = [] __device__ (auto& a, auto b) {
+        a = static_cast<T>(static_cast<AccumT>(a) + b);
+      };
+
+      impl::block_inplace_binary_scalar_transform<T>(left, scalar_val, add_op);
+    }
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_sub(LeftT& left,
+                                                    const T& scalar_val) {
+      using DiffT = typename op_traits<T>::diff_type;
+      auto sub_op = [] __device__ (auto& a, auto b) {
+        a = static_cast<T>(static_cast<DiffT>(a) - b);
+      };
+
+      impl::block_inplace_binary_scalar_transform<T>(left, scalar_val, sub_op);
+    }
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_mul(LeftT& left,
+                                                    const T& scalar_val) {
+      auto mul_op = [] __device__ (auto& a, auto b) {
+        a = a * b;
+      };
+
+      impl::block_inplace_binary_scalar_transform<T>(left, scalar_val, mul_op);
+    }
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_truediv(LeftT& left,
+                                                        const T& scalar_val) {
+      using ResultT = typename op_traits<T>::truediv_type;
+      auto div_op = [] __device__(auto& a, auto b) {
+        a = static_cast<T>(static_cast<ResultT>(a) / static_cast<ResultT>(b));
+      };
+
+      impl::block_inplace_binary_scalar_transform<T>(left, scalar_val, div_op);
+    }
+
+    // --- Logical and boolean operators --- //
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_equal(const LeftT& left,
+                                       const RightT& right,
+                                       OutT& out) {
+      auto eq_op = [] __device__ (auto a, auto b) {
+        return a == b;
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, eq_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_not_equal(const LeftT& left,
+                                           const RightT& right,
+                                           OutT& out) {
+      auto ne_op = [] __device__ (auto a, auto b) {
+        return a != b;
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, ne_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_less_than(const LeftT& left,
+                                           const RightT& right,
+                                           OutT& out) {
+      auto l_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::less(a, b);
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, l_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_less_equal_than(const LeftT& left,
+                                                 const RightT& right,
+                                                 OutT& out) {
+      auto le_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::le(a, b);
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, le_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_greater_than(const LeftT& left,
+                                              const RightT& right,
+                                              OutT& out) {
+      auto g_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::greater(a, b);
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, g_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_greater_equal_than(const LeftT& left,
+                                                    const RightT& right,
+                                                    OutT& out) {
+      auto ge_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::ge(a, b);
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, ge_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_logical_and(const LeftT& left,
+                                             const RightT& right,
+                                             OutT& out) {
+      auto and_op = [] __device__ (auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) && static_cast<bool>(b); }) {
+          return static_cast<bool>(a) && static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, and_op);
+    }
+
+    template <typename T, class LeftT, class RightT, class OutT>
+    __device__ inline void block_logical_or(const LeftT& left,
+                                            const RightT& right,
+                                            OutT& out) {
+      auto or_op = [] __device__(auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) || static_cast<bool>(b); }) {
+          return static_cast<bool>(a) || static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+
+      impl::block_binary_transform<T, bool>(left, right, out, or_op);
+    }
+
+    template <typename T, class ArrayT, class OutT>
+    __device__ inline void block_logical_not(const ArrayT& arr, OutT& out) {
+      auto not_op = [] __device__ (auto x) {
+        if constexpr (requires { !static_cast<bool>(x); }) {
+          return !static_cast<bool>(x);
+        } else {
+          return false;
+        }
+      };
+
+      impl::block_unary_transform<T, bool>(arr, out, not_op);
+    }
+
+    // --- Comparison operators with scalar broadcast --- //
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_equal(const LeftT& left,
+                                              const T& scalar_val,
+                                              OutT& out) {
+      auto eq_op = [] __device__ (auto a, auto b) {
+        return a == b;
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, eq_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_not_equal(const LeftT& left,
+                                                  const T& scalar_val,
+                                                  OutT& out) {
+      auto ne_op = [] __device__ (auto a, auto b) {
+        return a != b;
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, ne_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_less_than(const LeftT& left,
+                                                  const T& scalar_val,
+                                                  OutT& out) {
+      auto l_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::less(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, l_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_less_equal_than(const LeftT& left,
+                                                        const T& scalar_val,
+                                                        OutT& out) {
+      auto le_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::le(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, le_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_greater_than(const LeftT& left,
+                                                     const T& scalar_val,
+                                                     OutT& out) {
+      auto g_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::greater(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, g_op);
+      //__syncthreads();
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_greater_equal_than(const LeftT& left,
+                                                           const T& scalar_val,
+                                                           OutT& out) {
+      auto ge_op = [] __device__ (auto a, auto b) {
+        return op_traits<T>::ge(a, b);
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, ge_op);
+      //__syncthreads();
+    }
+
+    // --- Inplace logical operators --- //
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_logical_and(LeftT& left, const RightT& right) {
+      auto and_op = [] __device__ (auto& a, auto b) {
+        a = (a && b);
+      };
+
+      impl::block_inplace_binary_transform<bool>(left, right, and_op);
+    }
+
+    template <typename T, class LeftT, class RightT>
+    __device__ inline void inplace_block_logical_or(LeftT& left, const RightT& right) {
+      auto or_op = [] __device__ (auto& a, auto b) {
+        a = (a || b);
+      };
+
+      impl::block_inplace_binary_transform<bool>(left, right, or_op);
+    }
+
+    // --- Logical operators with scalar broadcast --- //
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_logical_and(const LeftT& left,
+                                                    const T& scalar_val,
+                                                    OutT& out) {
+      auto and_op = [] __device__(auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) && static_cast<bool>(b); }) {
+          return static_cast<bool>(a) && static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, and_op);
+    }
+
+    template <typename T, class LeftT, class OutT>
+    __device__ inline void block_scalar_logical_or(const LeftT& left,
+                                                   const T& scalar_val,
+                                                   OutT& out) {
+      auto or_op = [] __device__(auto a, auto b) {
+        if constexpr (requires { static_cast<bool>(a) || static_cast<bool>(b); }) {
+          return static_cast<bool>(a) || static_cast<bool>(b);
+        } else {
+          return false;
+        }
+      };
+
+      impl::block_binary_scalar_transform<T, bool>(left, scalar_val, out, or_op);
+    }
+
+    // --- Inplace logical operators with scalar broadcast --- //
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_logical_and(LeftT& left,
+                                                            const T& scalar_val) {
+      auto and_op = [] __device__(auto& a, auto b) {
+        a = (static_cast<bool>(a) && static_cast<bool>(b));
+      };
+
+      impl::block_inplace_binary_scalar_transform<T, LeftT>(left, scalar_val, and_op);
+    }
+
+    template <typename T, class LeftT>
+    __device__ inline void inplace_block_scalar_logical_or(LeftT& left,
+                                                           const T& scalar_val) {
+      auto or_op = [] __device__(auto& a, auto b) {
+        a = (static_cast<bool>(a) || static_cast<bool>(b));
+      };
+
+      impl::block_inplace_binary_scalar_transform<T, LeftT>(left, scalar_val, or_op);
     }
   } // namespace device
 } // namespace ncarray

@@ -114,7 +114,9 @@ namespace ncarray {
    * accumulation operations don't overflow, or providing comparisons for complex
    * number types.
    */
-  template <typename T> struct BaseOpTraits {
+  template <typename T>
+  struct BaseOpTraits {
+    using value_type = T;
     using sum_type = T;
     using diff_type = T;
     using truediv_type = double;
@@ -122,7 +124,9 @@ namespace ncarray {
     // Comparisons and identities -- needed especially for specializations below
     // on things like complex
     NCA_HD static bool greater(const T& a, const T& b) { return a > b; }
+    NCA_HD static bool ge(const T& a, const T& b) { return a >= b; }
     NCA_HD static bool less(const T& a, const T& b) { return a < b; }
+    NCA_HD static bool le(const T& a, const T& b) { return a <= b; }
     NCA_HD static T lowest() { return std::numeric_limits<T>::lowest(); }
     NCA_HD static T max() { return std::numeric_limits<T>::max(); }
 
@@ -160,6 +164,7 @@ namespace ncarray {
   // Complex need comparison operations
   template <typename T>
   struct op_traits<std::complex<T>> : BaseOpTraits<T> {
+    using value_type = T;
     using sum_type = std::complex<T>;
     using diff_type = std::complex<T>;
     using truediv_type = std::complex<double>;
@@ -171,11 +176,25 @@ namespace ncarray {
       return a.imag() > b.imag();
     }
 
+    NCA_HD static bool ge(const std::complex<T>& a, const std::complex<T>& b) {
+      if (a.real() != b.real()) {
+        return a.real() > b.real();
+      }
+      return a.imag() >= b.imag();
+    }
+
     NCA_HD static bool less(const std::complex<T>& a, const std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() < b.real();
       }
       return a.imag() < b.imag();
+    }
+
+    NCA_HD static bool le(const std::complex<T>& a, const std::complex<T>& b) {
+      if (a.real() != b.real()) {
+        return a.real() < b.real();
+      }
+      return a.imag() <= b.imag();
     }
 
     NCA_HD static std::complex<T> lowest() {
@@ -215,15 +234,15 @@ namespace ncarray {
 
   template <>
   struct op_traits<std::int8_t> : BaseOpTraits<std::int8_t> {
-    using sum_type = int64_t;
-    using diff_type = int64_t;
+    using sum_type = std::int64_t;
+    using diff_type = std::int64_t;
   };
 
   template <>
   struct op_traits<std::uint8_t> : BaseOpTraits<std::uint8_t> {
-    using sum_type = uint64_t;
+    using sum_type = std::uint64_t;
     // NOTE: Unsigned types promot to SIGNED for subtraction!
-    using diff_type = int64_t;
+    using diff_type = std::int64_t;
   };
 
   template <>
@@ -234,13 +253,20 @@ namespace ncarray {
 
   template <>
   struct op_traits<std::uint16_t> : BaseOpTraits<std::uint16_t> {
-    using sum_type = uint64_t;
+    using sum_type = std::uint64_t;
     // NOTE: Unsigned types promot to SIGNED for subtraction!
-    using diff_type = int64_t;
+    using diff_type = std::int64_t;
+  };
+
+  template <>
+  struct op_traits<bool> : BaseOpTraits<bool> {
+    using sum_type = std::uint64_t;
+    using diff_type = std::int64_t;
   };
 
   template <>
   struct op_traits<Float2> : BaseOpTraits<Float2> {
+    using value_type = float;
     using truediv_type = Double2;
 
     // Comparisons and identities -- needed especially for specializations below
@@ -267,6 +293,7 @@ namespace ncarray {
 
   template <>
   struct op_traits<Float3> : BaseOpTraits<Float3> {
+    using value_type = float;
     using truediv_type = Double3;
 
     NCA_HD static bool greater(const Float3& a, const Float3& b) {
@@ -293,6 +320,7 @@ namespace ncarray {
 
   template <>
   struct op_traits<Float4> : BaseOpTraits<Float4> {
+    using value_type = float;
     using truediv_type = Double4;
 
     NCA_HD static bool greater(const Float4& a, const Float4& b) {
@@ -321,6 +349,7 @@ namespace ncarray {
 
   template <>
   struct op_traits<Double2> : BaseOpTraits<Double2> {
+    using value_type = double;
     using truediv_type = Double2;
 
     // Comparisons and identities -- needed especially for specializations below
@@ -347,6 +376,7 @@ namespace ncarray {
 
   template <>
   struct op_traits<Double3> : BaseOpTraits<Double3> {
+    using value_type = double;
     using truediv_type = Double3;
 
     NCA_HD static bool greater(const Double3& a, const Double3& b) {
@@ -373,6 +403,7 @@ namespace ncarray {
 
   template <>
   struct op_traits<Double4> : BaseOpTraits<Double4> {
+    using value_type = double;
     using truediv_type = Double4;
 
     NCA_HD static bool greater(const Double4& a, const Double4& b) {

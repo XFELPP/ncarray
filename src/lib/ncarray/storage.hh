@@ -4,6 +4,8 @@
 #include "ncarray/dtype.hh"
 
 #ifdef NCA_HAS_CUDA
+#include "ncarray/device/utilities.cuh" // Macro error checks
+
 #include "cuda_runtime_api.h"
 #endif
 
@@ -16,7 +18,6 @@ typedef SSIZE_T ssize_t;
 
 #include <algorithm>
 #include <cstdint>
-#include <iostream>
 #include <memory>
 
 #ifndef NCA_HD
@@ -40,6 +41,24 @@ typedef SSIZE_T ssize_t;
 #endif
 
 namespace ncarray {
+#ifdef NCA_HAS_CUDA
+  inline cudaStream_t alloc_stream() {
+    static cudaStream_t stream = []() {
+      // NOTE: There are seemingly issues with ensuring host writes to pinned memory
+      //       are visible on device. This setting below is actually for the mem_pool
+      //       but hiding it here is straightforward and it only gets called once
+      cudaSetDeviceFlags(cudaDeviceMapHost); // Hide this setting here
+
+      cudaStream_t s;
+
+      CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+
+      return s;
+    }();
+
+    return stream;
+  }
+#endif
   struct MemTag {};
   struct HostTag : MemTag {};
   struct DevTag : MemTag {};
@@ -151,28 +170,6 @@ namespace ncarray {
     }
   };
 
-#ifdef NCA_HAS_CUDA
-#define CHECK_CUDA_ERROR(val) check((val), #val, __FILE__, __LINE__)
-  inline void check(cudaError_t err, const char* const func, const char* const file,
-                    const int line) {
-    if (err != cudaSuccess) {
-      std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl;
-      std::cerr << cudaGetErrorString(err) << " " << func << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-
-#define CHECK_LAST_CUDA_ERROR() checkLast(__FILE__, __LINE__)
-  inline void checkLast(const char* const file, const int line) {
-    cudaError_t const err{cudaGetLastError()};
-    if (err != cudaSuccess) {
-      std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl;
-      std::cerr << cudaGetErrorString(err) << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-#endif
-
   /**
    * The OwnerPolicy dictates an array that manages its own buffer for the
    * memory that backs the array.
@@ -180,6 +177,9 @@ namespace ncarray {
   struct OwnerPolicy : public StoragePolicy<OwnerPolicy>, public OwnerTag {
   public:
     using MemType = HostTag;
+
+    // By default, owners are NOT read only.
+    NCA_H OwnerPolicy() { this->m_read_only = false; }
 
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 
@@ -202,12 +202,19 @@ namespace ncarray {
   public:
     using MemType = DevTag;
 
+    // By default, owners are NOT read only.
+    NCA_H DevOwnerPolicy() { this->m_read_only = false; }
+
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 
     NCA_H inline void allocate(ssize_t nbytes) {
 #ifdef NCA_HAS_CUDA
       std::uint8_t* devPtr { nullptr };
-      CHECK_CUDA_ERROR(cudaMallocManaged(reinterpret_cast<void**>(&devPtr), nbytes));
+
+      CHECK_CUDA_ERROR(cudaMallocAsync(reinterpret_cast<void**>(&devPtr),
+                                       nbytes,
+                                       alloc_stream()));
+      cudaDeviceSynchronize();
       m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
 #endif
     }
@@ -223,6 +230,10 @@ namespace ncarray {
 
   protected:
     std::unique_ptr<std::uint8_t[], DevDeleter> m_storage;
+  private:
+#ifdef NCA_HAS_CUDA
+    cudaStream_t m_stream;
+#endif
   };
 
   template <class MemTag>

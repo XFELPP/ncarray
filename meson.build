@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.3.0',
+    version: '0.4.0',
     default_options: [
         'cpp_std=c++23',
         'cuda_std=c++20',
@@ -15,7 +15,20 @@ if nca_has_cuda
     add_project_arguments('-DNCA_HAS_CUDA', language: ['cpp', 'cuda'])
 endif
 
-add_project_arguments('-frtti', language: 'cpp')
+nca_cuda_args = [
+    '--extended-lambda',
+    '--expt-relaxed-constexpr',
+    # silence warning: declared but not referenced (e.g. pybind, stl...)
+    '-Xcudafe', '--diag_suppress=445',
+    # silence warning: long double treated as double
+    '-Xcudafe', '--diag_suppress=20208',
+    # We make a fat binary for Turing, Ampere, Ada and Hopper
+    '-gencode', 'arch=compute_75,code=sm_75',
+    #'-gencode', 'arch=compute_86,code=sm_86',
+    '-gencode', 'arch=compute_80,code=sm_80',
+    '-gencode', 'arch=compute_89,code=sm_89',
+    '-gencode', 'arch=compute_90,code=sm_90',
+]
 
 #### Main Python Setup ####
 ###########################
@@ -114,8 +127,12 @@ installed_headers = [
     'src/lib/ncarray/array_impl.hh',
     'src/lib/ncarray/array_operations.hh',
     'src/lib/ncarray/array_traits.hh',
+    'src/lib/ncarray/build_macro.hh',
     'src/lib/ncarray/custom_types.hh',
     'src/lib/ncarray/dtype.hh',
+    'src/lib/ncarray/engines.hh',
+    'src/lib/ncarray/host/elementwise.hh',
+    'src/lib/ncarray/host/reductions.hh',
     'src/lib/ncarray/indexing.hh',
     'src/lib/ncarray/layout.hh',
     'src/lib/ncarray/ncarrays.hh',
@@ -139,18 +156,7 @@ if nca_has_cuda
             'src/lib/ncarray/ncdevarrays.cu',
             'src/lib/ncarray/sodevarrays.cu',
         ],
-        cuda_args: [
-            '--extended-lambda',
-            '--expt-relaxed-constexpr',
-            # silence warning: declared but not referenced (e.g. pybind, stl...)
-            '-Xcudafe', '--diag_suppress=445',
-             # silence warning: long double treated as double
-            '-Xcudafe', '--diag_suppress=20208',
-            '-gencode', 'arch=compute_75,code=sm_75',
-            '-gencode', 'arch=compute_80,code=sm_80',
-            '-gencode', 'arch=compute_89,code=sm_89',
-            '-gencode', 'arch=compute_90,code=sm_90',
-        ],
+        cuda_args: nca_cuda_args,
         include_directories: ncarray_headers,
         install: true,
         install_dir: libncarray_install_dir,
@@ -169,7 +175,6 @@ if nca_has_cuda
 
     # The following headers are for integration with device code on host side
     installed_device_compat_headers = [
-        'src/lib/ncarray/engines.hh',
         'src/lib/ncarray/ncdevarrays.cuh',
         'src/lib/ncarray/sodevarrays.cuh',
     ]
@@ -182,9 +187,12 @@ if nca_has_cuda
 
     # The following headers are device only as well as host-called kernels
     installed_device_headers = [
+        'src/lib/ncarray/device/atomic.cuh',
         'src/lib/ncarray/device/elementwise.cuh',
         'src/lib/ncarray/device/kernels.cuh',
+        'src/lib/ncarray/device/mem_pool.cuh',
         'src/lib/ncarray/device/reductions.cuh',
+        'src/lib/ncarray/device/utilities.cuh',
     ]
 
     py3.install_sources(
@@ -202,6 +210,15 @@ if nca_has_cuda
     deps_for_py_mod += ncdevarray_dep
 endif
 
+py_bindings_headers = [
+    'src/lib/python/utilities.hh',
+]
+py3.install_sources(
+    py_bindings_headers,
+    pure: false,
+    subdir: 'ncarray/include/python',
+)
+
 py_mod = py3.extension_module(
     '_pyncarray',
     [
@@ -214,6 +231,30 @@ py_mod = py3.extension_module(
     install_rpath: py_to_lib_install_rpath,
     build_rpath: py_to_lib_install_rpath,
 )
+
+if nca_has_cuda
+    # NOTE: For faster/more efficient compilation, each GPU specialization is
+    # split off into its own translation unit.
+    py_dev_mod = py3.extension_module(
+        '_pyncdevarray',
+        [
+            'src/lib/python/ncdevarray.cu',
+            'src/lib/python/ncdevarray_view.cu',
+            'src/lib/python/ncdevarray_ref.cu',
+            'src/lib/python/ncdevarray_owner.cu',
+            'src/lib/python/sodevarray_view.cu',
+            'src/lib/python/sodevarray_ref.cu',
+            'src/lib/python/sodevarray_owner.cu',
+        ],
+        install: true,
+        install_dir: pyncarray_install_dir,
+        include_directories: ncarray_headers,
+        dependencies : deps_for_py_mod,
+        install_rpath: py_to_lib_install_rpath,
+        build_rpath: py_to_lib_install_rpath,
+        cuda_args: nca_cuda_args,
+    )
+endif
 
 py_sources = [
     'src/ncarray/__init__.py',
@@ -245,7 +286,6 @@ if not gtest_dep.found()
 endif
 
 deps_for_tests = [gtest_dep, ncarray_dep]
-
 if nca_has_cuda
     deps_for_tests += cuda_dep
     deps_for_tests += ncdevarray_dep
@@ -260,7 +300,7 @@ test_index = executable(
     install: false,
     include_directories: ncarray_headers,
 )
-test('Testing array indexing.', test_index)
+test('Testing array indexing.', test_index, verbose: true)
 
 test_ops = executable(
     'test_array_operations',
@@ -271,7 +311,7 @@ test_ops = executable(
     install: false,
     include_directories: ncarray_headers,
 )
-test('Testing array operations.', test_ops)
+test('Testing array operations.', test_ops, verbose: true)
 
 test_float_vecs = executable(
     'test_float_vecs',
@@ -282,4 +322,18 @@ test_float_vecs = executable(
     install: false,
     include_directories: ncarray_headers,
 )
-test('Testing custom float/double vectors.', test_float_vecs)
+test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
+
+if nca_has_cuda
+    test_gpu_ops = executable(
+        'test_gpu_array_operations',
+        [
+            'tests/cxx/test_gpu_operations.cu',
+        ],
+        dependencies: deps_for_tests,
+        install: false,
+        include_directories: ncarray_headers,
+        cuda_args: nca_cuda_args,
+    )
+    test('Testing array operations.', test_gpu_ops, verbose: true)
+endif
