@@ -20,8 +20,12 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
   template <ArrayLike A> Scalar sum(const A& arr);
   template <ArrayLike A> Scalar max(const A& arr);
+  template <ArrayLike A> Scalar argmax(const A& arr);
   template <ArrayLike A> Scalar min(const A& arr);
+  template <ArrayLike A> Scalar argmin(const A& arr);
   template <ArrayLike A> Scalar mean(const A& arr);
+  template <ArrayLike A> Scalar var(const A& arr, ssize_t ddof);
+  template <ArrayLike A> Scalar std(const A& arr, ssize_t ddof);
 } // namespace ncarray
 
 #define BASE_OPS_LIST(ACTION, L, S)                                                                \
@@ -128,8 +132,12 @@ namespace ncarray {
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(const ncarray::Scalar&);                  \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::sum() const;                  \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::max() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::argmax() const;               \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::min() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::argmin() const;               \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::mean() const;                 \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::var(ssize_t ddof) const;      \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::std(ssize_t ddof) const;      \
   ACTION ncarray::Scalar ncarray::sum(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
   ACTION ncarray::Scalar ncarray::max(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
   ACTION ncarray::Scalar ncarray::min(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \

@@ -71,6 +71,7 @@ namespace ncarray {
       return Scalar { result };
     }
 
+    // Mean, variance and standard deviation
     template <typename T, ArrayLike A>
     Scalar mean_recursive(const A& arr) {
       using AccumT = typename op_traits<T>::sum_type;
@@ -91,6 +92,41 @@ namespace ncarray {
     }
 
     template <typename T, ArrayLike A>
+    Scalar var_recursive(const A& arr, ssize_t ddof = 0) {
+      using ResultT = typename op_traits<T>::truediv_type;
+
+      ResultT mean = std::get<ResultT>(mean_recursive<T>(arr));
+
+      // NOTE: This is different than NumPy for complex numbers which would use std;:norm.
+      // TODO: Consider whether to use NumPy style norming for complex
+      auto variance_op_internal = [&](const std::uint8_t* data, ResultT* output) {
+        ResultT val = static_cast<ResultT>(*reinterpret_cast<const T*>(data));
+        ResultT diff = val - mean;
+
+        *output += diff * diff;
+      };
+
+      ssize_t starting_axis { 0 };
+      ResultT sum_squared_diff = impl::reduce_recursive<T>(arr,
+                                                           arr.data(),
+                                                           starting_axis,
+                                                           variance_op_internal,
+                                                           ResultT { 0 });
+
+      return Scalar { sum_squared_diff / static_cast<double>(arr.size() - ddof) };
+    }
+
+    template <typename T, ArrayLike A>
+    Scalar std_recursive(const A& arr, ssize_t ddof = 0) {
+      using ResultT = typename op_traits<T>::truediv_type;
+
+      ResultT var = std::get<ResultT>(var_recursive<T>(arr, ddof));
+
+      return Scalar { nca_sqrt(var) }; // custom_types.hh (handles vector types)
+    }
+
+    // Max and Argmax
+    template <typename T, ArrayLike A>
     Scalar max_recursive(const A& arr) {
       // Don't need a broader type for this one
       auto max_op_internal = [](const std::uint8_t* data, T* output) {
@@ -109,6 +145,30 @@ namespace ncarray {
     }
 
     template <typename T, ArrayLike A>
+    Scalar argmax_recursive(const A& arr) {
+      ssize_t counter { 0 };
+      ssize_t lin_argmax_idx { 0 };
+
+      // Output is just discarded here - capture the count by reference
+      auto argmax_op_internal = [&](const std::uint8_t* data, T* output) {
+        T val = *reinterpret_cast<const T*>(data);
+        if (op_traits<T>::greater(val, *output)) {
+          *output = val;
+          lin_argmax_idx = counter;
+        }
+        counter++;
+      };
+      ssize_t starting_axis { 0 };
+      impl::reduce_recursive<T>(arr,
+                                arr.data(),
+                                starting_axis,
+                                argmax_op_internal,
+                                op_traits<T>::lowest());
+      return Scalar { lin_argmax_idx };
+    }
+
+    // Min and argmin
+    template <typename T, ArrayLike A>
     Scalar min_recursive(const A& arr) {
       // Don't need a broader type for this one
       auto min_op_internal = [](const std::uint8_t* data, T* output) {
@@ -124,6 +184,30 @@ namespace ncarray {
                                            min_op_internal,
                                            op_traits<T>::max());
       return Scalar { result };
+    }
+
+    template <typename T, ArrayLike A>
+    Scalar argmin_recursive(const A& arr) {
+      ssize_t counter { 0 };
+      ssize_t lin_argmin_idx { 0 };
+
+      // Output is just discarded here - capture the count by reference
+      auto argmin_op_internal = [&](const std::uint8_t* data, T* output) {
+        T val = *reinterpret_cast<const T*>(data);
+        if (op_traits<T>::less(val, *output)) {
+          *output = val;
+          lin_argmin_idx = counter;
+        }
+        counter++;
+      };
+
+      ssize_t starting_axis { 0 };
+      impl::reduce_recursive<T>(arr,
+                                arr.data(),
+                                starting_axis,
+                                argmin_op_internal,
+                                op_traits<T>::max());
+      return Scalar { lin_argmin_idx };
     }
   } // namespace host
 } // namespace ncarray

@@ -12,12 +12,23 @@
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
 
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 #include <concepts>
+#include <cstdint>
 #include <type_traits>
 
 namespace ncarray {
   namespace device {
     namespace impl {
+      // Setup a small table of locks to reduce collisions
+      __device__ int _nca_atomic_locks[1024];
+
       template <typename T>
       concept SupportsAtomicAdd =
         std::is_same_v<std::remove_cvref_t<T>, int>                 ||
@@ -38,6 +49,31 @@ namespace ncarray {
         std::is_same_v<std::remove_cvref_t<T>, unsigned>            ||
         std::is_same_v<std::remove_cvref_t<T>, unsigned long long>;
 
+      /**
+       * A generic foundation for building atomic operations.
+       *
+       * A pair of functions can be provided, a native atomic operation as well as
+       * a lambda for fallback in a CAS loop should the datatype not support the native
+       * operation. The first template parameter indicates whether the type supports
+       * the native operation (for faster compile-time branching).
+       *
+       * Operations in order of preference are:
+       * 1. Use the native operation if possible (e.g. atomicAdd)
+       * 2. For vector types (float3, etc.) use the atomic on each component.
+       * 3. For types <= 8 bytes use a CAS loop of either int, or unsigned long long.
+       * 4. Finally, fall back to a locking approach with a striped mutex. This is
+       *    slower, but supports arbitrarily sized types (whereas native atomics are
+       *    only available up to 128 bit).
+       *
+       * @tparam NativeOp Whether the native operation can be used (for compile-time branching.)
+       * @tparam T The datatype.
+       * @tparam AtomicFn The type for the native atomic operation.
+       * @tparam CASFn The type for the comparison lambda in the CAS loop.
+       * @param addr The address to put the final result.
+       * @param val The value for this thread.
+       * @param atomic The native atomic (in lambda generally). E.g. atomicAdd.
+       * @param fn The comparison function. E.g. for add: [](T o, T v) { return o + v; }
+       */
       template <bool NativeOp, typename T, class AtomicFn, class CASFn>
       __device__ inline void nca_atomic_apply(T* addr,
                                               T val,
@@ -61,7 +97,9 @@ namespace ncarray {
           nca_atomic_apply<NativeOp>(&raw[0], val.real(), atomic, fn);
           nca_atomic_apply<NativeOp>(&raw[1], val.imag(), atomic, fn);
         } else if constexpr (sizeof(T) <= 8) {
-          using IntT = typename std::conditional_t<sizeof(T) == 4, int, unsigned long long>;
+          using IntT = typename std::conditional_t<sizeof(T) == 4,
+                                                   int,
+                                                   unsigned long long>;
           IntT* addr_as_int = reinterpret_cast<IntT*>(addr);
           IntT assumed;
           IntT old = *addr_as_int;
@@ -75,6 +113,21 @@ namespace ncarray {
             }
             old = atomicCAS(addr_as_int, assumed, *reinterpret_cast<const IntT*>(&new_val));
           } while (assumed != old);
+        } else {
+          std::uintptr_t addr_v = reinterpret_cast<std::uintptr_t>(addr);
+          int& lock = _nca_atomic_locks[(addr_v >> 4) % 1024];
+
+          while (atomicCAS(&lock, 0, 1) != 0); // Acquire spin-lock
+
+          // This is a pessimistic approach with the lock
+          // No need for the do-while, but slower because of lock acquisition
+          T old_val = *addr;
+          T new_val = fn(old_val, val);
+          if (new_val != old_val) {
+            *addr = new_val;
+          }
+
+          atomicExch(&lock, 0); // Release the lock
         }
       }
     } // namespace impl
@@ -126,6 +179,26 @@ namespace ncarray {
     }
 
     /**
+     * Generalized atomic to perform an argmax.
+     *
+     * There is no native operation for this. Use a CAS loop always.
+     */
+    template <typename T>
+    __device__ inline void nca_atomic_argmax(KeyValPair<ssize_t, T>* addr,
+                                             KeyValPair<ssize_t, T> val) {
+      using Pair = KeyValPair<ssize_t, T>;
+
+      auto CASOp = [] __device__(Pair old_v, Pair v) {
+        if (op_traits<T>::greater(old_v.val, v.val)) {
+          return old_v;
+        }
+        return v;
+      };
+
+      impl::nca_atomic_apply<false>(addr, val, /*nativeOp=*/nullptr, CASOp);
+    }
+
+    /**
      * Generalized atomicMin for all supported ncarray types T.
      * When possible, falls back onto the provide atomic primitives. Otherwise, it
      * will attempt component-wise atomics for vector types and complex numbers. The
@@ -146,6 +219,39 @@ namespace ncarray {
                                                             val,
                                                             nativeOp,
                                                             CASOp);
+    }
+
+    /**
+     * Generalized atomic to perform an argmin.
+     *
+     * There is no native operation for this. Use a CAS loop always.
+     */
+    template <typename T>
+    __device__ inline void nca_atomic_argmin(KeyValPair<ssize_t, T>* addr,
+                                             KeyValPair<ssize_t, T> val) {
+      using Pair = KeyValPair<ssize_t, T>;
+
+      auto CASOp = [] __device__(Pair old_v, Pair v) {
+        if (op_traits<T>::less(old_v.val, v.val)) {
+          return old_v;
+        }
+        return v;
+      };
+
+      impl::nca_atomic_apply<false>(addr, val, /*nativeOp=*/nullptr, CASOp);
+    }
+
+    /**
+     *
+     */
+    template <typename T>
+    __device__ inline void nca_atomic_accumulator_merge(VarAccumulator<T>* addr,
+                                                        VarAccumulator<T> val) {
+      auto CASOp = [] __device__ (VarAccumulator<T> old_v, VarAccumulator<T> v) {
+        return VarAccumulator<T>::merge(old_v, v);
+      };
+
+      impl::nca_atomic_apply<false>(addr, val, /*nativeOp=*/nullptr, CASOp);
     }
   } // namespace device
 } // namespace ncarray

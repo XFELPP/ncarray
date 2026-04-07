@@ -10,6 +10,7 @@
 #define NCARRAY_ENGINES_HH
 
 #include "ncarray/array_traits.hh"
+#include "ncarray/custom_types.hh"
 #ifdef __CUDACC__
 #include "ncarray/device/kernels.cuh"
 #endif
@@ -40,15 +41,31 @@ namespace ncarray {
     static Scalar execute_mean(const A& arr) {
       return host::mean_recursive<T>(arr);
     }
+    template <typename T, ArrayLike A>
+    static Scalar execute_var(const A& arr, ssize_t ddof = 0) {
+      return host::var_recursive<T>(arr);
+    }
+    template <typename T, ArrayLike A>
+    static Scalar execute_std(const A& arr, ssize_t ddof = 0) {
+      return host::std_recursive<T>(arr);
+    }
 
     template <typename T, ArrayLike A>
     static Scalar execute_max(const A& arr) {
       return host::max_recursive<T>(arr);
     }
+    template <typename T, ArrayLike A>
+    static Scalar execute_argmax(const A& arr) {
+      return host::argmax_recursive<T>(arr);
+    }
 
     template <typename T, ArrayLike A>
     static Scalar execute_min(const A& arr) {
       return host::min_recursive<T>(arr);
+    }
+    template <typename T, ArrayLike A>
+    static Scalar execute_argmin(const A& arr) {
+      return host::argmin_recursive<T>(arr);
     }
 
     // --- Binary non-broadcast operations --- //
@@ -899,6 +916,37 @@ namespace ncarray {
         static_cast<ResultT>(*ptrs.h_ptr) / static_cast<double>(arr.size())
       };
     }
+    template <typename T, class ArrayT>
+    static Scalar execute_var(const ArrayT& arr, ssize_t ddof = 0) {
+      using ResultT = typename op_traits<T>::truediv_type;
+
+      using Accumulator = VarAccumulator<ResultT>;
+      CircularDevicePool<Accumulator>& mem_pool =
+        CircularDevicePool<Accumulator>::instance();
+      using MemEntry = typename CircularDevicePool<Accumulator>::MemEntry;
+
+      MemEntry ptrs { mem_pool.next() };
+
+      *ptrs.h_ptr = { 0.0, ResultT { 0.0 }, ResultT { 0.0 } };
+
+      constexpr int TPB { 256 };
+      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
+
+      var_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
+      cudaDeviceSynchronize();
+
+      double n = ptrs.h_ptr->count;
+      ResultT var = ptrs.h_ptr->m2 / (n - static_cast<ResultT>(ddof));
+      return Scalar { var };
+    }
+    template <typename T, class ArrayT>
+    static Scalar execute_std(const ArrayT& arr, ssize_t ddof = 0) {
+      Scalar var_scalar = execute_var<T>(arr, ddof);
+      using ResultT = typename op_traits<T>::truediv_type;
+
+      ResultT var = std::get<ResultT>(var_scalar);
+      return Scalar { nca_sqrt(var) }; // nca_sqrt (custom_types.hh) handles vec types
+    }
 
     template <typename T, class ArrayT>
     static Scalar execute_max(const ArrayT& arr) {
@@ -918,6 +966,26 @@ namespace ncarray {
       return Scalar { *ptrs.h_ptr };
     }
 
+    template <typename T, ArrayLike A>
+    static Scalar execute_argmax(const A& arr) {
+      using Pair = KeyValPair<ssize_t, T>;
+      CircularDevicePool<Pair>& mem_pool = CircularDevicePool<Pair>::instance();
+      using MemEntry = typename CircularDevicePool<Pair>::MemEntry;
+
+      MemEntry ptrs { mem_pool.next() };
+
+      Pair max_pair { -1, op_traits<T>::lowest() };
+      *ptrs.h_ptr = max_pair;
+
+      constexpr int TPB { 256 };
+      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
+      argmax_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
+      cudaDeviceSynchronize();
+
+      Pair final_max_pair = *ptrs.h_ptr;
+      return Scalar { final_max_pair.key };
+    }
+
     template <typename T, class ArrayT>
     static Scalar execute_min(const ArrayT& arr) {
       CircularDevicePool<T>& mem_pool = CircularDevicePool<T>::instance();
@@ -934,6 +1002,26 @@ namespace ncarray {
       cudaDeviceSynchronize();
 
       return Scalar { *ptrs.h_ptr };
+    }
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_argmin(const A& arr) {
+      using Pair = KeyValPair<ssize_t, T>;
+      CircularDevicePool<Pair>& mem_pool = CircularDevicePool<Pair>::instance();
+      using MemEntry = typename CircularDevicePool<Pair>::MemEntry;
+
+      MemEntry ptrs { mem_pool.next() };
+
+      Pair min_pair { -1, op_traits<T>::max() };
+      *ptrs.h_ptr = min_pair;
+
+      constexpr int TPB { 256 };
+      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
+      argmin_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
+      cudaDeviceSynchronize();
+
+      Pair final_min_pair = *ptrs.h_ptr;
+      return Scalar { final_min_pair.key };
     }
 
     // --- Copy and modification --- //

@@ -72,6 +72,40 @@ namespace ncarray {
   }
 
   template <ArrayLike A>
+  inline Scalar var(const A& arr, ssize_t ddof) {
+    auto var_operation = [&] <typename T> () -> Scalar {
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_var<T>(arr, ddof);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_var<T>(arr, ddof);
+      }
+    };
+
+    return dispatch(arr.dtype(), var_operation);
+  }
+
+  template <ArrayLike A>
+  inline Scalar std(const A& arr, ssize_t ddof) {
+    auto std_operation = [&]<typename T>() -> Scalar {
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_std<T>(arr, ddof);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_std<T>(arr, ddof);
+      }
+    };
+
+    return dispatch(arr.dtype(), std_operation);
+  }
+
+  template <ArrayLike A>
   inline Scalar max(const A& arr) {
     auto max_operation = [&]<typename T>() -> Scalar {
       if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
@@ -87,6 +121,24 @@ namespace ncarray {
 
     return dispatch(arr.dtype(), max_operation);
   }
+
+  template <ArrayLike A>
+  inline Scalar argmax(const A& arr) {
+    auto argmax_operation = [&] <typename T> () -> Scalar {
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_argmax<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_argmax<T>(arr);
+      }
+    };
+
+    return dispatch(arr.dtype(), argmax_operation);
+  }
+
 
   template <ArrayLike A>
   inline Scalar min(const A& arr) {
@@ -105,24 +157,60 @@ namespace ncarray {
     return dispatch(arr.dtype(), min_operation);
   }
 
+  template <ArrayLike A>
+  inline Scalar argmin(const A& arr) {
+    auto argmin_operation = [&] <typename T> () -> Scalar {
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_argmin<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_argmin<T>(arr);
+      }
+    };
+
+    return dispatch(arr.dtype(), argmin_operation);
+  }
+
   template <class L, class S>
   inline Scalar ArrayImpl<L, S>::sum() const {
     return ncarray::sum(*this);
   }
 
+  // max and argmax
   template <class L, class S>
   inline Scalar ArrayImpl<L, S>::max() const {
     return ncarray::max(*this);
   }
+  template <class L, class S>
+  inline Scalar ArrayImpl<L, S>::argmax() const {
+    return ncarray::argmax(*this);
+  }
 
+  // min and argmin
   template <class L, class S>
   inline Scalar ArrayImpl<L, S>::min() const {
     return ncarray::min(*this);
   }
+  template <class L, class S>
+  inline Scalar ArrayImpl<L, S>::argmin() const {
+    return ncarray::argmin(*this);
+  }
 
+  // mean, variance and standard deviation
   template <class L, class S>
   inline Scalar ArrayImpl<L, S>::mean() const {
     return ncarray::mean(*this);
+  }
+  template <class L, class S>
+  inline Scalar ArrayImpl<L, S>::var(ssize_t ddof) const {
+    return ncarray::var(*this, ddof);
+  }
+  template <class L, class S>
+  inline Scalar ArrayImpl<L, S>::std(ssize_t ddof) const {
+    return ncarray::std(*this, ddof);
   }
 
   // Binary non-broadcast operations (same shape)

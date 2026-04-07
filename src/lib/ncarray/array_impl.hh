@@ -871,10 +871,14 @@ namespace ncarray {
     Scalar sum() const;
 
     Scalar max() const;
+    Scalar argmax() const;
 
     Scalar min() const;
+    Scalar argmin() const;
 
     Scalar mean() const;
+    Scalar var(ssize_t ddof = 0) const;
+    Scalar std(ssize_t ddof = 0) const;
 
     Scalar get_scalar(void* ptr) const {
       auto reduce = [&]<typename T>() -> Scalar {

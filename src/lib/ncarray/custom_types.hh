@@ -10,6 +10,7 @@
 #define NCARRAY_CUSTOM_TYPES_HH
 
 #include <cmath>
+#include <complex> // For std::sqrt in the nca_sqrt helper
 #include <concepts>
 #include <ostream>
 #include <type_traits>
@@ -22,7 +23,74 @@
 #endif
 #endif
 
+#ifndef NCA_D
+#ifdef __CUDACC__
+#define NCA_D __device__
+#else
+#define NCA_D
+#endif
+#endif
+
 namespace ncarray {
+  /**
+   * A small struct for holding a key and value.
+   *
+   * Used, for instance, in GPU-based key/value reductions.
+   */
+  template <typename KeyT, typename ValT>
+  struct KeyValPair {
+    KeyT key;
+    ValT val;
+
+    KeyValPair() = default;
+    NCA_HD KeyValPair(KeyT _key, ValT _val)
+      : key(_key)
+      , val(_val)
+    {}
+
+    NCA_HD inline bool operator==(const KeyValPair& other) const {
+      return key == other.key && val == other.val;
+    }
+
+    NCA_HD inline bool operator!=(const KeyValPair& other) const {
+      return !(*this == other);
+    }
+  };
+
+#ifdef NCA_HAS_CUDA
+  template <typename VarT>
+  struct VarAccumulator {
+    double count;
+    VarT mean;
+    VarT m2;
+
+    NCA_D inline bool operator==(const VarAccumulator& other) const {
+      return count == other.count && mean == other.mean && m2 == other.m2;
+    }
+
+    NCA_D inline bool operator!=(const VarAccumulator& other) const {
+      return !(*this == other);
+    }
+
+    NCA_D static VarAccumulator merge(const VarAccumulator& a,
+                                      const VarAccumulator& b) {
+      if (a.count == 0) {
+        return b;
+      }
+      if (b.count == 0) {
+        return a;
+      }
+
+      double n { a.count + b.count };
+      VarT delta { b.mean - a.mean };
+      VarT m { a.mean + delta * (b.count / n) };
+      VarT s { a.m2 + b.m2 + (delta * delta) * (a.count * b.count / n) };
+
+      return { n, m, s };
+    }
+  };
+#endif
+
 #define DEFINE_VECTOR_OPS(VECDTYPE, ...)                             \
   NCA_HD constexpr VECDTYPE operator+(const VECDTYPE& other) const { \
     return { __VA_ARGS__(+) };                                       \
@@ -466,6 +534,22 @@ namespace ncarray {
         std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
     } else {
       return std::isfinite(v.x) && std::isfinite(v.y);
+    }
+  }
+
+  template <typename T>
+  NCA_HD inline T nca_sqrt(const T& val) {
+    return std::sqrt(val);
+  }
+
+  template <Vector2DType T>
+  NCA_HD inline T nca_sqrt(const T& v) {
+    if constexpr (Vector4DType<T>) {
+      return T { std::sqrt(v.x), std::sqrt(v.y), std::sqrt(v.z), std::sqrt(v.w) };
+    } else if constexpr (Vector3DType<T>) {
+      return T { std::sqrt(v.x), std::sqrt(v.y), std::sqrt(v.z) };
+    } else {
+      return T { std::sqrt(v.x), std::sqrt(v.y) };
     }
   }
 

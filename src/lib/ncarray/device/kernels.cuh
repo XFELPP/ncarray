@@ -10,6 +10,7 @@
 #define NCARRAY_DEVICE_KERNELS_HH
 
 #include "ncarray/array_traits.hh"
+#include "ncarray/custom_types.hh"
 #include "ncarray/device/atomic.cuh"
 #include "ncarray/device/elementwise.cuh"
 #include "ncarray/device/reductions.cuh"
@@ -256,6 +257,15 @@ namespace ncarray {
       device::nca_atomic_max(res, block_res_max);
     }
   }
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void argmax_kernel(const ArrayT arr, KeyValPair<ssize_t,T>* max_pair) {
+    KeyValPair<ssize_t, T> block_res_argmax =
+      ncarray::device::block_argmax<BlockSize, ArrayT, T>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_argmax<T>(max_pair, block_res_argmax);
+    }
+  }
 
   template <int BlockSize, typename T, ViewArrayLike ArrayT>
   __global__ void min_kernel(const ArrayT arr, T* res) {
@@ -263,6 +273,27 @@ namespace ncarray {
 
     if (threadIdx.x == 0) {
       device::nca_atomic_min(res, block_res_min);
+    }
+  }
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void argmin_kernel(const ArrayT arr, KeyValPair<ssize_t, T>* min_pair) {
+    KeyValPair<ssize_t, T> block_res_argmin =
+      ncarray::device::block_argmin<BlockSize, ArrayT, T>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_argmin<T>(min_pair, block_res_argmin);
+    }
+  }
+
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void var_kernel(const ArrayT arr,
+                             VarAccumulator<typename op_traits<T>::truediv_type>* res) {
+    using ResultT = typename op_traits<T>::truediv_type;
+    // Welford approach. Thread computes its triplet for the grid strided segment
+    auto block_res_var = ncarray::device::block_var<BlockSize, ArrayT, ResultT>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_accumulator_merge<ResultT>(res, block_res_var);
     }
   }
 

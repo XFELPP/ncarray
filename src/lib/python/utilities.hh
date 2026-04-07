@@ -677,8 +677,12 @@ namespace pyncarray {
     // --- Array Reduction Methods (Reduce to scalar) --- //
     .def("sum", &ArrayT::sum)
     .def("max", &ArrayT::max)
+    .def("argmax", &ArrayT::argmax)
     .def("min", &ArrayT::min)
+    .def("argmin", &ArrayT::argmin)
     .def("mean", &ArrayT::mean)
+    .def("var", &ArrayT::var, py::arg("ddof") = 0)
+    .def("std", &ArrayT::std, py::arg("ddof") = 0)
     // --- Binary Arithmetic Methods --- //
     REGISTER_OPERATION("add", +)
     REGISTER_OPERATION("sub", -)
