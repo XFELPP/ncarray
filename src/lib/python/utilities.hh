@@ -683,6 +683,8 @@ namespace pyncarray {
     .def("mean", &ArrayT::mean)
     .def("var", &ArrayT::var, py::arg("ddof") = 0)
     .def("std", &ArrayT::std, py::arg("ddof") = 0)
+    .def("all", &ArrayT::all)
+    .def("any", &ArrayT::any)
     // --- Binary Arithmetic Methods --- //
     REGISTER_OPERATION("add", +)
     REGISTER_OPERATION("sub", -)

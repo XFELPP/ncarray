@@ -225,6 +225,55 @@ namespace ncarray {
                                                                 var_op,
                                                                 identity);
     }
+
+    // Logical ops - all and any
+    /**
+     * Return true if all values are truthy.
+     *
+     * @tparam BlockSize The size of the block for CUB helpers (TPB - threads/block)
+     * @tparam ArrayT The *array* type (not datatype).
+     * @tparam T The datatype of the array.
+     * @param arr The input array.
+     */
+    template <int BlockSize, class ArrayT, typename T>
+    __device__ inline bool block_all(const ArrayT& arr) {
+      auto cast_op = [&] __device__ (ssize_t idx, T val) {
+        return op_traits<T>::template cast<bool>(val);
+      };
+      auto all_op = [&] __device__ (auto a, auto b) { return a && b; };
+
+      bool identity { true };
+
+      return impl::block_reduce_transform<BlockSize, T, bool>(arr,
+                                                              cast_op,
+                                                              all_op,
+                                                              identity);
+    }
+
+    /**
+     * Return true if any of the values are truthy.
+     *
+     * @tparam BlockSize The size of the block for CUB helpers (TPB - threads/block)
+     * @tparam ArrayT The *array* type (not datatype).
+     * @tparam T The datatype of the array.
+     * @param arr The input array.
+     */
+    template <int BlockSize, class ArrayT, typename T>
+    __device__ inline bool block_any(const ArrayT& arr) {
+      auto cast_op = [&] __device__ (ssize_t idx, T val) {
+        return op_traits<T>::template cast<bool>(val);
+      };
+      auto any_op = [&] __device__ (auto a, auto b) {
+        return a || b;
+      };
+
+      bool identity { false };
+
+      return impl::block_reduce_transform<BlockSize, T, bool>(arr,
+                                                              cast_op,
+                                                              any_op,
+                                                              identity);
+    }
   } // namespace device
 } // namespace ncarray
 

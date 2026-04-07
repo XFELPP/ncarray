@@ -880,9 +880,12 @@ namespace ncarray {
     Scalar var(ssize_t ddof = 0) const;
     Scalar std(ssize_t ddof = 0) const;
 
+    Scalar all() const;
+    Scalar any() const;
+
     Scalar get_scalar(void* ptr) const {
       auto reduce = [&]<typename T>() -> Scalar {
-        return Scalar{*reinterpret_cast<T*>(ptr)};
+        return Scalar { *reinterpret_cast<T*>(ptr) };
       };
 
       return dispatch(this->m_dtype, reduce);

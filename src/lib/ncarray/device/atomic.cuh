@@ -242,7 +242,7 @@ namespace ncarray {
     }
 
     /**
-     *
+     * Atomic accumlator merge for variance calculations.
      */
     template <typename T>
     __device__ inline void nca_atomic_accumulator_merge(VarAccumulator<T>* addr,
@@ -252,6 +252,26 @@ namespace ncarray {
       };
 
       impl::nca_atomic_apply<false>(addr, val, /*nativeOp=*/nullptr, CASOp);
+    }
+
+    /**
+     * Atomic grid-wide logical and operation.
+     */
+    __device__ inline void nca_atomic_logical_and(bool* addr, bool val) {
+      if (!val) {
+        // Any false value means we are now false.
+        atomicExch(reinterpret_cast<int*>(addr), 0);
+      }
+    }
+
+    /**
+     * Atomic grid-wide logical or operation.
+     */
+    __device__ inline void nca_atomic_logical_or(bool* addr, bool val) {
+      if (val) {
+        // Any true value means we are now true.
+        atomicExch(reinterpret_cast<int*>(addr), 1);
+      }
     }
   } // namespace device
 } // namespace ncarray

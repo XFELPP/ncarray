@@ -209,6 +209,8 @@ namespace ncarray {
     NCA_HD static To cast(const std::complex<T>& val) {
       if constexpr (std::is_same_v<To, std::complex<T>>) {
         return val;
+      } else if constexpr (std::is_same_v<To, bool>) {
+        return val.real() != 0 || val.imag() != 0;
       } else if constexpr (Vector2DType<To>) {
         // For vectors broadcast into the first values.
         To res;

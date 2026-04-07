@@ -68,6 +68,17 @@ namespace ncarray {
       return host::argmin_recursive<T>(arr);
     }
 
+    // Logical reductions - all and any
+    template <typename T, ArrayLike A>
+    static Scalar execute_all(const A& arr) {
+      return host::all_recursive<T>(arr);
+    }
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_any(const A& arr) {
+      return host::any_recursive<T>(arr);
+    }
+
     // --- Binary non-broadcast operations --- //
 
     template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
@@ -1022,6 +1033,41 @@ namespace ncarray {
 
       Pair final_min_pair = *ptrs.h_ptr;
       return Scalar { final_min_pair.key };
+    }
+
+    // Logical reductions - all and any
+    template <typename T, ArrayLike A>
+    static Scalar execute_all(const A& arr) {
+      CircularDevicePool<bool>& mem_pool = CircularDevicePool<bool>::instance();
+      using MemEntry = typename CircularDevicePool<bool>::MemEntry;
+
+      MemEntry ptrs { mem_pool.next() };
+
+      *ptrs.h_ptr = true;
+
+      constexpr int TPB { 256 };
+      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
+      all_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
+      cudaDeviceSynchronize();
+
+      return Scalar { *ptrs.h_ptr };
+    }
+
+    template <typename T, ArrayLike A>
+    static Scalar execute_any(const A& arr) {
+      CircularDevicePool<bool>& mem_pool = CircularDevicePool<bool>::instance();
+      using MemEntry = typename CircularDevicePool<bool>::MemEntry;
+
+      MemEntry ptrs { mem_pool.next() };
+
+      *ptrs.h_ptr = false;
+
+      constexpr int TPB { 256 };
+      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
+      any_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
+      cudaDeviceSynchronize();
+
+      return Scalar { *ptrs.h_ptr };
     }
 
     // --- Copy and modification --- //

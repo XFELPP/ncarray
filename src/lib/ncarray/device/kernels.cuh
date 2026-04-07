@@ -322,6 +322,25 @@ namespace ncarray {
       dest[idx] = op_traits<SrcT>::template cast<DestT>(src[idx]);
     }
   }
+
+  // Logical ops - all and any
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void all_kernel(const ArrayT arr, bool* res) {
+    bool block_res_all = ncarray::device::block_all<BlockSize, ArrayT, T>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_logical_and(res, block_res_all);
+    }
+  }
+
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void any_kernel(const ArrayT arr, bool* res) {
+    bool block_res_any = ncarray::device::block_any<BlockSize, ArrayT, T>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_logical_or(res, block_res_any);
+    }
+  }
 } // namespace ncarray
 
 #endif // NCARRAY_DEVICE_KERNELS_HH

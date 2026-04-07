@@ -209,6 +209,45 @@ namespace ncarray {
                                 op_traits<T>::max());
       return Scalar { lin_argmin_idx };
     }
+
+    // All and any (Logical ops)
+    template <typename T, ArrayLike A>
+    Scalar all_recursive(const A& arr) {
+      auto all_op_internal = [](const std::uint8_t* data, bool* output) {
+        bool truthy {
+          op_traits<T>::template cast<bool>(*reinterpret_cast<const T*>(data))
+        };
+        *output = *output && truthy;
+      };
+
+      bool identity { true };
+      ssize_t starting_axis { 0 };
+      bool result = impl::reduce_recursive<T>(arr,
+                                              arr.data(),
+                                              starting_axis,
+                                              all_op_internal,
+                                              identity);
+      return Scalar { result };
+    }
+
+    template <typename T, ArrayLike A>
+    Scalar any_recursive(const A& arr) {
+      auto any_op_internal = [](const std::uint8_t* data, bool* output) {
+        bool truthy {
+          op_traits<T>::template cast<bool>(*reinterpret_cast<const T*>(data))
+        };
+        *output = *output || truthy;
+      };
+
+      ssize_t starting_axis { 0 };
+      bool identity { false };
+      bool result = impl::reduce_recursive<T>(arr,
+                                              arr.data(),
+                                              starting_axis,
+                                              any_op_internal,
+                                              identity);
+      return Scalar { result };
+    }
   } // namespace host
 } // namespace ncarray
 

@@ -174,6 +174,40 @@ namespace ncarray {
     return dispatch(arr.dtype(), argmin_operation);
   }
 
+  template <ArrayLike A>
+  inline Scalar all(const A& arr) {
+    auto all_operation = [&]<typename T>() -> Scalar {
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_all<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_all<T>(arr);
+      }
+    };
+
+    return dispatch(arr.dtype(), all_operation);
+  }
+
+  template <ArrayLike A>
+  inline Scalar any(const A& arr) {
+    auto any_operation = [&]<typename T>() -> Scalar {
+      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_any<T>(arr);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_any<T>(arr);
+      }
+    };
+
+    return dispatch(arr.dtype(), any_operation);
+  }
+
   template <class L, class S>
   inline Scalar ArrayImpl<L, S>::sum() const {
     return ncarray::sum(*this);
@@ -211,6 +245,17 @@ namespace ncarray {
   template <class L, class S>
   inline Scalar ArrayImpl<L, S>::std(ssize_t ddof) const {
     return ncarray::std(*this, ddof);
+  }
+
+  // logical reduction ops - all and any
+  template <class L, class S>
+  inline Scalar ArrayImpl<L, S>::all() const {
+    return ncarray::all(*this);
+  }
+
+  template <class L, class S>
+  inline Scalar ArrayImpl<L, S>::any() const {
+    return ncarray::any(*this);
   }
 
   // Binary non-broadcast operations (same shape)

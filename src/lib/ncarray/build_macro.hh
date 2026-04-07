@@ -26,6 +26,8 @@ namespace ncarray {
   template <ArrayLike A> Scalar mean(const A& arr);
   template <ArrayLike A> Scalar var(const A& arr, ssize_t ddof);
   template <ArrayLike A> Scalar std(const A& arr, ssize_t ddof);
+  template <ArrayLike A> Scalar all(const A& arr);
+  template <ArrayLike A> Scalar any(const A& arr);
 } // namespace ncarray
 
 #define BASE_OPS_LIST(ACTION, L, S)                                                                \
@@ -138,10 +140,18 @@ namespace ncarray {
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::mean() const;                 \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::var(ssize_t ddof) const;      \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::std(ssize_t ddof) const;      \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::all() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::any() const;                  \
   ACTION ncarray::Scalar ncarray::sum(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
   ACTION ncarray::Scalar ncarray::max(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
+  ACTION ncarray::Scalar ncarray::argmax(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);       \
   ACTION ncarray::Scalar ncarray::min(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
+  ACTION ncarray::Scalar ncarray::argmin(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);       \
   ACTION ncarray::Scalar ncarray::mean(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);         \
+  ACTION ncarray::Scalar ncarray::var(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&, ssize_t); \
+  ACTION ncarray::Scalar ncarray::std(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&, ssize_t); \
+  ACTION ncarray::Scalar ncarray::all(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
+  ACTION ncarray::Scalar ncarray::any(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::assign(                                  \
       const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::fill(ncarray::Scalar);                   \
