@@ -708,6 +708,75 @@ namespace pyncarray {
     // --- Inplace Logical Operations (Boolean Arrays Only) --- //
     REGISTER_INPLACE_OPERATION("iand", &=)
     REGISTER_INPLACE_OPERATION("ior", |=)
+    // --- Scattering Operations --- //
+    .def("scatter_add", [](ArrayT& self,
+                           const py::object& indices,
+                           const py::object& src) {
+#ifdef NCA_HAS_CUDA
+      // To keep the combinatorial explosion down while dev/host
+      // scatter add is supported in arbitrary combos, we only include
+      // dev views in the shared lib. So must cast and viewify beforehand
+      using MemType = typename std::decay_t<ArrayT>::MemType;
+      if constexpr (std::is_same_v<MemType, ncarray::DevTag>) {
+        auto is_arr_type = [&] <typename LayoutP, typename STag> (const py::object& val) {
+          using VP = typename ncarray::StoragePolicyTraits<STag>::View;
+          using RP = typename ncarray::StoragePolicyTraits<STag>::Ref;
+          using OP = typename ncarray::StoragePolicyTraits<STag>::Owner;
+          using ArrView = ncarray::ArrayImpl<LayoutP, VP>;
+          using ArrRef = ncarray::ArrayImpl<LayoutP, RP>;
+          using ArrOwner = ncarray::ArrayImpl<LayoutP, OP>;
+          if (py::isinstance<ArrView>(val) ||
+              py::isinstance<ArrRef>(val)  ||
+              py::isinstance<ArrOwner>(val)) {
+            return true;
+          }
+          return false;
+        };
+        if (is_arr_type.template operator()<LayoutPolicy, ncarray::HostTag>(indices)) {
+          auto h_idx = indices.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>>();
+          ncarray::ArrayImpl<LayoutPolicy, ncarray::DevOwnerPolicy> d_idx(h_idx.ndim(),
+                                                                        h_idx.shape(),
+                                                                        h_idx.dtype());
+
+          d_idx.assign(h_idx);
+          if (is_arr_type.template operator()<LayoutPolicy, ncarray::HostTag>(src)) {
+            auto h_src = src.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>>();
+            ncarray::ArrayImpl<LayoutPolicy, ncarray::DevOwnerPolicy> d_src(h_src.ndim(),
+                                                                          h_src.shape(),
+                                                                          h_src.dtype());
+            d_src.assign(h_src);
+            auto self_view = self.view();
+            self_view.scatter_add(d_idx.view(), d_src.view());
+          } else {
+            auto d_src = src.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::DevViewPolicy>>();
+            auto self_view = self.view();
+            self_view.scatter_add(d_idx.view(), d_src.view());
+          }
+        } else {
+          auto d_idx = indices.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::DevViewPolicy>>();
+          if (is_arr_type.template operator()<LayoutPolicy, ncarray::HostTag>(src)) {
+            auto h_src = src.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>>();
+            ncarray::ArrayImpl<LayoutPolicy, ncarray::DevOwnerPolicy> d_src(h_src.ndim(),
+                                                                          h_src.shape(),
+                                                                          h_src.dtype());
+            d_src.assign(h_src);
+            auto self_view = self.view();
+            self_view.scatter_add(d_idx.view(), d_src.view());
+            } else {
+            auto d_src = src.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::DevViewPolicy>>();
+            auto self_view = self.view();
+            self_view.scatter_add(d_idx, d_src);
+          }
+        }
+        return;
+      }
+#endif
+      auto self_view = self.view();
+      auto idx_view = indices.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>>();
+      auto src_view = src.cast<ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>>();
+
+      self_view.scatter_add(idx_view, src_view);
+    })
     // NumPy protocol compatibility
     // __array__(self, dtype=None, copy=None)
     .def("__array__", [](const ArrayT& self,

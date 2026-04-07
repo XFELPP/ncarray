@@ -21,9 +21,13 @@ namespace ncarray {
   EXTERN_NC_BASE_OPS(SOArrayPolicy, RefPolicy)
   EXTERN_NC_BASE_OPS(SOArrayPolicy, OwnerPolicy)
 
-  EXTERN_NC_CROSS_OPS(SOArrayPolicy, RefPolicy, SOArrayPolicy, ViewPolicy)
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, RefPolicy,   SOArrayPolicy, ViewPolicy)
   EXTERN_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, ViewPolicy)
   EXTERN_NC_CROSS_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, RefPolicy)
+
+  EXTERN_NC_TERNARY_OPS(SOArrayPolicy, ViewPolicy,  SOArrayPolicy, ViewPolicy, SOArrayPolicy, ViewPolicy)
+  EXTERN_NC_TERNARY_OPS(SOArrayPolicy, RefPolicy,   SOArrayPolicy, ViewPolicy, SOArrayPolicy, ViewPolicy)
+  EXTERN_NC_TERNARY_OPS(SOArrayPolicy, OwnerPolicy, SOArrayPolicy, ViewPolicy, SOArrayPolicy, ViewPolicy)
 } // namespace ncarray
 
 #endif // NCARRAY_SOARRAYS_HH

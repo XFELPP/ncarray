@@ -891,6 +891,10 @@ namespace ncarray {
       return dispatch(this->m_dtype, reduce);
     }
 
+    // --- Scattering operations --- //
+    template <ArrayLike Index, ArrayLike Src>
+    ArrayImpl& scatter_add(const Index& indices, const Src& src);
+
     // --- Binary operations --- //
     template <ArrayLike OtherType>
     OwnerType add(const OtherType& other) const;

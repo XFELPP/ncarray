@@ -47,3 +47,11 @@ INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, RefPolicy,      SOArrayPolicy, DevOwnerP
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, ViewPolicy,     SOArrayPolicy, DevViewPolicy)
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, ViewPolicy,     SOArrayPolicy, DevRefPolicy)
 INSTANTIATE_NC_CROSS_OPS(SOArrayPolicy, ViewPolicy,     SOArrayPolicy, DevOwnerPolicy)
+
+// --- Ternary ops --- //
+// NOTE: ONLY GPU comparsions are instantiated for the so. Python bindings know this
+// If you need other combos (and for some reason cannot cast yourself) include
+// array_operations.hh directly
+INSTANTIATE_NC_TERNARY_OPS(SOArrayPolicy, DevViewPolicy,  SOArrayPolicy, DevViewPolicy, SOArrayPolicy, DevViewPolicy)
+INSTANTIATE_NC_TERNARY_OPS(SOArrayPolicy, DevRefPolicy,   SOArrayPolicy, DevViewPolicy, SOArrayPolicy, DevViewPolicy)
+INSTANTIATE_NC_TERNARY_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevViewPolicy, SOArrayPolicy, DevViewPolicy)

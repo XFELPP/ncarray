@@ -24,6 +24,10 @@ namespace ncarray {
   EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevRefPolicy,   SOArrayPolicy, DevViewPolicy)
   EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevViewPolicy)
   EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevRefPolicy)
+
+  EXTERN_NC_TERNARY_OPS(SOArrayPolicy, DevViewPolicy,  SOArrayPolicy, DevViewPolicy, SOArrayPolicy, DevViewPolicy)
+  EXTERN_NC_TERNARY_OPS(SOArrayPolicy, DevRefPolicy,   SOArrayPolicy, DevViewPolicy, SOArrayPolicy, DevViewPolicy)
+  EXTERN_NC_TERNARY_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevViewPolicy, SOArrayPolicy, DevViewPolicy)
 }
 
 #endif // NCARRAY_SODEVARRAYS_HH

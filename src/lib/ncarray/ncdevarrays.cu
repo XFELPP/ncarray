@@ -47,3 +47,11 @@ INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, RefPolicy,      NCOffsetsPolicy, DevOw
 INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, ViewPolicy,     NCOffsetsPolicy, DevViewPolicy)
 INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, ViewPolicy,     NCOffsetsPolicy, DevRefPolicy)
 INSTANTIATE_NC_CROSS_OPS(NCOffsetsPolicy, ViewPolicy,     NCOffsetsPolicy, DevOwnerPolicy)
+
+// --- Ternary ops --- //
+// NOTE: ONLY GPU comparsions are instantiated for the so. Python bindings know this
+// If you need other combos (and for some reason cannot cast yourself) include
+// array_operations.hh directly
+INSTANTIATE_NC_TERNARY_OPS(NCOffsetsPolicy, DevViewPolicy,  NCOffsetsPolicy, DevViewPolicy, NCOffsetsPolicy, DevViewPolicy)
+INSTANTIATE_NC_TERNARY_OPS(NCOffsetsPolicy, DevRefPolicy,   NCOffsetsPolicy, DevViewPolicy, NCOffsetsPolicy, DevViewPolicy)
+INSTANTIATE_NC_TERNARY_OPS(NCOffsetsPolicy, DevOwnerPolicy, NCOffsetsPolicy, DevViewPolicy, NCOffsetsPolicy, DevViewPolicy)

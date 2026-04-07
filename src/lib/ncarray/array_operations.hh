@@ -258,6 +258,45 @@ namespace ncarray {
     return ncarray::any(*this);
   }
 
+  // --- Scattering Operations --- //
+  template <ArrayLike Dest, ArrayLike Index, ArrayLike Src>
+  inline void scatter_add(Dest& dest, const Index& indices, const Src& src) {
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto dest_view = dest.view();
+    auto indices_view = indices.view();
+    auto src_view = src.view();
+
+    auto visit_dest = [&] <typename DestT> () {
+      auto visit_indices = [&] <typename IndexT> () {
+        if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
+#ifdef __CUDACC__
+          GPUEngine::execute_scatter_add<DestT, IndexT>(dest_view,
+                                                        indices_view,
+                                                        src_view);
+#else
+          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+        } else {
+          HostEngine::execute_scatter_add<DestT, IndexT>(dest_view,
+                                                         indices_view,
+                                                         src_view);
+        }
+      };
+
+      dispatch(indices.dtype(), visit_indices);
+    };
+
+    dispatch(dest.dtype(), visit_dest);
+  }
+
+  template <class L, class S>
+  template <ArrayLike Index, ArrayLike Src>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::scatter_add(const Index& indices,
+                                                       const Src& src) {
+    ncarray::scatter_add(*this, indices, src);
+    return *this;
+  }
+
   // Binary non-broadcast operations (same shape)
   // --------------------------------------------
   // TODO: In the future, may make ResultType ArrayLike (instead of Owning)

@@ -79,6 +79,22 @@ namespace ncarray {
       return host::any_recursive<T>(arr);
     }
 
+    // --- Scatter operations --- //
+    template <
+      typename DestT,
+      typename IndexT,
+      ArrayLike Dest,
+      ArrayLike Index,
+      ArrayLike Src
+    >
+    static void execute_scatter_add(Dest& dest, const Index& indices, const Src& src) {
+      auto add_op_internal = [&]<typename SrcT>() {
+        host::scatter_add_recursive<DestT, IndexT, SrcT>(dest, indices, src);
+      };
+
+      dispatch(src.dtype(), add_op_internal);
+    }
+
     // --- Binary non-broadcast operations --- //
 
     template <typename T, ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
@@ -357,6 +373,74 @@ namespace ncarray {
 
 #ifdef __CUDACC__
   struct GPUEngine {
+      // --- Scatter operations --- //
+    template <
+      typename DestT,
+      typename IndexT,
+      ArrayLike Dest,
+      ArrayLike Index,
+      ArrayLike Src
+    >
+    static void execute_scatter_add(Dest& dest, const Index& indices, const Src& src) {
+      constexpr int TPB { 256 };
+      int blocks { static_cast<int>((src.size() + TPB - 1)) / TPB };
+      using IndexMemType = typename Index::MemType;
+      using SrcMemType = typename Src::MemType;
+
+      constexpr bool idx_is_dev = std::is_same_v<IndexMemType, DevTag>;
+      constexpr bool src_is_dev = std::is_same_v<SrcMemType, DevTag>;
+
+      if (idx_is_dev && src_is_dev) {
+        auto op = [&]<typename SrcT>() {
+          scatter_add_kernel<DestT, IndexT, SrcT><<<blocks, TPB>>>(dest.view(),
+                                                                   indices.view(),
+                                                                   src.view());
+        };
+        dispatch(src.dtype(), op);
+        cudaDeviceSynchronize();
+      } else {
+        using NCDevArray = ArrayImpl<NCOffsetsPolicy, DevOwnerPolicy>;
+        auto idx_dtype = indices.dtype();
+        auto src_dtype = src.dtype();
+
+        if (!idx_is_dev) {
+          NCDevArray idx_tmp(indices.ndim(), indices.shape(), idx_dtype);
+          idx_tmp.assign(indices);
+          if (!src_is_dev) {
+            NCDevArray src_tmp(src.ndim(), src.shape(), src_dtype);
+            src_tmp.assign(src);
+            auto op = [&] <typename SrcT> () {
+              scatter_add_kernel<DestT, IndexT, SrcT><<<blocks, TPB>>>(dest.view(),
+                                                                       idx_tmp.view(),
+                                                                       src_tmp.view());
+            };
+            dispatch(src.dtype(), op);
+            cudaDeviceSynchronize();
+          } else {
+            auto op = [&] <typename SrcT> () {
+              scatter_add_kernel<DestT, IndexT, SrcT><<<blocks, TPB>>>(dest.view(),
+                                                                       idx_tmp.view(),
+                                                                       src.view());
+            };
+            dispatch(src.dtype(), op);
+            cudaDeviceSynchronize();
+          }
+        } else {
+          if (!src_is_dev) {
+            NCDevArray src_tmp(src.ndim(), src.shape(), src_dtype);
+            src_tmp.assign(src);
+            auto op = [&] <typename SrcT> () {
+              scatter_add_kernel<DestT, IndexT, SrcT><<<blocks, TPB>>>(dest.view(),
+                                                                       indices.view(),
+                                                                       src_tmp.view());
+            };
+            dispatch(src.dtype(), op);
+            cudaDeviceSynchronize();
+          }
+        }
+      }
+    }
+
     // --- Binary non-broadcast operations --- //
     template <typename T, class Left, class Right, class Result>
     static void execute_add(const Left& left, const Right& right, Result& result) {

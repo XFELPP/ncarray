@@ -329,10 +329,20 @@ namespace ncarray {
   ACTION void ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::assign(                                \
       const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);
 
+
+// --- TWO ARRAY CROSS-OPERATIONS LIST ---
+#define TERNARY_OPS_LIST(ACTION, L1, S1, L2, S2, L3, S3)                                           \
+  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
+      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::scatter_add(                                   \
+        const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&,                                       \
+        const ncarray::ArrayImpl<ncarray::L3, ncarray::S3>&);
+
 #define INSTANTIATE_NC_BASE_OPS(L, S) BASE_OPS_LIST(template, L, S)
 #define INSTANTIATE_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(template, L1, S1, L2, S2)
+#define INSTANTIATE_NC_TERNARY_OPS(L1, S1, L2, S2, L3, S3) TERNARY_OPS_LIST(template, L1, S1, L2, S2, L3, S3)
 
 #define EXTERN_NC_BASE_OPS(L, S) BASE_OPS_LIST(extern template, L, S)
 #define EXTERN_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(extern template, L1, S1, L2, S2)
+#define EXTERN_NC_TERNARY_OPS(L1, S1, L2, S2, L3, S3) TERNARY_OPS_LIST(extern template, L1, S1, L2, S2, L3, S3)
 
 #endif

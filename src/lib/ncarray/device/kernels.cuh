@@ -297,6 +297,25 @@ namespace ncarray {
     }
   }
 
+  // Logical ops - all and any
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void all_kernel(const ArrayT arr, bool* res) {
+    bool block_res_all = ncarray::device::block_all<BlockSize, ArrayT, T>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_logical_and(res, block_res_all);
+    }
+  }
+
+  template <int BlockSize, typename T, ViewArrayLike ArrayT>
+  __global__ void any_kernel(const ArrayT arr, bool* res) {
+    bool block_res_any = ncarray::device::block_any<BlockSize, ArrayT, T>(arr);
+
+    if (threadIdx.x == 0) {
+      device::nca_atomic_logical_or(res, block_res_any);
+    }
+  }
+
   // --- Copy and Modification --- //
   template <ViewArrayLike OutT, typename T>
   __global__ void fill_kernel(OutT out, T val) {
@@ -323,22 +342,26 @@ namespace ncarray {
     }
   }
 
-  // Logical ops - all and any
-  template <int BlockSize, typename T, ViewArrayLike ArrayT>
-  __global__ void all_kernel(const ArrayT arr, bool* res) {
-    bool block_res_all = ncarray::device::block_all<BlockSize, ArrayT, T>(arr);
+  // --- Scattering operations --- //
+  template <
+    typename DestT,
+    typename IndexT,
+    typename SrcT,
+    ViewArrayLike Dest,
+    ViewArrayLike Index,
+    ViewArrayLike Src
+  >
+  __global__ void scatter_add_kernel(Dest dest, const Index indices, const Src src) {
+    ssize_t idx { static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x) };
 
-    if (threadIdx.x == 0) {
-      device::nca_atomic_logical_and(res, block_res_all);
-    }
-  }
-
-  template <int BlockSize, typename T, ViewArrayLike ArrayT>
-  __global__ void any_kernel(const ArrayT arr, bool* res) {
-    bool block_res_any = ncarray::device::block_any<BlockSize, ArrayT, T>(arr);
-
-    if (threadIdx.x == 0) {
-      device::nca_atomic_logical_or(res, block_res_any);
+    if (idx < src.size()) {
+      ssize_t target { op_traits<IndexT>::template cast<ssize_t>(indices[idx]) };
+      if (target >= 0 && target < dest.size()) {
+        SrcT& src_item = src[target];
+        DestT casted = op_traits<SrcT>::template cast<DestT>(src_item);
+        DestT& dest_item = dest[target];
+        device::nca_atomic_add(&dest_item, casted);
+      }
     }
   }
 } // namespace ncarray

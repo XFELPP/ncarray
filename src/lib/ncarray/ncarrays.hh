@@ -24,6 +24,10 @@ namespace ncarray {
   EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, RefPolicy, NCOffsetsPolicy, ViewPolicy)
   EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, ViewPolicy)
   EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, RefPolicy)
+
+  EXTERN_NC_TERNARY_OPS(NCOffsetsPolicy, ViewPolicy, NCOffsetsPolicy, ViewPolicy, NCOffsetsPolicy, ViewPolicy)
+  EXTERN_NC_TERNARY_OPS(NCOffsetsPolicy, RefPolicy, NCOffsetsPolicy, ViewPolicy, NCOffsetsPolicy, ViewPolicy)
+  EXTERN_NC_TERNARY_OPS(NCOffsetsPolicy, OwnerPolicy, NCOffsetsPolicy, ViewPolicy, NCOffsetsPolicy, ViewPolicy)
 } // namespace ncarray
 
 #endif // NCARRAY_NCARRAYS_HH

@@ -17,6 +17,58 @@ namespace ncarray {
   namespace host {
     namespace impl {
       /**
+       * Scatter src values into dest using indices. Src and indices must be the
+       * of the same shape.
+       */
+      template <
+        typename DestT,
+        typename IndexT,
+        typename SrcT,
+        class Op,
+        ArrayLike Dest,
+        ArrayLike Index,
+        ArrayLike Src
+      >
+      void scatter_reduce_recursive(Dest& dest,
+                                    const Index& indices,
+                                    const Src& src,
+                                    void* dest_ptr,
+                                    const void* idx_ptr,
+                                    const void* src_ptr,
+                                    ssize_t axis,
+                                    Op op) {
+        if (axis == static_cast<ssize_t>(src.ndim())) {
+          // Base case
+          IndexT idx = *reinterpret_cast<const IndexT*>(idx_ptr);
+
+          if (op_traits<IndexT>::ge(idx, 0) &&
+              op_traits<IndexT>::less(idx, op_traits<ssize_t>::template cast<IndexT>(dest.size()))) {
+            void* addr =
+              const_cast<void*>(dest.advance(dest_ptr,
+                                             0,
+                                             op_traits<IndexT>::template cast<ssize_t>(idx)));
+
+            op(reinterpret_cast<DestT*>(addr), reinterpret_cast<const SrcT*>(src_ptr));
+          }
+          return;
+        }
+
+        ssize_t dim = src.shape()[axis];
+        for (ssize_t i = 0; i < dim; ++i) {
+          const void* next_idx = indices.advance(idx_ptr, axis, i);
+          const void* next_src = src.advance(src_ptr, axis, i);
+          scatter_reduce_recursive<DestT, IndexT, SrcT>(dest,
+                                                        indices,
+                                                        src,
+                                                        dest_ptr,
+                                                        next_idx,
+                                                        next_src,
+                                                        axis + 1,
+                                                        op);
+        }
+      }
+
+      /**
        * Recursively fill an array with with a scalar value.
        *
        * This function can cast the value as it is assigned.
@@ -399,6 +451,32 @@ namespace ncarray {
         }
       }
     } // namespace impl
+
+    // -- Scatter operations --- //
+    template <
+      typename DestT,
+      typename IndexT,
+      typename SrcT,
+      ArrayLike Dest,
+      ArrayLike Index,
+      ArrayLike Src
+    >
+    void scatter_add_recursive(Dest& dest, const Index& indices, const Src& src) {
+      auto add_op_internal = [](DestT* dest_ptr, const SrcT* src_ptr) {
+        *dest_ptr += op_traits<SrcT>::template cast<DestT>(*src_ptr);
+      };
+
+      ssize_t starting_axis { 0 };
+      void* dest_ptr { const_cast<void*>(dest.data()) };
+      impl::scatter_reduce_recursive<DestT, IndexT, SrcT>(dest,
+                                                          indices,
+                                                          src,
+                                                          dest_ptr,
+                                                          indices.data(),
+                                                          src.data(),
+                                                          starting_axis,
+                                                          add_op_internal);
+    }
 
     // --- Binary non-broadcast operations (same shape) --- //
 
