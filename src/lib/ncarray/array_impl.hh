@@ -72,6 +72,32 @@ namespace {
 namespace ncarray {
   // --- Dispatch operation --- //
 
+  /**
+   * A restricted dispatcher for integer types. This is useful when using arrays
+   * to hold indices for other arrays.
+   */
+  template <typename Visitor>
+  NCA_HD inline auto dispatch_integers(DType type, Visitor&& visitor) {
+    switch (type) {
+    case DType::uint32: {
+      return visitor.template operator()<std::uint32_t>();
+    }
+    case DType::uint64: {
+      return visitor.template operator()<std::uint64_t>();
+    }
+    case DType::int32: {
+      return visitor.template operator()<std::int32_t>();
+    }
+    case DType::int64: {
+      return visitor.template operator()<std::int64_t>();
+    }
+    default: {
+      assert(false && "Invalid DType for operation! Only integers accepted!");
+      return visitor.template operator()<std::uint32_t>();
+    }
+    }
+  }
+
   template <typename Visitor>
   NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
     switch (type) {
@@ -891,9 +917,12 @@ namespace ncarray {
       return dispatch(this->m_dtype, reduce);
     }
 
-    // --- Scattering operations --- //
+    // --- Scattering and Keyed Reduction operations --- //
     template <ArrayLike Index, ArrayLike Src>
     ArrayImpl& scatter_add(const Index& indices, const Src& src);
+
+    template <ArrayLike Keys>
+    OwnerType reduce_by_key(const Keys& keys) const;
 
     // --- Binary operations --- //
     template <ArrayLike OtherType>

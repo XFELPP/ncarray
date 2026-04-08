@@ -258,13 +258,20 @@ namespace ncarray {
     return ncarray::any(*this);
   }
 
-  // --- Scattering Operations --- //
+  // --- Scattering and Keyed Reduction Operations --- //
   template <ArrayLike Dest, ArrayLike Index, ArrayLike Src>
   inline void scatter_add(Dest& dest, const Index& indices, const Src& src) {
     // Convert to views to decrease binary size with fewer template instantiations
     auto dest_view = dest.view();
     auto indices_view = indices.view();
     auto src_view = src.view();
+    auto indices_dtype = indices.dtype();
+    if (indices_dtype != DType::int64 ||
+        indices_dtype != DType::int32 ||
+        indices_dtype != DType::uint64 ||
+        indices_dtype != DType::uint32) {
+      return;
+    }
 
     auto visit_dest = [&] <typename DestT> () {
       auto visit_indices = [&] <typename IndexT> () {
@@ -283,7 +290,7 @@ namespace ncarray {
         }
       };
 
-      dispatch(indices.dtype(), visit_indices);
+      dispatch_integers(indices.dtype(), visit_indices);
     };
 
     dispatch(dest.dtype(), visit_dest);
@@ -293,8 +300,46 @@ namespace ncarray {
   template <ArrayLike Index, ArrayLike Src>
   inline ArrayImpl<L, S>& ArrayImpl<L, S>::scatter_add(const Index& indices,
                                                        const Src& src) {
+    auto indices_dtype = indices.dtype();
+    if (indices_dtype != DType::int64  ||
+        indices_dtype != DType::int32  ||
+        indices_dtype != DType::uint64 ||
+        indices_dtype != DType::uint32) {
+      return *this;
+    }
     ncarray::scatter_add(*this, indices, src);
     return *this;
+  }
+
+  template <ArrayLike Keys, ArrayLike Vals, OwningArrayLike Result>
+  inline auto reduce_by_key(const Keys& keys, const Vals& vals) {
+    Scalar max_key { keys.max() };
+
+    auto visit_op = [&] <typename KeyT> () {
+      return op_traits<KeyT>::template cast<ssize_t>(std::get<KeyT>(max_key)) + 1;
+    };
+    ssize_t n_bins { dispatch(keys.dtype(), visit_op) };
+
+    Result result(1, &n_bins, vals.dtype());
+
+    auto reduce_op = [&] <typename ValT> () {
+      result.fill(ValT { 0 });
+    };
+    dispatch(vals.dtype(), reduce_op);
+
+    result.scatter_add(keys, vals);
+
+    return result;
+  }
+
+  template <class L, class S>
+  template <ArrayLike Keys>
+  inline typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::reduce_by_key(const Keys& keys) const {
+    using ViewType = typename ArrayImpl<L, S>::ViewType;
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    return ncarray::reduce_by_key<Keys, ViewType, OwnerType>(keys, this->view());
   }
 
   // Binary non-broadcast operations (same shape)

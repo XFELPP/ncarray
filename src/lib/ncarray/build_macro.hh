@@ -152,6 +152,9 @@ namespace ncarray {
   ACTION ncarray::Scalar ncarray::std(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&, ssize_t); \
   ACTION ncarray::Scalar ncarray::all(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
   ACTION ncarray::Scalar ncarray::any(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+  ncarray::ArrayImpl<ncarray::L, ncarray::S>::reduce_by_key(                                       \
+      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::assign(                                  \
       const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::fill(ncarray::Scalar);                   \
@@ -296,6 +299,9 @@ namespace ncarray {
   ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
       ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator/=(                                    \
           const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
+  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
+      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::reduce_by_key(                                 \
+          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
   ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
       ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator==(                                    \
           const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
