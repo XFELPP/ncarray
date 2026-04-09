@@ -41,13 +41,11 @@ namespace ncarray {
       : start(start_)
       , stop(stop_)
       , step(step_)
-      , length((stop - start + step - 1) / step)
     {}
 
     ssize_t start;
     ssize_t stop;
     ssize_t step;
-    ssize_t length;
   };
 
   // Indexing is allowed by integer, slice or ellipsis

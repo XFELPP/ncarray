@@ -254,7 +254,10 @@ namespace ncarray {
             ssize_t start = idx_item.slice.start;
             ssize_t stop = idx_item.slice.stop;
             ssize_t step = idx_item.slice.step;
-            length = idx_item.slice.length;
+            length = (stop - start + step - 1) / step;
+            if (length < 0) {
+              length = 0;
+            }
 
             if (start < 0) {
               start += static_cast<const Derived*>(this)->m_shape[axis];
