@@ -34,7 +34,6 @@ namespace ncarray {
       : start(start_)
       , stop(stop_)
       , step(1)
-      , length((stop - start + step - 1) / step)
     {}
 
     NCA_HD Slice(ssize_t start_, ssize_t stop_, ssize_t step_)
