@@ -10,17 +10,56 @@
 #define NCARRAY_LAYOUT_HH
 
 #include "ncarray/indexing.hh"
-#include "ncarray/storage.hh"
 
+#ifdef __CUDACC_RTC__
+typedef long long ssize_t;
+#else
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 #endif
+#endif
 
+#ifdef __CUDACC_RTC__
+#include <cuda/std/cstdint>
+#include <cuda/std/type_traits>
+
+using cuda::std::int8_t;
+using cuda::std::int16_t;
+using cuda::std::int32_t;
+using cuda::std::int64_t;
+
+using cuda::std::uint8_t;
+using cuda::std::uint16_t;
+using cuda::std::uint32_t;
+using cuda::std::uint64_t;
+
+using cuda::std::false_type;
+using cuda::std::is_base_of_v;
+using cuda::std::true_type;
+
+#else
 #include <concepts>
 #include <cstdint>
+#include <type_traits>
+
+using std::int8_t;
+using std::int16_t;
+using std::int32_t;
+using std::int64_t;
+
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+
+using std::false_type;
+using std::is_base_of_v;
+using std::true_type;
+
+#endif
 
 #ifndef NCA_HD
 #ifdef __CUDACC__
@@ -135,6 +174,16 @@ namespace ncarray {
 
     NCA_HD inline const void* advance(const void* data, ssize_t axis, ssize_t index) const {
       return static_cast<const Derived*>(this)->advance(data, axis, index);
+    }
+
+    template <typename Coords>
+    NCA_HD inline void* advance(void* data, const Coords& coords) const {
+      return static_cast<const Derived*>(this)->advance(data, coords);
+    }
+
+    template <typename Coords>
+    NCA_HD inline const void* advance(const void* data, const Coords& coords) const {
+      return static_cast<const Derived*>(this)->advance(data, coords);
     }
 
     /**
@@ -254,16 +303,18 @@ namespace ncarray {
             ssize_t start = idx_item.slice.start;
             ssize_t stop = idx_item.slice.stop;
             ssize_t step = idx_item.slice.step;
-            length = (stop - start + step - 1) / step;
-            if (length < 0) {
-              length = 0;
-            }
 
             if (start < 0) {
               start += static_cast<const Derived*>(this)->m_shape[axis];
             }
             if (stop < 0) {
               stop += static_cast<const Derived*>(this)->m_shape[axis];
+            }
+
+            length = (stop - start + step - 1) / step;
+
+            if (length < 0) {
+              length = 0;
             }
 
             stride *= step;
@@ -313,6 +364,35 @@ namespace ncarray {
       return static_cast<const Derived*>(this)->get_offset_impl(axis);
     }
 
+    /**
+     * Check whether another array's layout matches my own.
+     *
+     * When layout's match perfectly, then certain optimizations can be done during
+     * expression evaluation.
+     */
+    NCA_HD inline bool layout_matches(const LayoutPolicy<Derived>& other) const {
+      if (static_cast<const Derived*>(this)->ndim() != other.ndim()) {
+        return false;
+      }
+
+      for (ssize_t i = 0; i < this->ndim(); ++i) {
+        if (static_cast<const Derived*>(this)->m_strides[i] != other.m_strides[i]) {
+          return false;
+        }
+        if (static_cast<const Derived*>(this)->m_shape[i] != other.m_shape[i]) {
+          return false;
+        }
+
+        // NOTE: get_offset is specialized to return either offsets or suboffsets.
+        //       This function is safe to use for both Layout policies.
+        //if (static_cast<const Derived*>(this)->get_offset(i) != other.get_offset(i)) {
+        //  return false;
+        //}
+      }
+
+      return true;
+    }
+
   protected:
     Metadata m_shape;
     Metadata m_strides;
@@ -334,28 +414,70 @@ namespace ncarray {
      */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
       if (axis == this->m_pointer_axis) {
-        return reinterpret_cast<void**>(data)[index + m_offsets[axis]];
+        return reinterpret_cast<void**>(data)[index + this->m_offsets[axis]];
       }
 
-      return reinterpret_cast<std::uint8_t*>(data) + index * m_strides[axis] + m_offsets[axis];
+      return
+        reinterpret_cast<uint8_t*>(data) +
+        index * this->m_strides[axis] + this->m_offsets[axis];
     }
 
     NCA_HD inline const void* advance(const void* data,
                                       ssize_t axis,
                                       ssize_t index) const {
       if (axis == this->m_pointer_axis) {
-        return reinterpret_cast<const void* const *>(data)[index + m_offsets[axis]];
+        return
+          reinterpret_cast<const void* const *>(data)[index + this->m_offsets[axis]];
       }
 
       return
-        reinterpret_cast<const std::uint8_t*>(data) + index * m_strides[axis] + m_offsets[axis];
+        reinterpret_cast<const uint8_t*>(data) +
+        index * this->m_strides[axis] + this->m_offsets[axis];
+    }
+
+    template <typename Coords>
+    NCA_HD inline void* advance(void* data, const Coords& coords) const {
+      void* data_p { data };
+
+      for (int axis = 0; axis < coords.size(); ++axis) {
+        auto index { coords[axis] };
+
+        if (axis == this->m_pointer_axis) {
+          data_p = reinterpret_cast<void**>(data_p)[index + this->m_offsets[axis]];
+        } else {
+          data_p =
+            reinterpret_cast<uint8_t*>(data_p) + index * this->m_strides[axis] +
+            this->m_offsets[axis];
+        }
+      }
+      return data_p;
+    }
+
+    template <typename Coords>
+    NCA_HD inline const void* advance(const void* data,
+                                      const Coords& coords) const {
+      const void* data_p { data };
+
+      for (int axis = 0; axis < coords.size(); ++axis) {
+        auto index { coords[axis] };
+
+        if (axis == this->m_pointer_axis) {
+          data_p = reinterpret_cast<const void* const*>(data_p)[index + this->m_offsets[axis]];
+        } else {
+          data_p =
+            reinterpret_cast<const uint8_t*>(data_p) +
+            index * this->m_strides[axis] + this->m_offsets[axis];
+        }
+      }
+
+      return data_p;
     }
 
     NCA_HD inline const ssize_t* offsets() const {
-      return m_offsets.data;
+      return this->m_offsets.data;
     }
     NCA_HD inline ssize_t offset(ssize_t dim) const {
-      return m_offsets[dim];
+      return this->m_offsets[dim];
     }
 
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
@@ -410,9 +532,10 @@ namespace ncarray {
      * Negative suboffsets mean no-pointer axis, and no special dereferencing
      */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
-      std::uint8_t* next = reinterpret_cast<std::uint8_t*>(data) + index * m_strides[axis];
+      uint8_t* next =
+        reinterpret_cast<uint8_t*>(data) + index * this->m_strides[axis];
       if (m_suboffsets[axis] >= 0) {
-        next = *reinterpret_cast<std::uint8_t**>(next) + m_suboffsets[axis];
+        next = *reinterpret_cast<uint8_t**>(next) + this->m_suboffsets[axis];
       }
       return reinterpret_cast<void*>(next);
     }
@@ -420,24 +543,64 @@ namespace ncarray {
     NCA_HD inline const void* advance(const void* data,
                                       ssize_t axis,
                                       ssize_t index) const {
-      const std::uint8_t* next =
-        reinterpret_cast<const std::uint8_t*>(data) + index * m_strides[axis];
+      const uint8_t* next =
+        reinterpret_cast<const uint8_t*>(data) + index * this->m_strides[axis];
       if (m_suboffsets[axis] >= 0) {
-        next = *reinterpret_cast<const std::uint8_t* const*>(next) + m_suboffsets[axis];
+        next =
+          *reinterpret_cast<const uint8_t* const*>(next) +
+          this->m_suboffsets[axis];
       }
       return reinterpret_cast<const void*>(next);
     }
 
+    template <typename Coords>
+    NCA_HD inline void* advance(void* data, const Coords& coords) const {
+      void* data_p { data };
+
+      for (int axis = 0; axis < coords.size(); ++axis) {
+        auto index { coords[axis] };
+
+        uint8_t* next =
+          reinterpret_cast<uint8_t*>(data_p) + index * this->m_strides[axis];
+        if (m_suboffsets[axis] >= 0) {
+          next = *reinterpret_cast<uint8_t**>(next) + this->m_suboffsets[axis];
+        }
+        data_p = reinterpret_cast<void*>(next);
+      }
+      return data_p;
+    }
+
+    template <typename Coords>
+    NCA_HD inline const void* advance(const void* data,
+                                      const Coords& coords) const {
+      const void* data_p { data };
+
+      for (int axis = 0; axis < coords.size(); ++axis) {
+        auto index { coords[axis] };
+
+        const uint8_t* next =
+            reinterpret_cast<const uint8_t*>(data_p) + index * this->m_strides[axis];
+        if (m_suboffsets[axis] >= 0) {
+          next =
+            *reinterpret_cast<const uint8_t* const*>(next) + this->m_suboffsets[axis];
+        }
+        data_p = reinterpret_cast<const void*>(next);
+      }
+
+      return data_p;
+    }
+
+
     NCA_HD inline const ssize_t* suboffsets() const {
-      return m_suboffsets.data;
+      return this->m_suboffsets.data;
     }
 
     NCA_HD inline ssize_t suboffset(ssize_t dim) const {
-      return m_suboffsets[dim];
+      return this->m_suboffsets[dim];
     }
 
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
-      return m_suboffsets[axis] >= 0;
+      return this->m_suboffsets[axis] >= 0;
     }
 
     NCA_HD inline Metadata::value_type get_offset_impl(ssize_t axis) const {
@@ -461,10 +624,35 @@ namespace ncarray {
 
   // --- End Layout Policies --- //
 
-  // Setup simple concept to support const and non-const iterators
-  template <typename T>
-  concept ViewLike = std::is_base_of_v<ViewPolicy, std::remove_const_t<T>>;
+  template <class L, class D>
+  concept IsLayoutPolicy = is_base_of_v<LayoutPolicy<D>, L>;
 
+  template <class L>
+  struct is_layout_policy : false_type {};
+
+  template <class D>
+  struct is_layout_policy<LayoutPolicy<D>> : true_type {};
+
+  template <class L>
+  constexpr bool is_layout_policy_v = is_layout_policy<L>::value;
+
+  template <class L>
+  struct is_ncoffsets_policy : false_type {};
+
+  template <>
+  struct is_ncoffsets_policy<NCOffsetsPolicy> : true_type {};
+
+  template <class L>
+  struct is_soarray_policy : false_type {};
+
+  template <>
+  struct is_soarray_policy<SOArrayPolicy> : true_type {};
+
+  template <class L>
+  constexpr bool is_ncoffsets_policy_v = is_ncoffsets_policy<L>::value;
+
+  template <class L>
+  constexpr bool is_soarray_policy_v = is_soarray_policy<L>::value;
 } // namespace ncarray
 
 #endif // NCARRAY_LAYOUT_HH

@@ -1,0 +1,2 @@
+option('build_core', type: 'boolean', value: true, description: 'Build the C++ shared libraries.')
+option('build_python', type: 'boolean', value: true, description: 'Build the Python extension modules.')

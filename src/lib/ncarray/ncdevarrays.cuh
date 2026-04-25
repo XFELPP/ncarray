@@ -26,9 +26,31 @@ namespace ncarray {
   EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, DevOwnerPolicy, NCOffsetsPolicy, DevViewPolicy)
   EXTERN_NC_CROSS_OPS(NCOffsetsPolicy, DevOwnerPolicy, NCOffsetsPolicy, DevRefPolicy)
 
-  EXTERN_NC_TERNARY_OPS(NCOffsetsPolicy, DevViewPolicy,  NCOffsetsPolicy, DevViewPolicy, NCOffsetsPolicy, DevViewPolicy)
-  EXTERN_NC_TERNARY_OPS(NCOffsetsPolicy, DevRefPolicy,   NCOffsetsPolicy, DevViewPolicy, NCOffsetsPolicy, DevViewPolicy)
-  EXTERN_NC_TERNARY_OPS(NCOffsetsPolicy, DevOwnerPolicy, NCOffsetsPolicy, DevViewPolicy, NCOffsetsPolicy, DevViewPolicy)
+  EXTERN_DEV_VM_OPS(char, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(bool, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::uint8_t, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::uint16_t, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::uint32_t, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::uint64_t, NCOffsetsPolicy)
+
+  EXTERN_DEV_VM_OPS(std::int8_t, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::int16_t, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::int32_t, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::int64_t, NCOffsetsPolicy)
+
+  EXTERN_DEV_VM_OPS(float, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(double, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(long double, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::complex<float>, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(std::complex<double>, NCOffsetsPolicy)
+
+  EXTERN_DEV_VM_OPS(Float2, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(Float3, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(Float4, NCOffsetsPolicy)
+
+  EXTERN_DEV_VM_OPS(Double2, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(Double3, NCOffsetsPolicy)
+  EXTERN_DEV_VM_OPS(Double4, NCOffsetsPolicy)
 }
 
 #endif // NCARRAY_NCDEVARRAYS_CUH

@@ -4,10 +4,21 @@
 #include "ncarray/dtype.hh"
 
 #ifdef NCA_HAS_CUDA
+#ifndef __CUDACC_RTC__
 #include "ncarray/device/utilities.cuh" // Macro error checks
 
 #include "cuda_runtime_api.h"
+#endif // nvrtc guard
 #endif
+
+#ifdef __CUDACC_RTC__
+typedef long long ssize_t;
+
+#include <cuda/std/cstdint>
+
+using cuda::std::uint8_t;
+
+#else
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -19,6 +30,10 @@ typedef SSIZE_T ssize_t;
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+
+using std::uint8_t;
+
+#endif // nvrtc
 
 #ifndef NCA_HD
 #ifdef __CUDACC__
@@ -43,6 +58,7 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
 #ifdef NCA_HAS_CUDA
   inline cudaStream_t alloc_stream() {
+#ifndef __CUDACC_RTC__
     static cudaStream_t stream = []() {
       // NOTE: There are seemingly issues with ensuring host writes to pinned memory
       //       are visible on device. This setting below is actually for the mem_pool
@@ -57,6 +73,7 @@ namespace ncarray {
     }();
 
     return stream;
+#endif // nvrtc guard
   }
 #endif
   struct MemTag {};
@@ -157,17 +174,23 @@ namespace ncarray {
   };
 
   struct DevDeleter {
-    void operator()(std::uint8_t* ptr) {
+#ifndef __CUDACC_RTC__
+    void operator()(uint8_t* ptr) {
+//#ifndef __CUDACC_RTC__
 #ifdef NCA_HAS_CUDA
       cudaFree(ptr);
 #endif
+//#endif
     }
+#endif
   };
 
   struct HostDeleter {
-    void operator()(std::uint8_t* ptr) {
+#ifndef __CUDACC_RTC__
+    void operator()(uint8_t* ptr) {
       delete[] ptr;
     }
+#endif
   };
 
   /**
@@ -175,6 +198,7 @@ namespace ncarray {
    * memory that backs the array.
    */
   struct OwnerPolicy : public StoragePolicy<OwnerPolicy>, public OwnerTag {
+#ifndef __CUDACC_RTC__
   public:
     using MemType = HostTag;
 
@@ -196,9 +220,11 @@ namespace ncarray {
 
   protected:
     std::unique_ptr<std::uint8_t[], HostDeleter> m_storage;
+#endif // nvrtc guard
   };
 
   struct DevOwnerPolicy : public StoragePolicy<DevOwnerPolicy>, public OwnerTag {
+#ifndef __CUDACC_RTC__
   public:
     using MemType = DevTag;
 
@@ -234,6 +260,7 @@ namespace ncarray {
 #ifdef NCA_HAS_CUDA
     cudaStream_t m_stream;
 #endif
+#endif // nvrtc guard
   };
 
   template <class MemTag>

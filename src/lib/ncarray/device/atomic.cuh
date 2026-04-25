@@ -11,15 +11,22 @@
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
+#include "ncarray/op_traits.hh"
 
+#ifdef __CUDACC_RTC__
+typedef long long ssize_t;
+#else
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 #endif
+#endif
 
+#ifndef __CUDACC_RTC__
 #include <concepts>
+#endif
 #include <cstdint>
 #include <type_traits>
 
@@ -129,6 +136,55 @@ namespace ncarray {
 
           atomicExch(&lock, 0); // Release the lock
         }
+      }
+
+      /**
+       * A generic foundation for building atomic operations.
+       *
+       * A pair of functions can be provided, a native atomic operation as well as
+       * a lambda for fallback in a CAS loop should the datatype not support the native
+       * operation. The first template parameter indicates whether the type supports
+       * the native operation (for faster compile-time branching).
+       *
+       * Operations in order of preference are:
+       * 1. Use the native operation if possible (e.g. atomicAdd)
+       * 2. For vector types (float3, etc.) use the atomic on each component.
+       * 3. For types <= 8 bytes use a CAS loop of either int, or unsigned long long.
+       * 4. Finally, fall back to a locking approach with a striped mutex. This is
+       *    slower, but supports arbitrarily sized types (whereas native atomics are
+       *    only available up to 128 bit).
+       *
+       * @tparam NativeOp Whether the native operation can be used (for compile-time branching.)
+       * @tparam T The datatype.
+       * @tparam AtomicFn The type for the native atomic operation.
+       * @tparam CASFn The type for the comparison lambda in the CAS loop.
+       * @param addr The address to put the final result.
+       * @param val The value for this thread.
+       * @param atomic The native atomic (in lambda generally). E.g. atomicAdd.
+       * @param fn The comparison function. E.g. for add: [](T o, T v) { return o + v; }
+       */
+      template <typename AccumT, typename ResultT, class CompareFn, class StoreFn>
+      __device__ inline void nca_dual_atomic_apply(AccumT* addr,
+                                                   AccumT val,
+                                                   ResultT* result,
+                                                   CompareFn&& compare,
+                                                   StoreFn store) {
+        std::uintptr_t addr_v = reinterpret_cast<std::uintptr_t>(addr);
+        int& lock = _nca_atomic_locks[(addr_v >> 4) % 1024];
+
+        while (atomicCAS(&lock, 0, 1) != 0); // Acquire spin-lock
+
+        // This is a pessimistic approach with the lock
+        // No need for the do-while, but slower because of lock acquisition
+        AccumT old_val = *addr;
+        AccumT new_val = compare(old_val, val);
+        if (new_val != old_val) {
+          *addr = new_val;
+          // Also update the dual buffer while holding the lock
+          *result = store(new_val); // Store may transform the new_val
+        }
+
+        atomicExch(&lock, 0); // Release the lock
       }
     } // namespace impl
 
@@ -260,7 +316,14 @@ namespace ncarray {
     __device__ inline void nca_atomic_logical_and(bool* addr, bool val) {
       if (!val) {
         // Any false value means we are now false.
-        atomicExch(reinterpret_cast<int*>(addr), 0);
+        std::size_t s_bool { reinterpret_cast<std::size_t>(addr) };
+
+        unsigned* aligned_addr = reinterpret_cast<unsigned*>(s_bool & ~3);
+
+        unsigned shift { (static_cast<unsigned>(s_bool) & 3) * 8 };
+        unsigned mask { ~(0xFFu << shift) };
+
+        atomicAnd(aligned_addr, mask);
       }
     }
 
@@ -270,9 +333,17 @@ namespace ncarray {
     __device__ inline void nca_atomic_logical_or(bool* addr, bool val) {
       if (val) {
         // Any true value means we are now true.
-        atomicExch(reinterpret_cast<int*>(addr), 1);
+        std::size_t s_bool { reinterpret_cast<std::size_t>(addr) };
+
+        unsigned* aligned_addr = reinterpret_cast<unsigned*>(s_bool & ~3);
+
+        unsigned shift { (static_cast<unsigned>(s_bool) & 3) * 8 };
+        unsigned mask { 0x01u << shift };
+
+        atomicOr(aligned_addr, mask);
       }
     }
+
   } // namespace device
 } // namespace ncarray
 

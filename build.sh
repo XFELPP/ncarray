@@ -191,6 +191,11 @@ LINES=(
 
 print_banner "${LINES[@]}"
 
+# Setup ccache
+export CC="ccache gcc"
+export CXX="ccache g++"
+export CUDAHOSTCXX="ccache g++"
+
 # Run meson configure/setup if it hasn't be done yet or it has been requested
 # It generally only needs to rerun if install prefix has changed, or meson.build
 # files have been modified.
@@ -221,10 +226,9 @@ else
     print_banner "${LINES[@]}"
 fi
 
-# Build... This is mostly for XAlgosPP and C/C++ extensions
 LINES=("Compiling...")
 print_banner "${LINES[@]}"
-meson compile -C "${BUILD_DIR}"
+meson compile -j 4 -C "${BUILD_DIR}"
 
 # Test...
 if [[ ${RUN_TESTS} ]]; then

@@ -9,11 +9,29 @@
 #ifndef NCARRAY_ARRAY_IMPL_HH
 #define NCARRAY_ARRAY_IMPL_HH
 
+#include "ncarray/array_element_proxy.hh"
 #include "ncarray/array_traits.hh"
 #include "ncarray/dtype.hh"
+#include "ncarray/expression.hh"
 #include "ncarray/indexing.hh"
 #include "ncarray/layout.hh"
+#include "ncarray/op_traits.hh"
+#include "ncarray/mvnode.hh"
 #include "ncarray/storage.hh"
+
+#ifdef __CUDACC_RTC__
+
+#include <cuda/std/cstdint>
+#include <cuda/std/initializer_list>
+#include <cuda/std/type_traits>
+
+using cuda::std::initializer_list;
+using cuda::std::is_base_of_v;
+using cuda::std::is_same_v;
+using cuda::std::move;
+using cuda::std::uint64_t;
+
+#else
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -27,12 +45,22 @@ typedef SSIZE_T ssize_t;
 #include <cassert>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <numeric>
 #include <ostream>
 #include <string>
 #include <type_traits>
+#include <variant>
 #include <vector>
+
+using std::initializer_list;
+using std::is_base_of_v;
+using std::move;
+using std::is_same_v;
+using std::uint64_t;
+
+#endif // nvrtc guard
 
 #ifndef NCA_HD
 #ifdef __CUDACC__
@@ -42,13 +70,26 @@ typedef SSIZE_T ssize_t;
 #endif
 #endif
 
+#ifndef NCA_DNI
+#ifdef __CUDACC__
+#define NCA_DNI __noinline__
+#else
+#define NCA_DNI
+#endif
+#endif
+
 #ifndef NCARRAY_MAX_NDIM
 #define NCARRAY_MAX_NDIM 10
 #endif
 
-namespace {
-  std::vector<ssize_t> calculate_c_order_strides(const std::vector<ssize_t>& shape,
-                                                 const ssize_t itemsize) {
+namespace ncarray {
+
+#ifndef __CUDACC_RTC__
+
+  // --- Helper Functions For Metadata --- //
+
+  inline std::vector<ssize_t> calculate_c_order_strides(const std::vector<ssize_t>& shape,
+                                                        const ssize_t itemsize) {
     size_t ndim { shape.size() };
     std::vector<ssize_t> strides(ndim, itemsize);
     for (ssize_t dim = ndim - 2; dim >= 0; --dim) {
@@ -57,176 +98,27 @@ namespace {
     return strides;
   }
 
-  std::vector<ssize_t>
-  calculate_c_order_strides(const ssize_t ndim,
-                            const ssize_t* shape,
-                            const ssize_t itemsize) {
+  inline std::vector<ssize_t> calculate_c_order_strides(const ssize_t ndim,
+                                                        const ssize_t* shape,
+                                                        const ssize_t itemsize) {
     std::vector<ssize_t> strides(ndim, itemsize);
     for (ssize_t dim = ndim - 2; dim >= 0; --dim) {
       strides[dim] = strides[dim + 1] * shape[dim + 1];
     }
     return strides;
   }
-} // anonymous namespace
 
-namespace ncarray {
-  // --- Dispatch operation --- //
-
-  /**
-   * A restricted dispatcher for integer types. This is useful when using arrays
-   * to hold indices for other arrays.
-   */
-  template <typename Visitor>
-  NCA_HD inline auto dispatch_integers(DType type, Visitor&& visitor) {
-    switch (type) {
-    case DType::uint32: {
-      return visitor.template operator()<std::uint32_t>();
-    }
-    case DType::uint64: {
-      return visitor.template operator()<std::uint64_t>();
-    }
-    case DType::int32: {
-      return visitor.template operator()<std::int32_t>();
-    }
-    case DType::int64: {
-      return visitor.template operator()<std::int64_t>();
-    }
-    default: {
-      assert(false && "Invalid DType for operation! Only integers accepted!");
-      return visitor.template operator()<std::uint32_t>();
-    }
+  NCA_HD inline void calculate_c_order_strides(const ssize_t ndim,
+                                               const ssize_t* shape,
+                                               const ssize_t itemsize,
+                                               ssize_t* new_strides) {
+    new_strides[ndim - 1] = itemsize;
+    for (ssize_t dim = ndim - 2; dim >= 0; --dim) {
+      new_strides[dim] = new_strides[dim + 1] * shape[dim + 1];
     }
   }
 
-  template <typename Visitor>
-  NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
-    switch (type) {
-    case DType::bool_: {
-      return visitor.template operator()<bool>();
-    }
-    case DType::char_: {
-      return visitor.template operator()<char>();
-    }
-    // Stuck becuase of std::uint8_t
-    // case DType::uchar: {
-    //  return visitor.template operator()<unsigned char>();
-    //}
-    case DType::uint8: {
-      return visitor.template operator()<std::uint8_t>();
-    }
-    case DType::uint16: {
-      return visitor.template operator()<std::uint16_t>();
-    }
-    case DType::uint32: {
-      return visitor.template operator()<std::uint32_t>();
-    }
-    case DType::uint64: {
-      return visitor.template operator()<std::uint64_t>();
-    }
-    case DType::int8: {
-      return visitor.template operator()<std::int8_t>();
-    }
-    case DType::int16: {
-      return visitor.template operator()<std::int16_t>();
-    }
-    case DType::int32: {
-      return visitor.template operator()<std::int32_t>();
-    }
-    case DType::int64: {
-      return visitor.template operator()<std::int64_t>();
-    }
-    case DType::float32: {
-      return visitor.template operator()<float>();
-    }
-    case DType::float64: {
-      return visitor.template operator()<double>();
-    }
-    case DType::complex64: {
-      return visitor.template operator()<std::complex<float>>();
-    }
-    case DType::complex128: {
-      return visitor.template operator()<std::complex<double>>();
-    }
-    case DType::complex256: {
-      return visitor.template operator()<std::complex<long double>>();
-    }
-    case DType::vfloat2: {
-      return visitor.template operator()<Float2>();
-    }
-    case DType::vfloat3: {
-      return visitor.template operator()<Float3>();
-    }
-    case DType::vfloat4: {
-      return visitor.template operator()<Float4>();
-    }
-    case DType::vdouble2: {
-      return visitor.template operator()<Double2>();
-    }
-    case DType::vdouble3: {
-      return visitor.template operator()<Double3>();
-    }
-    case DType::vdouble4: {
-      return visitor.template operator()<Double4>();
-    }
-    default:
-      assert(false && "Invalid DType for operation!");
-      return visitor.template operator()<float>();
-    }
-  }
-
-  // --- Array Element Proxy --- //
-  /**
-   * The element proxy can be returned by arrays during indexing to provide
-   * reference based access to the underlying data.
-   *
-   * This mostly provides improved ergonomics.
-   *
-   * operator T& style functions do NOT type check. If you require type checking
-   * an `get<T>` function is provided.
-   */
-  struct ArrayElementProxy {
-    void* m_data;
-    DType m_dtype;
-
-    template <typename T>
-    NCA_HD inline operator T&() const {
-      return *reinterpret_cast<T*>(m_data);
-    }
-
-    template <typename T>
-    NCA_HD inline operator const T&() const {
-      return *reinterpret_cast<const T*>(m_data);
-    }
-
-    template <typename T>
-    NCA_HD inline ArrayElementProxy& operator=(const T& val) {
-      auto assign_op = [&]<typename ArrayT>() {
-        *reinterpret_cast<ArrayT*>(m_data) = op_traits<T>::template cast<ArrayT>(val);
-      };
-
-      ncarray::dispatch(m_dtype, assign_op);
-      return *this;
-    }
-
-    // --- Type checking versions --- //
-    template <typename T>
-    NCA_HD inline T& get() {
-      assert(m_dtype == dtype_traits<T>::value);
-      return *reinterpret_cast<T*>(m_data);
-    }
-
-    template <typename T>
-    NCA_HD inline const T& get() const {
-      assert(m_dtype == dtype_traits<T>::value);
-      return *reinterpret_cast<const T*>(m_data);
-    }
-
-    template <typename T>
-    NCA_HD inline void set(const T& val) {
-      assert(m_dtype == dtype_traits<T>::value);
-      *reinterpret_cast<T*>(m_data) = val;
-    }
-  };
+#endif
 
   // --- Array Implementations --- //
   /**
@@ -264,7 +156,9 @@ namespace ncarray {
     // policies (e.g. Owner) have no default - it cannot be defined since
     // knowing how much memory to allocate relies on information from Layout
     // This means that these constructors MUST be correct and initialize everything
+
     // --- Host-only copy constructor for owner types --- //
+#ifndef __CUDACC_RTC__
     ArrayImpl(const ArrayImpl& other)
       requires std::is_base_of_v<OwnerTag, Storage>
       : Layout(static_cast<const Layout&>(other))
@@ -285,10 +179,10 @@ namespace ncarray {
       // After move make sure to reset the data pointer
       this->m_data = reinterpret_cast<void*>(this->m_storage.get());
     }
-
+#endif
     // --- View/Ref copy/move can be done on host or device --- //
     NCA_HD ArrayImpl(const ArrayImpl& other)
-      requires (!std::is_base_of_v<OwnerTag, Storage>)
+      requires (!is_base_of_v<OwnerTag, Storage>)
       : Layout(static_cast<const Layout&>(other))
     {
       // Handle the attributes coming from Storage
@@ -297,7 +191,7 @@ namespace ncarray {
       this->m_read_only = other.read_only();
 
       // Specializations for the Reference and Owning classes
-      if constexpr (std::is_base_of_v<RefTag, Storage>) {
+      if constexpr (is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -306,11 +200,11 @@ namespace ncarray {
     }
 
     NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
-      requires (!std::is_base_of_v<OwnerTag, Storage>)
-      : Layout(std::move(static_cast<Layout&>(other)))
-      , Storage(std::move(static_cast<Storage&>(other)))
+      requires (!is_base_of_v<OwnerTag, Storage>)
+      : Layout(move(static_cast<Layout&>(other)))
+      , Storage(move(static_cast<Storage&>(other)))
     {
-      if constexpr (std::is_base_of_v<RefTag, Storage>) {
+      if constexpr (is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -320,7 +214,7 @@ namespace ncarray {
 
     // Universal interconversion - any storage type can become a view
     template <class OtherStorage>
-    requires std::is_base_of_v<ViewTag, Storage>
+    requires is_base_of_v<ViewTag, Storage>
     NCA_HD ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
       : Layout(static_cast<const Layout&>(other))
       , Storage()
@@ -331,9 +225,9 @@ namespace ncarray {
     }
 
     template <class OtherStorage>
-    requires std::is_base_of_v<ViewTag, Storage>
+    requires is_base_of_v<ViewTag, Storage>
     NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
-      : Layout(std::move(static_cast<const Layout&>(other)))
+      : Layout(move(static_cast<const Layout&>(other)))
       , Storage()
     {
       this->m_data = other.data();
@@ -341,9 +235,12 @@ namespace ncarray {
       this->m_read_only = other.read_only();
     }
 
+#ifndef __CUDACC_RTC__
+
     // --- Host only move/copy assignment for owner types --- //
+
     ArrayImpl& operator=(const ArrayImpl& other)
-      requires std::is_base_of_v<OwnerTag, Storage>
+      requires is_base_of_v<OwnerTag, Storage>
     {
       if (this != &other) {
         *this = ArrayImpl(other);
@@ -352,11 +249,11 @@ namespace ncarray {
     }
 
     ArrayImpl& operator=(ArrayImpl&& other) noexcept
-      requires std::is_base_of_v<OwnerTag, Storage>
+      requires is_base_of_v<OwnerTag, Storage>
     {
       if (this != &other) {
-        Layout::operator=(std::move(static_cast<Layout&>(other)));
-        Storage::operator=(std::move(static_cast<Storage&>(other)));
+        Layout::operator=(move(static_cast<Layout&>(other)));
+        Storage::operator=(move(static_cast<Storage&>(other)));
 
         this->m_data = this->m_storage.get();
       }
@@ -364,9 +261,11 @@ namespace ncarray {
       return *this;
     }
 
+#endif
+
     // --- View/Ref copy/move assignment can be done on host or device --- //
     NCA_HD ArrayImpl& operator=(const ArrayImpl& other)
-      requires (!std::is_base_of_v<OwnerTag, Storage>)
+      requires (!is_base_of_v<OwnerTag, Storage>)
     {
       if (this != &other) {
         *this = ArrayImpl(other);
@@ -376,13 +275,13 @@ namespace ncarray {
     }
 
     NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept
-      requires (!std::is_base_of_v<OwnerTag, Storage>)
+      requires (!is_base_of_v<OwnerTag, Storage>)
     {
       if (this != &other) {
-        Layout::operator=(std::move(static_cast<Layout&>(other)));
-        Storage::operator=(std::move(static_cast<Storage&>(other)));
+        Layout::operator=(move(static_cast<Layout&>(other)));
+        Storage::operator=(move(static_cast<Storage&>(other)));
 
-        if constexpr (std::is_base_of_v<RefTag, Storage>) {
+        if constexpr (is_base_of_v<RefTag, Storage>) {
           for (ssize_t i = 0; i < this->ndim(); ++i) {
             this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
           }
@@ -408,10 +307,10 @@ namespace ncarray {
       this->m_shape.set(shape_.data, ndim);
       this->m_strides.set(strides_.data, ndim);
 
-      if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+      if constexpr (is_same_v<Layout, NCOffsetsPolicy>) {
         this->m_offsets.ndim = this->ndim();
         this->m_offsets.set(offsets_.data, ndim);
-      } else if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+      } else if constexpr (is_same_v<Layout, SOArrayPolicy>) {
         this->m_suboffsets.ndim = this->ndim();
         this->m_suboffsets.set(offsets_.data, ndim);
       }
@@ -433,17 +332,20 @@ namespace ncarray {
       this->m_pointer_axis = pointer_axis_;
       this->m_read_only = read_only_;
       for (ssize_t i = 0; i < this->ndim(); ++i) {
-        if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
+        if constexpr (is_same_v<Layout, NCOffsetsPolicy>) {
           this->m_offsets.ndim = ndim;
           this->m_offsets[i] = 0;
-        } else if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        } else if constexpr (is_same_v<Layout, SOArrayPolicy>) {
           this->m_suboffsets.ndim = ndim;
           this->m_suboffsets[i] = -1;
         }
       }
     }
 
+#ifndef __CUDACC_RTC__
+
     // --- Ref classes.... --- //
+
     NCA_HD ArrayImpl(const std::vector<void*>& data_ptrs,
                      const std::vector<ssize_t>& shape_,
                      const std::vector<ssize_t>& strides_,
@@ -480,6 +382,7 @@ namespace ncarray {
     }
 
     // --- Owner classes.... --- //
+
     /**
      * Construct a new array given a shape and datatype. This will generally be
      * used for Owner type arrays.
@@ -617,6 +520,13 @@ namespace ncarray {
       }
     }
 
+    template <Expression Expr>
+    ArrayImpl(const Expr& expr)
+      : ArrayImpl(expr.ndim(), expr.shape(), expr.dtype())
+    {
+      *this = expr;
+    }
+
     NCA_HD ssize_t nbytes() const {
       return this->size() * this->itemsize();
     }
@@ -638,10 +548,26 @@ namespace ncarray {
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
 
+    template <typename... Args>
+    requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
+    NCA_HD ViewType operator()(Args&&... idx_args) const {
+      AxisDescr axes[NCARRAY_MAX_NDIM];
+
+      if constexpr (sizeof...(Args) > 0) {
+        IndexItem indices[] = { IndexItem(std::forward<Args>(idx_args))... };
+
+        this->build_new_axes(axes, indices, sizeof...(Args));
+      } else {
+        this->build_new_axes(axes, nullptr, 0);
+      }
+      return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
+    }
+#endif // nvrtc guard
+
     // --- Linearized indexing to reference (non-const and const) --- //
 
-    NCA_HD ArrayElementProxy operator[](ssize_t idx) {
-      void* out_data = const_cast<void*>(this->data());
+    template <typename Coords>
+    NCA_HD void lin_to_md(ssize_t idx, Coords& coords) {
       ssize_t lin_idx { idx };
 
 #if defined(__CUDACC__)
@@ -651,69 +577,75 @@ namespace ncarray {
 #elif defined(__clang__)
 #pragma clang loop unroll(full)
 #endif
-      for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
-        ssize_t dim_shape = this->shape(dim);
-        ssize_t local_idx = lin_idx % dim_shape;
+      for (auto dim = coords.size() - 1; dim >= 1; --dim) {
+        auto dim_shape = this->shape(dim);
+        coords[dim] = lin_idx % dim_shape;
 
-        lin_idx /= this->shape(dim);
+        lin_idx /= dim_shape;
+      }
+      coords[0] = lin_idx % this->shape(0);
+    }
 
+    template <typename Coords>
+    NCA_HD ArrayElementProxy operator[](const Coords& coords) {
+      void* out_data = const_cast<void*>(this->data());
+
+      for (auto dim = 0; dim < coords.size(); ++dim) {
+        auto local_idx { coords[dim] };
         out_data = this->advance(out_data, dim, local_idx);
       }
 
       return { out_data, this->dtype() };
     }
 
-    NCA_HD const ArrayElementProxy operator[](ssize_t idx) const {
+    template <typename Coords>
+    NCA_HD const ArrayElementProxy operator[](const Coords& coords) const {
       const void* out_data = this->data();
-      ssize_t lin_idx { idx };
 
-#if defined(__CUDACC__)
-#pragma unroll
-#elif defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC unroll 10
-#elif defined(__clang__)
-#pragma clang loop unroll(full)
-#endif
-      for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
-        ssize_t dim_shape = this->shape(dim);
-        ssize_t local_idx = lin_idx % dim_shape;
-        lin_idx /= dim_shape;
+      for (auto dim = 0; dim < coords.size(); ++dim) {
+        auto local_idx { coords[dim] };
         out_data = this->advance(out_data, dim, local_idx);
       }
 
       return { const_cast<void*>(out_data), this->dtype() };
     }
 
-    // --- Variadic indexing to reference --- //
-    // operator() overloads are intended for indexing down to a single point reference.
-    // For view semantics, use the variadic operator[] - a specialized version of that
-    // operator also accepts a "linearized" index to traverse the entire N-D array
-    // with one index.
-    template <typename... Args>
-    requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
-    NCA_HD ArrayElementProxy operator()(Args... args) {
-      assert(sizeof...(Args) == this->ndim());
+    // --- Indexing to reference --- //
 
-      void* ptr = const_cast<void*>(this->data());
+    /**
+     * The initializer list overloader are for indexing down to a single point reference.
+     * For semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
+     * C++20, code, the variadic operator().
+     */
+    NCA_HD ArrayElementProxy operator[](initializer_list<uint64_t> coords) {
+      assert(coords.size() == this->ndim());
+      void* out_data = const_cast<void*>(this->data());
+
       ssize_t axis { 0 };
+      for (auto l_idx : coords) {
+        out_data = this->advance(out_data, axis++, l_idx);
+      }
 
-      ((ptr = this->advance(ptr, axis++, static_cast<ssize_t>(args))), ...);
-
-      return { ptr, this->dtype() };
+      return { out_data, this->dtype() };
     }
 
-    template <typename... Args>
-    requires (sizeof...(Args) > 0 && (std::integral<std::decay_t<Args>> && ...))
-    NCA_HD const ArrayElementProxy operator()(Args... args) const {
-      assert(sizeof...(Args) == this->ndim());
+    /**
+     * The initializer list overloader are for indexing down to a single point reference.
+     * For semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
+     * C++20, code, the variadic operator().
+     */
+    NCA_HD const ArrayElementProxy operator[](initializer_list<uint64_t> coords) const {
+      const void* out_data = this->data();
 
-      const void* ptr = this->data();
       ssize_t axis { 0 };
+      for (auto l_idx : coords) {
+        out_data = this->advance(out_data, axis++, l_idx);
+      }
 
-      ((ptr = this->advance(ptr, axis++, static_cast<ssize_t>(args))), ...);
-
-      return { const_cast<void*>(ptr), this->dtype() };
+      return { const_cast<void*>(out_data), this->dtype() };
     }
+
+#ifndef __CUDACC_RTC__
 
     // --- Utilities for building new views --- //
 
@@ -749,10 +681,14 @@ namespace ncarray {
      * @returns The new view of the data.
      */
     template <class VT>
-    NCA_HD VT out_from_axes_ptr(void* data_ptr, const AxisDescr* axes) const {
+    NCA_HD VT out_from_axes_ptr(void* data_ptr,
+                                const AxisDescr* axes,
+                                ssize_t ndim = -1) const {
       Metadata new_shape;
       Metadata new_strides;
       Metadata new_offsets;
+
+      ssize_t total_dim = ndim == -1 ? this->ndim() : ndim;
 
       ssize_t n_dim { 0 };
       ssize_t pointer_axis { -1 };
@@ -761,7 +697,7 @@ namespace ncarray {
       // NOTE: Passing a length 1 slice does NOT collapse/remove the axis.
       // E.g. A 3-D NCArray* ncarr indexed as ncarr[:1] will have shape (1, ...)
       // The `squeeze` function can be used to remove this extra length 1 axis.
-      for (ssize_t i = 0; i < this->ndim(); ++i) {
+      for (ssize_t i = 0; i < total_dim; ++i) {
         const auto& d = axes[i];
 
         if (!d.collapsed) {
@@ -828,10 +764,26 @@ namespace ncarray {
      * gpu_kernel<<<blocks, TPB>>>(my_array.view());
      * @endcode
      */
-    ViewType view() const { return ViewType(*this); }
+    NCA_HD ViewType view() const { return ViewType(*this); }
 
+    /**
+     * Copy the array's data into the provided buffer.
+     *
+     * This will copy data using the array's datatype.
+     *
+     * @param[in] dest_buffer The destination for the copied data.
+     */
     void copy_into(void* dest_buffer) const;
 
+    /**
+     * Copy the array's data into the provided buffer while casting.
+     *
+     * This will perform the appropriate casts from the array's datatype to the
+     * requested datatype.
+     *
+     * @tparam OutT The output/destination datatype.
+     * @param[in] dest_buffer The destination for the copied data.
+     */
     template <typename OutT>
     void copy_into_astype(OutT* dest_buffer) const;
 
@@ -839,6 +791,11 @@ namespace ncarray {
     //       contiguous?
     OwnerType to_contiguous() const;
 
+    /**
+     * Check whether the array's current data is a contiguous block.
+     *
+     * @returns is_contiguous Whether the data is contiguous.
+     */
     NCA_HD inline bool is_contiguous() const {
       ssize_t expected_stride { this->itemsize() };
       for (ssize_t axis = this->ndim() - 1; axis >= 0; --axis) {
@@ -893,7 +850,87 @@ namespace ncarray {
       return out_from_axes_ptr<ViewType>(new_data, new_axes);
     }
 
-    // --- Reduction operations --- //
+    /**
+     * This function for reshaping assumes contiguity. It is user responsibility
+     * to ensure that this is true!
+     *
+     * @param[in] new_shape The new shape that is requested.
+     * @param[in] ndim The number of dimensions in the new shape.
+     * @returns new_view The reshaped view.
+     */
+    NCA_HD ViewType reshape(const ssize_t* new_shape, ssize_t ndim) const {
+      ssize_t new_strides[NCARRAY_MAX_NDIM] { 0 };
+
+      calculate_c_order_strides(ndim, new_shape, this->itemsize(), new_strides);
+
+      AxisDescr new_axes[NCARRAY_MAX_NDIM];
+      for (ssize_t dim = 0; dim < ndim; ++dim) {
+        ssize_t length { new_shape[dim] };
+        ssize_t stride { new_strides[dim] };
+        ssize_t offset { 0 };
+        if constexpr (requires { this->m_suboffsets; }) {
+          offset = -1;
+        }
+        bool is_pointer { false };
+        new_axes[dim] = {
+          dim,
+          length,
+          stride,
+          offset,
+          is_pointer,
+          false
+        };
+      }
+
+      return out_from_axes_ptr<ViewType>(this->m_data, new_axes, ndim);
+    }
+
+    /**
+     * For non-contiguous arrays, there is no mathematical formula to reshape in
+     * the general case. This function provides a copy and reshape utility to
+     * return a new array of the specified shape.
+     *
+     * Because this function allocates an OwnerType, it can only be called from the
+     * host.
+     *
+     * @param[in] new_shape The new shape that is requested.
+     * @param[in] ndim The number of dimensions in the new shape.
+     * @returns new_owner A new contiguous owning array of the specified shape.
+     */
+    OwnerType copy_as_shape(const ssize_t* new_shape, ssize_t ndim) const {
+      ssize_t new_size {
+        std::accumulate(new_shape, new_shape + ndim, 1, std::multiplies<ssize_t>())
+      };
+
+      if (new_size != this->size()) {
+        throw std::runtime_error("Cannot reshape into the requested shape!");
+      }
+      OwnerType copy(ndim, new_shape, this->dtype());
+
+      this->copy_into(copy.data());
+
+      return copy;
+    }
+
+    // --- Axis-Aware Reductions --- //
+
+    OwnerType sum(const std::vector<ssize_t>& axes) const;
+
+    OwnerType max(const std::vector<ssize_t>& axes) const;
+    OwnerType argmax(const std::vector<ssize_t>& axes) const;
+
+    OwnerType min(const std::vector<ssize_t>& axes) const;
+    OwnerType argmin(const std::vector<ssize_t>& axes) const;
+
+    OwnerType mean(const std::vector<ssize_t>& axes) const;
+    OwnerType var(const std::vector<ssize_t>& axes, ssize_t ddof = 0) const;
+    OwnerType std(const std::vector<ssize_t>& axes, ssize_t ddof = 0) const;
+
+    OwnerType all(const std::vector<ssize_t>& axes) const;
+    OwnerType any(const std::vector<ssize_t>& axes) const;
+
+    // --- Full Reductions (To Scalar) --- //
+
     Scalar sum() const;
 
     Scalar max() const;
@@ -917,178 +954,79 @@ namespace ncarray {
       return dispatch(this->m_dtype, reduce);
     }
 
-    // --- Scattering and Keyed Reduction operations --- //
-    template <ArrayLike Index, ArrayLike Src>
-    ArrayImpl& scatter_add(const Index& indices, const Src& src);
-
-    template <ArrayLike Keys>
-    OwnerType reduce_by_key(const Keys& keys) const;
+    template <Expression Expr>
+    ArrayImpl& operator=(const Expr& expr);
 
     // --- Binary operations --- //
-    template <ArrayLike OtherType>
-    OwnerType add(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator+(const OtherType& other) const;
 
-    template <ArrayLike OtherType>
-    OwnerType sub(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator-(const OtherType& other) const;
+    using ExprResult = ExprMVNode<MemType>;
 
-    template <ArrayLike OtherType>
-    OwnerType mul(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator*(const OtherType& other) const;
+    template <class RHS>
+    ExprResult operator+(const RHS& right) const;
 
-    template <ArrayLike OtherType>
-    OwnerType truediv(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator/(const OtherType& other) const;
+    template <class RHS>
+    ExprResult operator-(const RHS& right) const;
 
-    // --- Binary inplace operations --- //
-    template <ArrayLike OtherType>
-    ArrayImpl& iadd(const OtherType& other);
-    template <ArrayLike OtherType>
-    ArrayImpl& operator+=(const OtherType& other);
+    template <class RHS>
+    ExprResult operator*(const RHS& right) const;
 
-    template <ArrayLike OtherType>
-    ArrayImpl& isub(const OtherType& other);
-    template <ArrayLike OtherType>
-    ArrayImpl& operator-=(const OtherType& other);
+    template <class RHS>
+    ExprResult operator/(const RHS& right) const;
 
-    template <ArrayLike OtherType>
-    ArrayImpl& imul(const OtherType& other);
-    template <ArrayLike OtherType>
-    ArrayImpl& operator*=(const OtherType& other);
+    // --- Binary Inplace Operations --- //
 
-    template <ArrayLike OtherType>
-    ArrayImpl& itruediv(const OtherType& other);
-    template <ArrayLike OtherType>
-    ArrayImpl& operator/=(const OtherType& other);
+    template <class RHS>
+    ArrayImpl& operator+=(const RHS& right);
 
-    // --- Binary Operations Overloads for Scalar Broadcasts --- //
-    OwnerType add(const Scalar& other) const;
-    OwnerType operator+(const Scalar& other) const;
+    template <class RHS>
+    ArrayImpl& operator-=(const RHS& right);
 
-    OwnerType sub(const Scalar& other) const;
-    OwnerType operator-(const Scalar& other) const;
+    template <class RHS>
+    ArrayImpl& operator*=(const RHS& right);
 
-    OwnerType mul(const Scalar& other) const;
-    OwnerType operator*(const Scalar& other) const;
+    template <class RHS>
+    ArrayImpl& operator/=(const RHS& right);
 
-    OwnerType truediv(const Scalar& other) const;
-    OwnerType operator/(const Scalar& other) const;
+    // --- Comparisons --- //
 
-    // --- Inplace binary operations with scalar broadcasts --- //
+    template <class RHS>
+    ExprResult operator==(const RHS& right) const;
 
-    ArrayImpl& iadd(const Scalar& other);
-    ArrayImpl& operator+=(const Scalar& other);
+    template <class RHS>
+    ExprResult operator!=(const RHS& right) const;
 
-    ArrayImpl& isub(const Scalar& other);
-    ArrayImpl& operator-=(const Scalar& other);
+    template <class RHS>
+    ExprResult operator<(const RHS& right) const;
 
-    ArrayImpl& imul(const Scalar& other);
-    ArrayImpl& operator*=(const Scalar& other);
+    template <class RHS>
+    ExprResult operator<=(const RHS& right) const;
 
-    ArrayImpl& itruediv(const Scalar& other);
-    ArrayImpl& operator/=(const Scalar& other);
+    template <class RHS>
+    ExprResult operator>(const RHS& right) const;
 
-    // --- Logical and boolean operators --- //
+    template <class RHS>
+    ExprResult operator>=(const RHS& right) const;
 
-    template <ArrayLike OtherType>
-    OwnerType is_equal(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator==(const OtherType& other) const;
+    // --- Logical Operations --- //
 
-    template <ArrayLike OtherType>
-    OwnerType is_not_equal(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator!=(const OtherType& other) const;
+    template <class RHS>
+    ExprResult operator&&(const RHS& right) const;
 
-    template <ArrayLike OtherType>
-    OwnerType is_less_than(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator<(const OtherType& other) const;
+    template <class RHS>
+    ExprResult operator||(const RHS& right) const;
 
-    template <ArrayLike OtherType>
-    OwnerType is_less_equal_than(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator<=(const OtherType& other) const;
+    ExprResult operator!() const;
 
-    template <ArrayLike OtherType>
-    OwnerType is_greater_than(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator>(const OtherType& other) const;
+    // --- Logical Inplace Operations --- //
 
-    template <ArrayLike OtherType>
-    OwnerType is_greater_equal_than(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator>=(const OtherType& other) const;
+    template <class RHS>
+    ArrayImpl& operator&=(const RHS& right);
 
-    template <ArrayLike OtherType>
-    OwnerType logical_and(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator&&(const OtherType& other) const;
-
-    template <ArrayLike OtherType>
-    OwnerType logical_or(const OtherType& other) const;
-    template <ArrayLike OtherType>
-    OwnerType operator||(const OtherType& other) const;
-
-    OwnerType logical_not() const;
-    OwnerType operator!() const;
-
-    // --- Comparison operators with scalar broadcast --- //
-
-    OwnerType is_equal(const Scalar& other) const;
-    OwnerType operator==(const Scalar& other) const;
-
-    OwnerType is_not_equal(const Scalar& other) const;
-    OwnerType operator!=(const Scalar& other) const;
-
-    OwnerType is_less_than(const Scalar& other) const;
-    OwnerType operator<(const Scalar& other) const;
-
-    OwnerType is_less_equal_than(const Scalar& other) const;
-    OwnerType operator<=(const Scalar& other) const;
-
-    OwnerType is_greater_than(const Scalar& other) const;
-    OwnerType operator>(const Scalar& other) const;
-
-    OwnerType is_greater_equal_than(const Scalar& other) const;
-    OwnerType operator>=(const Scalar& other) const;
-
-    // --- Inplace logical operators --- //
-
-    template <ArrayLike OtherType>
-    ArrayImpl& ilogical_and(const OtherType& other);
-    template <ArrayLike OtherType>
-    ArrayImpl& operator&=(const OtherType& other);
-
-    template <ArrayLike OtherType>
-    ArrayImpl& ilogical_or(const OtherType& other);
-    template <ArrayLike OtherType>
-    ArrayImpl& operator|=(const OtherType& other);
-
-    // --- Logical operators with scalar broadcast --- //
-
-    OwnerType logical_and(const Scalar& other) const;
-    OwnerType operator&&(const Scalar& other) const;
-
-    OwnerType logical_or(const Scalar& other) const;
-    OwnerType operator||(const Scalar& other) const;
-
-    // --- Inplace logical operators with scalar broadcast --- //
-
-    ArrayImpl& ilogical_and(const Scalar& other);
-    ArrayImpl& operator&=(const Scalar& other);
-
-    ArrayImpl& ilogical_or(const Scalar& other);
-    ArrayImpl& operator|=(const Scalar& other);
+    template <class RHS>
+    ArrayImpl& operator|=(const RHS& right);
 
     // -- Iterators --- //
 
-    //template <ViewLike VT>
     template <class VT>
     class IteratorImpl {
     public:
@@ -1272,8 +1210,162 @@ namespace ncarray {
 
       oss << "]";
     }
+
+#endif // nvrtc guard
+
   };
+
+#ifndef __CUDACC_RTC__
+
   // --- End Array Implementations --- //
+
+  /**
+   * Convert an NCOffsets array to an SOArray.
+   *
+   * For convenience the function will consume all offsets in the NCOffsetsArray.
+   * All suboffsets should then be -1 or 0.
+   */
+  template <typename MemTag>
+  auto promote_to_so(const ArrayImpl<NCOffsetsPolicy,
+                                     typename StoragePolicyTraits<MemTag>::View>& nc) {
+    using SOView = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemTag>::View>;
+
+    Metadata shape;
+    Metadata strides;
+    Metadata suboffsets;
+    auto ndim { nc.ndim() };
+
+    void* data_ptr { const_cast<void*>(nc.data()) };
+
+    ssize_t pointer_axis { -1 };
+    shape.set(nc.shape(), ndim);
+    for (ssize_t i = 0; i < ndim; ++i) {
+      if (nc.is_pointer_axis(i)) {
+        pointer_axis = i;
+        data_ptr = reinterpret_cast<void**>(data_ptr) + nc.offset(i);
+
+        strides[i] = sizeof(void*);
+        suboffsets[i] = 0; // We just handled this for the SOArray
+      } else {
+        data_ptr = reinterpret_cast<std::uint8_t*>(data_ptr) + nc.offset(i);
+
+        strides[i] = nc.stride(i);
+        suboffsets[i] = -1;
+      }
+    }
+    strides.ndim = ndim;
+    suboffsets.ndim = ndim;
+    SOView so(data_ptr,
+              shape,
+              strides,
+              suboffsets,
+              nc.dtype(),
+              pointer_axis,
+              nc.read_only());
+
+    return so;
+  }
+
+#endif
+
+  // --- Alias Helpers --- //
+
+  template <typename MemType>
+  using NCViewFor = ArrayImpl<NCOffsetsPolicy, typename StoragePolicyTraits<MemType>::View>;
+
+  template <typename MemType>
+  using NCRefFor = ArrayImpl<NCOffsetsPolicy, typename StoragePolicyTraits<MemType>::Ref>;
+
+  template <typename MemType>
+  using NCOwnerFor = ArrayImpl<NCOffsetsPolicy, typename StoragePolicyTraits<MemType>::Owner>;
+
+  template <typename MemType>
+  using SOViewFor = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemType>::View>;
+
+  template <typename MemType>
+  using SORefFor = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemType>::Ref>;
+
+  template <typename MemType>
+  using SOOwnerFor = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemType>::Owner>;
+
+  // --- Indexing Helpers --- //
+
+  template <class Array>
+  NCA_HD inline NCA_DNI ArrayElementProxy static_index(Array arr, unsigned idx) {
+    switch (arr.ndim()) {
+    case 1: {
+      StaticCoords<1, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 2: {
+      StaticCoords<2, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 3: {
+      StaticCoords<3, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 4: {
+      StaticCoords<4, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 5: {
+      StaticCoords<5, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 6: {
+      StaticCoords<6, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 7: {
+      StaticCoords<7, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 8: {
+      StaticCoords<8, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 9: {
+      StaticCoords<9, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    case 10:
+    default: {
+      StaticCoords<10, unsigned> coords;
+
+      arr.lin_to_md(idx, coords);
+
+      return arr[coords];
+    }
+    }
+  }
 } // namespace ncarray
 
 #endif // NCARRAY_POLICIES_HH

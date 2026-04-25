@@ -4,8 +4,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import contextlib
 import os
 
+from ncarray.core.vm import set_eager, _eager_eval
 from ncarray.core._pyncarray import *
 try:
     from ncarray.core._pyncdevarray import *
@@ -18,3 +20,15 @@ def get_include() -> str:
 
 def get_lib_dir() -> str:
     return os.path.join(os.path.dirname(__file__), "lib")
+
+
+@contextlib.contextmanager
+def lazy_mode():
+    """Context manager to delay immediate evaluation of results."""
+
+    old: bool = _eager_eval
+    set_eager(False)
+    try:
+        yield
+    finally:
+        set_eager(old)

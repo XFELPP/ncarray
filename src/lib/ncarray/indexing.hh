@@ -9,6 +9,15 @@
 #ifndef NCARRAY_INDEXING_HH
 #define NCARRAY_INDEXING_HH
 
+#ifdef __CUDACC_RTC__
+typedef long long ssize_t;
+
+#include <cuda/std/type_traits>
+
+using cuda::std::decay_t;
+using cuda::std::integral;
+using cuda::std::same_as;
+#else
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
@@ -16,7 +25,13 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
-#include <concepts>
+#include <type_traits>
+
+using std::decay_t;
+using std::integral;
+using std::same_as;
+
+#endif
 
 #ifndef NCA_HD
 #ifdef __CUDACC__
@@ -49,9 +64,9 @@ namespace ncarray {
 
   // Indexing is allowed by integer, slice or ellipsis
   template <typename IdxT>
-  concept IndexArg = std::integral<std::decay_t<IdxT>> ||
-    std::same_as<std::decay_t<IdxT>, Slice> ||
-    std::same_as<std::decay_t<IdxT>, Ellipsis>;
+  concept IndexArg = integral<decay_t<IdxT>> ||
+    same_as<decay_t<IdxT>, Slice> ||
+    same_as<decay_t<IdxT>, Ellipsis>;
 
   enum class IndexType { Integer, Slice, Ellipsis };
 
@@ -89,5 +104,27 @@ namespace ncarray {
     ssize_t data_shift { 0 };  ///< An accumulator to propagate offsets for new views
   };
 
+  /**
+   * A small struct with compile-time constant size for indexing arrays.
+   *
+   * The constexpr size makes it far easier for the compiler to unroll loops and
+   * optimize certain hot paths.
+   */
+  template <int NDim = 1, typename IndexT = ssize_t>
+  struct StaticCoords {
+    IndexT value[NDim];
+
+    NCA_HD static constexpr int size() {
+      return NDim;
+    }
+
+    NCA_HD inline IndexT& operator[](int idx) {
+      return value[idx];
+    }
+
+    NCA_HD inline const IndexT& operator[](int idx) const {
+      return value[idx];
+    }
+  };
 } // namespace ncarray
 #endif // NCARRAY_INDEXING_HH

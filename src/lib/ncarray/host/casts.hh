@@ -1,0 +1,58 @@
+#ifndef NCARRAY_HOST_CASTS_HH
+#define NCARRAY_HOST_CASTS_HH
+
+#include "ncarray/custom_types.hh"
+
+#include <complex>
+#include <cstdint>
+
+namespace ncarray {
+  namespace host {
+    template <typename T>
+    struct VM_Cast_Table {
+      using Fn = T (*)(const void*);
+
+      static const Fn tbl[22];
+
+      inline Fn operator[](int idx) const { return tbl[idx]; }
+    };
+
+    template <typename T>
+    inline constexpr VM_Cast_Table<T> vm_cast_table {};
+
+    #define EXTERN_VM_CAST_TABLE(T)            \
+      extern template struct VM_Cast_Table<T>;
+
+    EXTERN_VM_CAST_TABLE(bool)
+    EXTERN_VM_CAST_TABLE(char)
+
+    EXTERN_VM_CAST_TABLE(std::uint8_t)
+    EXTERN_VM_CAST_TABLE(std::uint16_t)
+    EXTERN_VM_CAST_TABLE(std::uint32_t)
+    EXTERN_VM_CAST_TABLE(std::uint64_t)
+
+    EXTERN_VM_CAST_TABLE(std::int8_t)
+    EXTERN_VM_CAST_TABLE(std::int16_t)
+    EXTERN_VM_CAST_TABLE(std::int32_t)
+    EXTERN_VM_CAST_TABLE(std::int64_t)
+
+    EXTERN_VM_CAST_TABLE(float)
+    EXTERN_VM_CAST_TABLE(double)
+    EXTERN_VM_CAST_TABLE(long double)
+
+    EXTERN_VM_CAST_TABLE(std::complex<float>)
+    EXTERN_VM_CAST_TABLE(std::complex<double>)
+    EXTERN_VM_CAST_TABLE(std::complex<long double>)
+
+    EXTERN_VM_CAST_TABLE(Float2)
+    EXTERN_VM_CAST_TABLE(Float3)
+    EXTERN_VM_CAST_TABLE(Float4)
+
+    EXTERN_VM_CAST_TABLE(Double2)
+    EXTERN_VM_CAST_TABLE(Double3)
+    EXTERN_VM_CAST_TABLE(Double4)
+
+    #undef EXTERN_VM_CAST_TABLE
+  }
+}
+#endif // NCARRAY_HOST_CASTS_HH

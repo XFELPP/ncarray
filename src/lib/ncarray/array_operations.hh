@@ -10,10 +10,13 @@
 #define NCARRAY_ARRAY_OPERATIONS_HH
 
 #include "ncarray/array_impl.hh"
-#include "ncarray/array_traits.hh"
-#include "ncarray/custom_types.hh"
-#include "ncarray/dtype.hh"
 #include "ncarray/engines.hh"
+#include "ncarray/expression.hh"
+#include "ncarray/host/casts.hh"
+#include "ncarray/op_code.hh"
+#include "ncarray/op_traits.hh"
+#include "ncarray/mvnode.hh"
+#include "ncarray/vmexpression.hh"
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -27,6 +30,7 @@ typedef SSIZE_T ssize_t;
 #include <concepts>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace ncarray {
   class index_error : public std::invalid_argument {
@@ -34,1921 +38,986 @@ namespace ncarray {
     using std::invalid_argument::invalid_argument;
   };
 
-  // Unary reduction operations
-  // --------------------------
-
-  template <ArrayLike A>
-  inline Scalar sum(const A& arr) {
-    auto sum_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_sum<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_sum<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), sum_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar mean(const A& arr) {
-    auto sum_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_mean<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_mean<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), sum_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar var(const A& arr, ssize_t ddof) {
-    auto var_operation = [&] <typename T> () -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_var<T>(arr, ddof);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_var<T>(arr, ddof);
-      }
-    };
-
-    return dispatch(arr.dtype(), var_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar std(const A& arr, ssize_t ddof) {
-    auto std_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_std<T>(arr, ddof);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_std<T>(arr, ddof);
-      }
-    };
-
-    return dispatch(arr.dtype(), std_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar max(const A& arr) {
-    auto max_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_max<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_max<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), max_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar argmax(const A& arr) {
-    auto argmax_operation = [&] <typename T> () -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_argmax<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_argmax<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), argmax_operation);
-  }
-
-
-  template <ArrayLike A>
-  inline Scalar min(const A& arr) {
-    auto min_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_min<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_min<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), min_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar argmin(const A& arr) {
-    auto argmin_operation = [&] <typename T> () -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_argmin<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_argmin<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), argmin_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar all(const A& arr) {
-    auto all_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_all<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_all<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), all_operation);
-  }
-
-  template <ArrayLike A>
-  inline Scalar any(const A& arr) {
-    auto any_operation = [&]<typename T>() -> Scalar {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        return GPUEngine::execute_any<T>(arr);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        return HostEngine::execute_any<T>(arr);
-      }
-    };
-
-    return dispatch(arr.dtype(), any_operation);
-  }
+  // --- Expression Evaluation/Materialization --- //
 
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::sum() const {
-    return ncarray::sum(*this);
+  template <Expression Expr>
+  ArrayImpl<L, S>& ArrayImpl<L, S>::operator=(const Expr& expr) {
+    auto view = this->view();
+
+    auto op = [&]<typename DestT>() {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+
+    return *this;
+  }
+
+  // --- Binary Operations --- //
+
+  // Addition
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator+(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node + right;
+  }
+
+  // Subtraction
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator-(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node - right;
+  }
+
+  // Multiplication
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator*(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node * right;
+  }
+
+  // True division
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator/(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node / right;
+  }
+
+  // --- Inplace Binary Operations --- //
+
+  template <class L, class S>
+  template <class RHS>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const RHS& right) {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto add_expr = node + right;
+    auto op = [&]<typename DestT>() {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(add_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(add_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // Subtraction
+  template <class L, class S>
+  template <class RHS>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const RHS& right) {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto sub_expr = node - right;
+    auto op = [&]<typename DestT>() {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(sub_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(sub_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // Multiplication
+  template <class L, class S>
+  template <class RHS>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const RHS& right) {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto mul_expr = node * right;
+    auto op = [&]<typename DestT>() {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(mul_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(mul_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // True division
+  template <class L, class S>
+  template <class RHS>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const RHS& right) {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto truediv_expr = node / right;
+    auto op = [&]<typename DestT>() {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(truediv_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(truediv_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // --- Comparisons --- //
+
+  // Is Equal
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator==(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node == right;
+  }
+
+  // Not equal
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator!=(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node != right;
+  }
+
+  // Less than
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator<(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node < right;
+  }
+
+  // Less than or equal
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator<=(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node <= right;
+  }
+
+  // Greater than
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator>(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node > right;
+  }
+
+  // Greater than or equal
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator>=(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node >= right;
+  }
+
+  // --- Logical Operations --- //
+
+  // Logical and
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator&&(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node && right;
+  }
+
+  // Logical or
+  template <class L, class S>
+  template <class RHS>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator||(const RHS& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node || right;
+  }
+
+  // Logical not
+  template <class L, class S>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator!() const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return !node;
+  }
+
+  // --- Logical Inplace Operations --- //
+
+  // Logical and
+  template <class L, class S>
+  template <class RHS>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator&=(const RHS& right) {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto and_expr = node && right;
+
+    auto op = [&] <typename DestT> () {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(and_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(and_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // Logical or
+  template <class L, class S>
+  template <class RHS>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator|=(const RHS& right) {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto or_expr = node || right;
+
+    auto op = [&] <typename DestT> () {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(or_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(or_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+
+  // --- Axis-Aware Reductions --- //
+
+  // sum
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::sum(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    auto dtype_op = [] <typename T> () {
+      using AccumT = typename op_traits<T>::sum_type;
+      return dtype_traits<AccumT>::value;
+    };
+    DType result_dtype = dispatch(this->dtype(), dtype_op);
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto sum_op = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, SumTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, SumTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), sum_op);
+
+    return result;
   }
 
   // max and argmax
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::max() const {
-    return ncarray::max(*this);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::max(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    DType result_dtype = this->dtype();
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto max_op = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, MaxTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, MaxTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), max_op);
+
+    return result;
   }
+
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::argmax() const {
-    return ncarray::argmax(*this);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::argmax(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    DType result_dtype = dtype_traits<std::int64_t>::value;
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto argmax_op = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, ArgmaxTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, ArgmaxTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), argmax_op);
+
+    return result;
   }
 
   // min and argmin
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::min() const {
-    return ncarray::min(*this);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::min(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    DType result_dtype = this->dtype();
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto min_op = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, MinTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, MinTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), min_op);
+
+    return result;
   }
+
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::argmin() const {
-    return ncarray::argmin(*this);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::argmin(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    DType result_dtype = dtype_traits<std::int64_t>::value;
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto argmin_op = [&]<typename SrcT>() {
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, ArgminTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, ArgminTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), argmin_op);
+
+    return result;
   }
 
   // mean, variance and standard deviation
+
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::mean() const {
-    return ncarray::mean(*this);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::mean(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    auto dtype_op = []<typename T>() {
+      using ResultT = typename op_traits<T>::truediv_type;
+      return dtype_traits<ResultT>::value;
+    };
+
+    DType result_dtype = dispatch(this->dtype(), dtype_op);
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto mean_operation = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, MeanTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, MeanTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), mean_operation);
+
+    return result;
+  }
+
+  // TODO: Make ddof work
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::var(const std::vector<ssize_t>& axes, ssize_t ddof) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+    auto dtype_op = []<typename T>() {
+      using ResultT = typename op_traits<T>::truediv_type;
+      return dtype_traits<ResultT>::value;
+    };
+
+    DType result_dtype = dispatch(this->dtype(), dtype_op);
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto var_operation = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, VarTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, VarTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), var_operation);
+
+    return result;
   }
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::var(ssize_t ddof) const {
-    return ncarray::var(*this, ddof);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::std(const std::vector<ssize_t>& axes, ssize_t ddof) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+    auto dtype_op = []<typename T>() {
+      using ResultT = typename op_traits<T>::truediv_type;
+      return dtype_traits<ResultT>::value;
+    };
+
+    DType result_dtype = dispatch(this->dtype(), dtype_op);
+
+    OwnerType result(new_ndim, new_shape, result_dtype);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto std_operation = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, StdTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, StdTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), std_operation);
+
+    return result;
+  }
+
+  // Logical all and any
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::all(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    OwnerType result(new_ndim, new_shape, dtype_traits<bool>::value);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto all_operation = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, AllTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, AllTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), all_operation);
+
+    return result;
   }
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::std(ssize_t ddof) const {
-    return ncarray::std(*this, ddof);
+  typename ArrayImpl<L, S>::OwnerType
+  ArrayImpl<L, S>::any(const std::vector<ssize_t>& axes) const {
+    ssize_t new_shape[NCARRAY_MAX_NDIM];
+    ssize_t new_ndim { 0 };
+    ReductionParams params = build_reduction_params(axes,
+                                                    this->ndim(),
+                                                    this->shape(),
+                                                    this->strides(),
+                                                    new_shape,
+                                                    new_ndim,
+                                                    this->itemsize());
+
+    OwnerType result(new_ndim, new_shape, dtype_traits<bool>::value);
+
+    auto start_view = this->view();
+    auto res_view = result.view();
+
+    auto any_operation = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_reduce_axes<SrcT, AnyTraits>(start_view, params, res_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        HostEngine::execute_reduce_axes<SrcT, AnyTraits>(start_view, params, res_view);
+      }
+    };
+
+    dispatch(this->dtype(), any_operation);
+
+    return result;
+  }
+
+
+  // --- Full Reductions (To Scalar) --- //
+
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::sum() const {
+    auto arr_view = this->view();
+
+    auto sum_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, SumTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_sum<SrcT>(arr_view);
+      }
+    };
+
+    return dispatch(this->dtype(), sum_operation);
+  }
+
+  // max and argmax
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::max() const {
+    auto arr_view = this->view();
+
+    auto max_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, MaxTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_max<SrcT>(arr_view);
+      }
+    };
+
+    return dispatch(this->dtype(), max_operation);
+  }
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::argmax() const {
+    auto arr_view = this->view();
+
+    auto argmax_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, ArgmaxTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_argmax<SrcT>(arr_view);
+      }
+    };
+
+    return dispatch(this->dtype(), argmax_operation);
+  }
+
+  // min and argmin
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::min() const {
+    auto arr_view = this->view();
+
+    auto min_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, MinTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_min<SrcT>(arr_view);
+      }
+    };
+
+    return dispatch(this->dtype(), min_operation);
+  }
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::argmin() const {
+    auto arr_view = this->view();
+
+    auto argmin_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, ArgminTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_argmin<SrcT>(arr_view);
+      }
+    };
+
+    return dispatch(this->dtype(), argmin_operation);
+  }
+
+  // mean, variance and standard deviation
+
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::mean() const {
+    auto arr_view = this->view();
+
+    auto mean_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_full_reduce<SrcT, MeanTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_mean<SrcT>(arr_view);
+      }
+    };
+
+    return dispatch(this->dtype(), mean_operation);
+  }
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::var(ssize_t ddof) const {
+    auto arr_view = this->view();
+
+    auto var_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, VarTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_var<SrcT>(arr_view, ddof);
+      }
+    };
+
+    return dispatch(this->dtype(), var_operation);
+  }
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::std(ssize_t ddof) const {
+    auto arr_view = this->view();
+
+    auto std_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        return GPUEngine::execute_full_reduce<SrcT, StdTraits>(arr_view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        return HostEngine::execute_std<SrcT>(arr_view, ddof);
+      }
+    };
+
+    return dispatch(this->dtype(), std_operation);
   }
 
   // logical reduction ops - all and any
-  template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::all() const {
-    return ncarray::all(*this);
-  }
 
   template <class L, class S>
-  inline Scalar ArrayImpl<L, S>::any() const {
-    return ncarray::any(*this);
-  }
-
-  // --- Scattering and Keyed Reduction Operations --- //
-  template <ArrayLike Dest, ArrayLike Index, ArrayLike Src>
-  inline void scatter_add(Dest& dest, const Index& indices, const Src& src) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto dest_view = dest.view();
-    auto indices_view = indices.view();
-    auto src_view = src.view();
-    auto indices_dtype = indices.dtype();
-    if (indices_dtype != DType::int64 ||
-        indices_dtype != DType::int32 ||
-        indices_dtype != DType::uint64 ||
-        indices_dtype != DType::uint32) {
-      return;
-    }
-
-    auto visit_dest = [&] <typename DestT> () {
-      auto visit_indices = [&] <typename IndexT> () {
-        if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
+  Scalar ArrayImpl<L, S>::all() const {
+    auto arr_view = this->view();
+    auto all_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
 #ifdef __CUDACC__
-          GPUEngine::execute_scatter_add<DestT, IndexT>(dest_view,
-                                                        indices_view,
-                                                        src_view);
-#else
-          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-        } else {
-          HostEngine::execute_scatter_add<DestT, IndexT>(dest_view,
-                                                         indices_view,
-                                                         src_view);
-        }
-      };
-
-      dispatch_integers(indices.dtype(), visit_indices);
-    };
-
-    dispatch(dest.dtype(), visit_dest);
-  }
-
-  template <class L, class S>
-  template <ArrayLike Index, ArrayLike Src>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::scatter_add(const Index& indices,
-                                                       const Src& src) {
-    auto indices_dtype = indices.dtype();
-    if (indices_dtype != DType::int64  ||
-        indices_dtype != DType::int32  ||
-        indices_dtype != DType::uint64 ||
-        indices_dtype != DType::uint32) {
-      return *this;
-    }
-    ncarray::scatter_add(*this, indices, src);
-    return *this;
-  }
-
-  template <ArrayLike Keys, ArrayLike Vals, OwningArrayLike Result>
-  inline auto reduce_by_key(const Keys& keys, const Vals& vals) {
-    Scalar max_key { keys.max() };
-
-    auto visit_op = [&] <typename KeyT> () {
-      return op_traits<KeyT>::template cast<ssize_t>(std::get<KeyT>(max_key)) + 1;
-    };
-    ssize_t n_bins { dispatch(keys.dtype(), visit_op) };
-
-    Result result(1, &n_bins, vals.dtype());
-
-    auto reduce_op = [&] <typename ValT> () {
-      result.fill(ValT { 0 });
-    };
-    dispatch(vals.dtype(), reduce_op);
-
-    result.scatter_add(keys, vals);
-
-    return result;
-  }
-
-  template <class L, class S>
-  template <ArrayLike Keys>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::reduce_by_key(const Keys& keys) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::reduce_by_key<Keys, ViewType, OwnerType>(keys, this->view());
-  }
-
-  // Binary non-broadcast operations (same shape)
-  // --------------------------------------------
-  // TODO: In the future, may make ResultType ArrayLike (instead of Owning)
-  // but this requires supporting user-provided buffer to put result in
-  // TODO: Handle different shape, types and so on for left/right. Not dealt with atm
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto add(const Left& left, const Right& right) {
-    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-      using AccumT = typename op_traits<T>::sum_type;
-      return dtype_traits<AccumT>::value;
-    });
-
-    ResultType result(left.ndim(), left.shape(), result_dtype);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto add_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_add<T>(left_view, right_view, result_view);
+        return GPUEngine::execute_full_reduce<SrcT, AllTraits>(arr_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_add<T>(left_view, right_view, result_view);
+        return HostEngine::execute_all<SrcT>(arr_view);
       }
     };
 
-    dispatch(left.dtype(), add_operation);
-    return result;
+    return dispatch(this->dtype(), all_operation);
   }
 
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto sub(const Left& left, const Right& right) {
-    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-      using DiffT = typename op_traits<T>::diff_type;
-      return dtype_traits<DiffT>::value;
-    });
-
-    ResultType result(left.ndim(), left.shape(), result_dtype);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto sub_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
+  template <class L, class S>
+  Scalar ArrayImpl<L, S>::any() const {
+    auto arr_view = this->view();
+    auto any_operation = [&] <typename SrcT> () -> Scalar {
+      if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_sub<T>(left_view, right_view, result_view);
+        return GPUEngine::execute_full_reduce<SrcT, AnyTraits>(arr_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
       } else {
-        HostEngine::execute_sub<T>(left_view, right_view, result_view);
+        return HostEngine::execute_any<SrcT>(arr_view);
       }
     };
 
-    dispatch(left.dtype(), sub_operation);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto mul(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto mul_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_mul<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_mul<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), mul_operation);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto truediv(const Left& left, const Right& right) {
-    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-      using ResultT = typename op_traits<T>::truediv_type;
-      return dtype_traits<ResultT>::value;
-    });
-
-    ResultType result(left.ndim(), left.shape(), result_dtype);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto truediv_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_truediv<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_truediv<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), truediv_operation);
-    return result;
-  }
-
-  // --- Inplace binary operations --- //
-
-  template <ArrayLike Left, ArrayLike Right>
-  inline void inplace_add(Left& left, const Right& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-
-    auto add_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_add<T>(left_view, right_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_add<T>(left_view, right_view);
-      }
-    };
-    dispatch(left.dtype(), add_op);
-  }
-
-  template <ArrayLike Left, ArrayLike Right>
-  inline void inplace_sub(Left& left, const Right& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-
-    auto sub_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_sub<T>(left_view, right_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_sub<T>(left_view, right_view);
-      }
-    };
-    dispatch(left.dtype(), sub_op);
-  }
-
-  template <ArrayLike Left, ArrayLike Right>
-  inline void inplace_mul(Left& left, const Right& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-
-    auto mul_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_mul<T>(left_view, right_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_mul<T>(left_view, right_view);
-      }
-    };
-    dispatch(left.dtype(), mul_op);
-  }
-
-  template <ArrayLike Left, ArrayLike Right>
-  inline void inplace_truediv(Left& left, const Right& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-
-    auto div_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_truediv<T>(left_view, right_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_truediv<T>(left_view, right_view);
-      }
-    };
-
-    dispatch(left.dtype(), div_op);
-  }
-
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::add(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator+(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::add<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_add<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_add<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::sub(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator-(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::sub<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_sub<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_sub<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::mul(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator*(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::mul<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_mul<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_mul<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::truediv(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator/(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-    return ncarray::truediv<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_truediv<ThisType, OtherType>(*this, other);
-
-    return *this;
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_truediv<ThisType, OtherType>(*this, other);
-
-    return *this;
-  }
-
-  // --- Binary operations with a scalar broadcast --- //
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline ResultType add_scalar(const Left& left, const Scalar& right) {
-    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-      using AccumT = typename op_traits<T>::sum_type;
-
-      return dtype_traits<AccumT>::value;
-    });
-
-    ResultType result(left.ndim(), left.shape(), result_dtype);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto add_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_add_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_add_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), add_operation);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline ResultType sub_scalar(const Left& left, const Scalar& right) {
-    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-      using DiffT = typename op_traits<T>::diff_type;
-      return dtype_traits<DiffT>::value;
-    });
-
-    ResultType result(left.ndim(), left.shape(), result_dtype);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto sub_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_sub_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_sub_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), sub_operation);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto mul_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto mul_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_mul_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_mul_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), mul_operation);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto truediv_scalar(const Left& left, const Scalar& right) {
-    DType result_dtype = dispatch(left.dtype(), []<typename T>() {
-      using ResultT = typename op_traits<T>::truediv_type;
-      return dtype_traits<ResultT>::value;
-    });
-
-    ResultType result(left.ndim(), left.shape(), result_dtype);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto truediv_operation = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_truediv_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_truediv_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), truediv_operation);
-    return result;
-  }
-
-  // --- Inplace binary operations with a scalar broadcast --- //
-
-  template <ArrayLike Left>
-  inline void inplace_add_scalar(Left& left, const Scalar& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-
-    auto add_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_add_scalar<T>(left_view, right);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_add_scalar<T>(left_view, right);
-      }
-    };
-    dispatch(left.dtype(), add_op);
-  }
-
-  template <ArrayLike Left>
-  inline void inplace_sub_scalar(Left& left, const Scalar& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-
-    auto sub_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_sub_scalar<T>(left_view, right);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_sub_scalar<T>(left_view, right);
-      }
-    };
-    dispatch(left.dtype(), sub_op);
-  }
-  template <ArrayLike Left>
-  inline void inplace_mul_scalar(Left& left, const Scalar& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-
-    auto mul_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_mul_scalar<T>(left_view, right);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_mul_scalar<T>(left_view, right);
-      }
-    };
-    dispatch(left.dtype(), mul_op);
-  }
-
-  template <ArrayLike Left>
-  inline void inplace_truediv_scalar(Left& left, const Scalar& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-
-    auto truediv_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_inplace_truediv_scalar<T>(left_view, right);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_inplace_truediv_scalar<T>(left_view, right);
-      }
-    };
-    dispatch(left.dtype(), truediv_op);
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::add(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::add_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator+(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::add_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::iadd(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_add_scalar<ThisType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_add_scalar<ThisType>(*this, other);
-    return *this;
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::sub(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::sub_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator-(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::sub_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::isub(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_sub_scalar<ThisType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_sub_scalar<ThisType>(*this, other);
-    return *this;
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::mul(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::mul_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator*(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::mul_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::imul(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_mul_scalar<ThisType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_mul_scalar<ThisType>(*this, other);
-    return *this;
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::truediv(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::truediv_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator/(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::truediv_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::itruediv(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_truediv_scalar<ThisType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-    ncarray::inplace_truediv_scalar<ThisType>(*this, other);
-    return *this;
-  }
-
-  // --- Logical and boolean operators --- //
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto is_equal(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto equal_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_equal<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_equal<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), equal_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto is_not_equal(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto not_equal_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_not_equal<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_not_equal<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), not_equal_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto is_less_than(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto less_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_less_than<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_less_than<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), less_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto is_less_equal_than(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto less_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_less_equal_than<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_less_equal_than<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), less_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto is_greater_than(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto greater_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_greater_than<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_greater_than<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), greater_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto is_greater_equal_than(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    auto greater_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_greater_equal_than<T>(left, right, result);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_greater_equal_than<T>(left, right, result);
-      }
-    };
-
-    dispatch(left.dtype(), greater_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto logical_and(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto logical_and_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_logical_and<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_logical_and<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), logical_and_op);
-    return result;
-  }
-
-  template <ArrayLike Left, ArrayLike Right, OwningArrayLike ResultType>
-  inline auto logical_or(const Left& left, const Right& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-    auto result_view = result.view();
-
-    auto logical_or_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_logical_or<T>(left_view, right_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_logical_or<T>(left_view, right_view, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), logical_or_op);
-    return result;
-  }
-
-  template <ArrayLike Array, OwningArrayLike ResultType>
-  inline auto logical_not(const Array& arr) {
-    ResultType result(arr.ndim(), arr.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto arr_view = arr.view();
-    auto result_view = result.view();
-
-    auto logical_not_op = [&] <typename T> () {
-      if constexpr (std::is_same_v<typename std::decay_t<Array>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_logical_not<T>(arr_view, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_logical_not<T>(arr_view, result_view);
-      }
-    };
-
-    dispatch(arr.dtype(), logical_not_op);
-    return result;
-  }
-
-  // equal
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_equal(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_equal<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator==(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_equal<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // not equal
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_not_equal(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_not_equal<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator!=(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_not_equal<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // less than
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_less_than(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator<(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // less equal than
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_less_equal_than(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_equal_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator<=(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_equal_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // greater than
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_greater_than(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator>(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // greater equal than
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_greater_equal_than(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_equal_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator>=(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_equal_than<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // logical and
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::logical_and(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_and<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator&&(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_and<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // logical or
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::logical_or(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_or<ViewType, OtherType, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator||(const OtherType& other) const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_or<ViewType, OtherType, OwnerType>(*this, other);
-  }
-
-  // logical not
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::logical_not() const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_not<ViewType, OwnerType>(*this);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::operator!() const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_not<ViewType, OwnerType>(*this);
-  }
-
-  // --- Comparison operators with scalar broadcast --- //
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto is_equal_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto equal_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_equal_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_equal_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), equal_op);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto is_not_equal_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto not_equal_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_not_equal_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_not_equal_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), not_equal_op);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto is_less_than_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto less_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_less_than_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_less_than_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), less_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto is_less_equal_than_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto less_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_less_equal_than_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_less_equal_than_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), less_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto is_greater_than_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto greater_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_greater_than_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_greater_than_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), greater_than_op);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto is_greater_equal_than_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), DType::bool_);
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto greater_than_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_greater_equal_than_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_greater_equal_than_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), greater_than_op);
-    return result;
-  }
-
-  // equal
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_equal(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator==(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // not equal
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_not_equal(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_not_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator!=(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_not_equal_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // less than
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_less_than(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator<(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // less equal than
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_less_equal_than(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator<=(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_less_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // greater than
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_greater_than(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator>(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // greater equal than
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::is_greater_equal_than(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator>=(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::is_greater_equal_than_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // --- Inplace logical operators --- //
-
-  template <ArrayLike Left, ArrayLike Right>
-  inline auto inplace_logical_and(Left& left, const Right& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-
-    auto logical_and_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<T, bool>) {
-        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_and<T>(left_view, right_view);
-#else
-          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-        } else {
-          HostEngine::execute_inplace_logical_and<T>(left_view, right_view);
-        }
-      }
-    };
-
-    dispatch(left.dtype(), logical_and_op);
-  }
-
-  template <ArrayLike Left, ArrayLike Right>
-  inline auto inplace_logical_or(Left& left, const Right& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto right_view = right.view();
-
-    auto logical_or_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<T, bool>) {
-        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_or<T>(left_view, right_view);
-#else
-          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-        } else {
-          HostEngine::execute_inplace_logical_or<T>(left_view, right_view);
-        }
-      }
-    };
-
-    dispatch(left.dtype(), logical_or_op);
-  }
-
-  // inplace logical and
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::ilogical_and(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_and<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator&=(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_and<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-
-  // inplace logical or
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::ilogical_or(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_or<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  template <ArrayLike OtherType>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator|=(const OtherType& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_or<ThisType, OtherType>(*this, other);
-    return *this;
-  }
-
-  // --- Logical operators with scalar broadcast --- //
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto logical_and_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto and_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_logical_and_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_logical_and_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), and_op);
-    return result;
-  }
-
-  template <ArrayLike Left, OwningArrayLike ResultType>
-  inline auto logical_or_scalar(const Left& left, const Scalar& right) {
-    ResultType result(left.ndim(), left.shape(), left.dtype());
-
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-    auto result_view = result.view();
-
-    auto or_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_logical_or_scalar<T>(left_view, right, result_view);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-      } else {
-        HostEngine::execute_logical_or_scalar<T>(left_view, right, result_view);
-      }
-    };
-
-    dispatch(left.dtype(), or_op);
-    return result;
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::logical_and(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator&&(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_and_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::logical_or(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::operator||(const Scalar& other) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    return ncarray::logical_or_scalar<ArrayImpl<L, S>, OwnerType>(*this, other);
-  }
-
-  // --- Inplace logical operators with scalar broadcast --- //
-  // logical and
-  template <ArrayLike Left>
-  inline void inplace_logical_and_scalar(Left& left, const Scalar& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-
-    auto and_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<T, bool>) {
-        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_and_scalar<T>(left_view, right);
-#else
-          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-        } else {
-          HostEngine::execute_inplace_logical_and_scalar<T>(left_view, right);
-        }
-      }
-    };
-    dispatch(left.dtype(), and_op);
-  }
-
-  // logical or
-  template <ArrayLike Left>
-  inline void inplace_logical_or_scalar(Left& left, const Scalar& right) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto left_view = left.view();
-
-    auto or_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<T, bool>) {
-        if constexpr (std::is_same_v<typename std::decay_t<Left>::MemType, DevTag>) {
-#ifdef __CUDACC__
-          GPUEngine::execute_inplace_logical_or_scalar<T>(left_view, right);
-#else
-          throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
-#endif
-        } else {
-          HostEngine::execute_inplace_logical_or_scalar<T>(left_view, right);
-        }
-      }
-    };
-    dispatch(left.dtype(), or_op);
-  }
-
-  // inplace logical and
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::ilogical_and(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_and_scalar<ThisType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator&=(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_and_scalar<ThisType>(*this, other);
-    return *this;
-  }
-
-  // inplace logical or
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::ilogical_or(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_or_scalar<ThisType>(*this, other);
-    return *this;
-  }
-  template <class L, class S>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator|=(const Scalar& other) {
-    using ThisType = ArrayImpl<L, S>;
-
-    ncarray::inplace_logical_or_scalar<ThisType>(*this, other);
-    return *this;
-  }
-
-  // --- Iterators --- //
-
-  template <typename L, typename S>
-  inline typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::begin() {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using Iterator = typename ArrayImpl<L, S>::Iterator;
-
-    Metadata offset_type;
-    if constexpr (requires { this->m_offsets; }) {
-      offset_type = this->m_offsets;
-    } else {
-      offset_type = this->m_suboffsets;
-    }
-
-    return Iterator(ViewType(*this), 0);
-  }
-
-  template <typename L, typename S>
-  inline typename ArrayImpl<L, S>::Iterator ArrayImpl<L, S>::end() {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using Iterator = typename ArrayImpl<L, S>::Iterator;
-
-    Metadata offset_type;
-    if constexpr (requires { this->m_offsets; }) {
-      offset_type = this->m_offsets;
-    } else {
-      offset_type = this->m_suboffsets;
-    }
-
-    ssize_t len = this->ndim() > 0 ? this->m_shape[0] : 0;
-
-    return Iterator(ViewType(*this), len);
-  }
-
-  template <typename L, typename S>
-  inline typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::begin() const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using ConstIterator = typename ArrayImpl<L, S>::ConstIterator;
-
-    Metadata offset_type;
-    if constexpr (requires { this->m_offsets; }) {
-      offset_type = this->m_offsets;
-    } else {
-      offset_type = this->m_suboffsets;
-    }
-
-    return ConstIterator(ViewType(*this), 0);
-  }
-
-  template <typename L, typename S>
-  inline typename ArrayImpl<L, S>::ConstIterator ArrayImpl<L, S>::end() const {
-    using ViewType = typename ArrayImpl<L, S>::ViewType;
-    using ConstIterator = typename ArrayImpl<L, S>::ConstIterator;
-
-    Metadata offset_type;
-    if constexpr (requires { this->m_offsets; }) {
-      offset_type = this->m_offsets;
-    } else {
-      offset_type = this->m_suboffsets;
-    }
-
-    ssize_t len = this->ndim() > 0 ? this->m_shape[0] : 0;
-
-    return ConstIterator(ViewType(*this), len);
+    return dispatch(this->dtype(), any_operation);
   }
 
   // --- Copy and Modification --- //
-  template <ArrayLike A>
-  inline void fill(A& arr, Scalar val) {
+
+  template <class L, class S>
+  void ArrayImpl<L, S>::copy_into(void* dest_buffer) const {
     // Convert to views to decrease binary size with fewer template instantiations
-    auto arr_view = arr.view();
-
-    auto fill_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
-#ifdef __CUDACC__
-        GPUEngine::execute_fill<T>(arr_view, val);
-#else
-        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
-#endif
-      } else {
-        HostEngine::execute_fill<T>(arr_view, val);
-      }
-    };
-
-    dispatch(arr.dtype(), fill_op);
-  }
-
-  template <ArrayLike A, typename OutputType>
-  inline void copy_into(const A& arr, OutputType* dest) {
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto arr_view = arr.view();
+    auto arr_view = this->view();
 
     auto copy_op = [&]<typename T>() {
-      if constexpr (std::is_same_v<typename std::decay_t<A>::MemType, DevTag>) {
+      T* dest = reinterpret_cast<T*>(dest_buffer);
+      if constexpr (std::is_same_v<typename std::decay_t<ArrayImpl<L,S>>::MemType, DevTag>) {
 #ifdef __CUDACC__
         GPUEngine::execute_copy_into<T>(arr_view, dest);
 #else
@@ -1959,28 +1028,79 @@ namespace ncarray {
       }
     };
 
-    dispatch(arr.dtype(), copy_op);
+    dispatch(this->dtype(), copy_op);
   }
 
-  template <ArrayLike Dest, ArrayLike Src>
-  inline void assign(Dest& dest, const Src& src) {
+  template <class L, class S>
+  template <typename OutT>
+  void ArrayImpl<L, S>::copy_into_astype(OutT* dest_buffer) const {
+    auto arr_view = this->view();
+    if constexpr (std::is_same_v<typename std::decay_t<ArrayImpl<L,S>>::MemType, DevTag>) {
+#ifdef __CUDACC__
+      GPUEngine::execute_copy_into<OutT>(arr_view, dest_buffer);
+#else
+      throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+    } else {
+      HostEngine::execute_copy_into<OutT>(arr_view, dest_buffer);
+    }
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::to_contiguous() const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    OwnerType result(this->m_shape, this->m_dtype);
+
+    auto copy_op = [&]<typename T>() {
+      T* dest_ptr = reinterpret_cast<T*>(result.data());
+      this->copy_into_astype(dest_ptr);
+    };
+
+    dispatch(this->m_dtype, copy_op);
+
+    return result;
+  }
+
+  template <class L, class S>
+  typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::astype(DType& dtype_out) const {
+    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
+
+    OwnerType result(this->m_shape, this->m_dtype);
+
+    auto copy_op = [&]<typename OutT>() {
+      OutT* dest_ptr = reinterpret_cast<OutT*>(result.data());
+      this->copy_into_astype<OutT>(dest_ptr);
+    };
+
+    dispatch(dtype_out, copy_op);
+
+    return result;
+  }
+
+  template <class L, class S>
+  void ArrayImpl<L, S>::assign(const ArrayLike auto& arr) {
+  //void ArrayImpl<L, S>::assign(const typename ArrayImpl<L, S>::ViewType& arr) {
+    if (this->m_read_only) {
+      throw type_error("Cannot modify a read-only view!");
+    }
+
     // Only deal with identical shapes for now
-    if (dest.ndim() != src.ndim()) {
+    if (this->ndim() != arr.ndim()) {
       throw type_error("Shapes must match for assignment");
     }
-    for (ssize_t i = 0; i < dest.ndim(); ++i) {
-      if (dest.shape(i) != src.shape(i)) {
+    for (ssize_t i = 0; i < this->ndim(); ++i) {
+      if (this->shape(i) != arr.shape(i)) {
         throw type_error("Shapes must match for assignment");
       }
     }
 
-    // Convert to views to decrease binary size with fewer template instantiations
-    auto dest_view = dest.view();
-    auto src_view = src.view();
+    auto dest_view = this->view();
+    auto src_view = arr.view();
 
-    auto assign_op = [&] <typename DestT> () {
+    auto assign_op = [&]<typename DestT>() {
       // Dispatch dest type - the engines do the double dispatch to get the src type
-      if constexpr (std::is_same_v<typename std::decay_t<Dest>::MemType, DevTag>) {
+      if constexpr (std::is_same_v<typename std::decay_t<ArrayImpl<L,S>>::MemType, DevTag>) {
 #ifdef __CUDACC__
         GPUEngine::execute_assign<DestT>(dest_view, src_view);
 #else
@@ -1990,74 +1110,31 @@ namespace ncarray {
         HostEngine::execute_assign<DestT>(dest_view, src_view);
       }
     };
-    dispatch(dest.dtype(), assign_op);
+    dispatch(this->dtype(), assign_op);
   }
 
   template <class L, class S>
-  inline void ArrayImpl<L, S>::copy_into(void* dest_buffer) const {
-    auto copy_op = [&]<typename T>() {
-      T* dest_ptr = reinterpret_cast<T*>(dest_buffer);
-      ncarray::copy_into(*this, dest_ptr);
-    };
-
-    dispatch(this->m_dtype, copy_op);
-  }
-
-  template <class L, class S>
-  template <typename OutT>
-  inline void ArrayImpl<L, S>::copy_into_astype(OutT* dest_buffer) const {
-    ncarray::copy_into(*this, dest_buffer);
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType ArrayImpl<L, S>::to_contiguous() const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    OwnerType result(this->m_shape, this->m_dtype);
-
-    auto copy_op = [&]<typename T>() {
-      T* dest_ptr = reinterpret_cast<T*>(result.data());
-      ncarray::copy_into(*this, dest_ptr);
-    };
-
-    dispatch(this->m_dtype, copy_op);
-
-    return result;
-  }
-
-  template <class L, class S>
-  inline typename ArrayImpl<L, S>::OwnerType
-  ArrayImpl<L, S>::astype(DType& dtype_out) const {
-    using OwnerType = typename ArrayImpl<L, S>::OwnerType;
-
-    OwnerType result(this->m_shape, this->m_dtype);
-
-    auto copy_op = [&]<typename OutT>() {
-      OutT* dest_ptr = reinterpret_cast<OutT*>(result.data());
-      ncarray::copy_into(*this, dest_ptr);
-    };
-
-    dispatch(dtype_out, copy_op);
-
-    return result;
-  }
-
-  template <class L, class S>
-  inline void ArrayImpl<L, S>::assign(const ArrayLike auto& arr) {
+  void ArrayImpl<L, S>::fill(Scalar val) {
     if (this->m_read_only) {
       throw type_error("Cannot modify a read-only view!");
     }
 
-    ncarray::assign(*this, arr);
-  }
+    // Convert to views to decrease binary size with fewer template instantiations
+    auto arr_view = this->view();
 
-  template <class L, class S>
-  inline void ArrayImpl<L, S>::fill(Scalar val) {
-    if (this->m_read_only) {
-      throw type_error("Cannot modify a read-only view!");
-    }
+    auto fill_op = [&]<typename T>() {
+      if constexpr (std::is_same_v<typename std::decay_t<ArrayImpl<L,S>>::MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_fill<T>(arr_view, val);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
+#endif
+      } else {
+        HostEngine::execute_fill<T>(arr_view, val);
+      }
+    };
 
-    ncarray::fill(*this, val);
+    dispatch(this->dtype(), fill_op);
   }
 
 } // namespace ncarray

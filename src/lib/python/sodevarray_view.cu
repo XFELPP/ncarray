@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/utilities.hh"
+#include "python/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"

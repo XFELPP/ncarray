@@ -12,6 +12,7 @@
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
+#include "ncarray/op_traits.hh"
 
 namespace ncarray {
   namespace host {

@@ -11,14 +11,19 @@
 
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
+#include "ncarray/expression.hh"
+#include "ncarray/op_traits.hh"
 
 #include "cub/cub.cuh"
 
+#ifdef __CUDACC_RTC__
+typedef long long ssize_t;
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
+#endif
 #endif
 
 namespace ncarray {
@@ -26,6 +31,8 @@ namespace ncarray {
     namespace impl {
       /**
        * Foundation function for generic block collective reductions.
+       *
+       * This function is setup for *grid-level* striding.
        *
        * A transformation operation is provided to turn a pair of indices and values
        * into a new type for the accumulation operation. After which the reduction
@@ -63,11 +70,66 @@ namespace ncarray {
         AccumT thread_val { identity };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
-          T& item = arr[i];
+          //T& item = arr[i];
+          T& item = static_index(arr, i);
           thread_val = reduce(thread_val, transform(i, item));
         }
 
         return BlockReduce(temp_storage).Reduce(thread_val, reduce);
+      }
+
+      /**
+       * Foundation function for generic warp collective reductions.
+       *
+       * This function is setup for striding over the number of reduced elements.
+       * How precisely the striding works is dictated by the transform operation.
+       * Unlike for block-wide collectives, the entire array is passed along with
+       * the local loop index. Complex indexing operations can be performed in the
+       * transformation to create the correct stride patterns.
+       *
+       * @tparam BlockSize The size of the block for CUB helpers (TPB - threads/block)
+       * @tparam T The datatype of the array.
+       * @tparam AccumT The datatype of accumulated output.
+       * @tparam ArrayT The *array* type (not datatype).
+       * @tparam TransformOp Type of the transformation function.
+       * @tparam ReduceOp Type of the reduction function.
+       * @param arr The input array.
+       * @param transform The transformation function.
+       * @param reduced_elems The number of elements to be reduced. This dictates the loop dimension.
+       * @param reduce The reduction function.
+       * @param identity The starting identity value for the operation.
+       */
+      template <
+        int BlockSize,
+        typename T,
+        typename AccumT,
+        //class ArrayT,
+        ArrayExpression Source,
+        class TransformOp,
+        class ReduceOp
+      >
+      __device__ inline AccumT warp_reduce_transform(const Source& src,
+                                                     //const ArrayT& arr,
+                                                     TransformOp transform,
+                                                     ssize_t reduced_elems,
+                                                     ReduceOp reduce,
+                                                     AccumT identity) {
+        constexpr int WarpsPerBlock { BlockSize / 32 };
+
+        using WarpReduce = cub::WarpReduce<AccumT>;
+        __shared__ typename WarpReduce::TempStorage temp_storage[WarpsPerBlock];
+
+        unsigned wid { threadIdx.x / 32 };
+        unsigned lane { threadIdx.x % 32 };
+        unsigned stride { 32 };
+
+        AccumT thread_val { identity };
+
+        for (ssize_t a = lane; a < reduced_elems; a += stride) {
+          thread_val = reduce(thread_val, transform(a, src));
+        }
+
+        return WarpReduce(temp_storage[wid]).Reduce(thread_val, reduce);
       }
     } // namespace impl
 
@@ -146,6 +208,36 @@ namespace ncarray {
                                                               identity);
     }
 
+    /*
+    struct VarTraits {
+      template <typename T>
+      using AccumT = VarAccumulator<typename op_traits<T>::truediv_type>;
+
+      template <typename T>
+      static NCA_HD inline AccumT<T> identity() {
+        using ResultT = op_traits<T>::truediv_type;
+        return AccumT(0, ResultT { 0.0 }, ResultT { 0.0 });
+      }
+
+      template <typename T>
+      static NCA_HD inline AccumT<T> transform(ssize_t idx, T val) {
+        using ResultT = op_traits<T>::truediv_type;
+
+        return AccumT<T>(1.0, static_cast<ResultT>(val), ResultT { 0.0 });
+      }
+
+      template <typename T>
+      static NCA_HD inline AccumT<T> reduce(AccumT<T> a, AccumT<T> b) {
+        return AccumT<T>::merge(a, b);
+      }
+
+      template <typename T>
+      static NCA_HD inline void atomic(AccumT<T>* dest, AccumT<T> val) {
+        using ResultT = op_traits<T>::truediv_type;
+        device::nca_atomic_accumulator_merge<ResultT>(res, block_res_var);
+      }
+    };
+*/
     /**
      * Find the minimum across the block.
      *
