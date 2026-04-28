@@ -70,7 +70,6 @@ namespace ncarray {
         AccumT thread_val { identity };
 
         for (ssize_t i = static_cast<ssize_t>(tid); i < arr.size(); i += stride) {
-          //T& item = arr[i];
           T& item = static_index(arr, i);
           thread_val = reduce(thread_val, transform(i, item));
         }
@@ -103,13 +102,11 @@ namespace ncarray {
         int BlockSize,
         typename T,
         typename AccumT,
-        //class ArrayT,
-        ArrayExpression Source,
+        ViewArrayLike Array,
         class TransformOp,
         class ReduceOp
       >
-      __device__ inline AccumT warp_reduce_transform(const Source& src,
-                                                     //const ArrayT& arr,
+      __device__ inline AccumT warp_reduce_transform(const Array& arr,
                                                      TransformOp transform,
                                                      ssize_t reduced_elems,
                                                      ReduceOp reduce,
@@ -126,7 +123,7 @@ namespace ncarray {
         AccumT thread_val { identity };
 
         for (ssize_t a = lane; a < reduced_elems; a += stride) {
-          thread_val = reduce(thread_val, transform(a, src));
+          thread_val = reduce(thread_val, transform(a, arr));
         }
 
         return WarpReduce(temp_storage[wid]).Reduce(thread_val, reduce);
@@ -208,36 +205,6 @@ namespace ncarray {
                                                               identity);
     }
 
-    /*
-    struct VarTraits {
-      template <typename T>
-      using AccumT = VarAccumulator<typename op_traits<T>::truediv_type>;
-
-      template <typename T>
-      static NCA_HD inline AccumT<T> identity() {
-        using ResultT = op_traits<T>::truediv_type;
-        return AccumT(0, ResultT { 0.0 }, ResultT { 0.0 });
-      }
-
-      template <typename T>
-      static NCA_HD inline AccumT<T> transform(ssize_t idx, T val) {
-        using ResultT = op_traits<T>::truediv_type;
-
-        return AccumT<T>(1.0, static_cast<ResultT>(val), ResultT { 0.0 });
-      }
-
-      template <typename T>
-      static NCA_HD inline AccumT<T> reduce(AccumT<T> a, AccumT<T> b) {
-        return AccumT<T>::merge(a, b);
-      }
-
-      template <typename T>
-      static NCA_HD inline void atomic(AccumT<T>* dest, AccumT<T> val) {
-        using ResultT = op_traits<T>::truediv_type;
-        device::nca_atomic_accumulator_merge<ResultT>(res, block_res_var);
-      }
-    };
-*/
     /**
      * Find the minimum across the block.
      *

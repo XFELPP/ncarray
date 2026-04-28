@@ -27,7 +27,6 @@
 #include "ncarray/mvnode.hh"
 #include "ncarray/op_traits.hh"
 #include "ncarray/reductions.hh"
-#include "ncarray/vmexpression.hh"
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -57,14 +56,36 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
 #ifdef __CUDACC__
   /**
-   * The HostEngine is ultimately responsible for dispatching all operations involving
-   * arrays on the host/CPU. This includes binary operations, reductions, unary
+   * The GPUEngine is ultimately responsible for dispatching all operations involving
+   * arrays on the GPU. This includes binary operations, reductions, unary
    * operations, copies, assignments, fills and so on.
    */
   struct GPUEngine {
 
     // --- Binary Operations --- //
 
+    /**
+     * Execute a binary expression.
+     *
+     * In reality, this function dispatches all operations with the exception of
+     * single array reductions, for which there an axis-aware, and full-to-scalar
+     * functions exist.
+     *
+     * A runtime compiler uses NVRTC to JIT compile an expression which is built
+     * via a dynamic expression node object when writing operator-based expressions.
+     * The runtime compiler will cache the PTX in the user cache directory for faster
+     * lookup on subsequent runs (given that the expression is identical). A fallback
+     * routine is also provided for larger expressions which is AOT compiled and included
+     * in the shared library.
+     *
+     * @tparam DestT The datatype of the final output array.
+     * @tparam Expr The class of the expression object.
+     * @tparam Result The class of the result array.
+     * @param expr The runtime-constructed node containing the operands and operations.
+     * @param result The pre-allocated result array. The `expr` node will be able to
+     *        provide the correct size/shape and datatype to construct this array to
+     *        pass into this function.
+     */
     template <typename DestT, class Expr, OwningArrayLike Result>
     static void execute_binary_expression(const Expr& expr, Result& result) {
       const int size { static_cast<int>(result.size()) };
@@ -140,26 +161,6 @@ namespace ncarray {
     }
 
     // --- Axis-Aware Reductions --- //
-    /*
-    template <typename T, class ArrayT>
-    static Scalar execute_sum(const ArrayT& arr) {
-      using AccumT = typename op_traits<T>::sum_type;
-      CircularDevicePool<AccumT>& mem_pool = CircularDevicePool<AccumT>::instance();
-      using MemEntry = typename CircularDevicePool<AccumT>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = AccumT { 0 };
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-
-      sum_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      return Scalar { *ptrs.h_ptr };
-    }
-    */
 
     /**
      * A simple helper to determine if the size is a power of 2.
@@ -169,20 +170,15 @@ namespace ncarray {
     /**
      * Perform reduction along a set of axes.
      *
-     * Depending on the level of reduction on the properties of the array dimensions
-     * a number of paths may be taken:
-     * 1. For small reductions (e.g. binning by 2x2) binning is fully parallelized at
-     *    1 thread per bin.
-     * 2. At moderate levels, warp-wide collectives are used with 1 bin per warp.
-     * 3. For larger factors block-wide binning.
+     * Currently, only a block-wide binning approach is used for all reduction factors.
+     * Kernels are available that can perform 1 bin per warp, or 1 bin per thread,
+     * for users interested in testing these for their use cases.
      *
      * For full reduction to a scalar, there is another function available with
      * generalized atomics across the grid.
      *
-     * @tparam Traits The holder struct for the type of reduction.
      * @tparam SrcT The datatype of the array.
-     * @tparam OutT The datatype of the final output array - this is not necessarily
-     *              the same as the accumulator datatype.
+     * @tparam Traits The holder struct for the type of reduction.
      * @tparam Array The array type.
      * @tparam Result The output array type.
      * @param arr Array to be reduced.
@@ -192,10 +188,10 @@ namespace ncarray {
     template <
       typename SrcT,
       ReductionTraits<SrcT> Traits,
-      ArrayExpression Expr,
-      ArrayLike Result
+      ViewArrayLike Array,
+      ViewArrayLike Result
     >
-    static void execute_reduce_axes(const Expr& expr,
+    static void execute_reduce_axes(const Array& arr,
                                     const ReductionParams& params,
                                     Result& res) {
       using AccumT = typename Traits::AccumT<SrcT>;
@@ -206,145 +202,37 @@ namespace ncarray {
 
       constexpr int TPB { 256 };
 
-      ssize_t reduction_factor { expr.size() / res.size() };
+      ssize_t reduction_factor { arr.size() / res.size() };
 
       Reducer<SrcT, Traits> reducer;
 
-      if (reduction_factor < 32 && res.size() >= 1024) {
-        int blocks { static_cast<int>((res.size() + TPB - 1) / TPB) };
-
-        res.fill(Scalar(Traits::template fill<SrcT>()));
-
-        if constexpr (Expression<Expr>) {
-          axes_bin_parallel_kernel<SrcT, AccumT><<<blocks, TPB>>>(expr,
-                                                                  res.view(),
-                                                                  params,
-                                                                  reduction_factor,
-                                                                  identity,
-                                                                  reducer);
-        } else {
-          axes_bin_parallel_kernel<SrcT, AccumT><<<blocks, TPB>>>(expr.view(),
-                                                                  res.view(),
-                                                                  params,
-                                                                  reduction_factor,
-                                                                  identity,
-                                                                  reducer);
+      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
+      bool use_shifts { true };
+      for (ssize_t dim = 0; dim < arr.ndim(); ++dim) {
+        if (!GPUEngine::is_pow2(arr.shape()[dim])) {
+          use_shifts = false;
+          break;
         }
-      } else if (reduction_factor <= 1024 && res.size() >= 32) {
-        int warps_per_block { TPB / 32 };
-        int blocks {
-          static_cast<int>(res.size() + warps_per_block - 1) / warps_per_block
-        };
+      }
 
-        res.fill(Scalar(Traits::template fill<SrcT>()));
+      AccumT* d_scratch { nullptr };
+      cudaMalloc(reinterpret_cast<void**>(&d_scratch),
+                 res.size() * sizeof(AccumT));
 
-        if constexpr (Expression<Expr>) {
-          axes_warp_reduce_kernel<TPB, SrcT, AccumT><<<blocks, TPB>>>(expr,
-                                                                      res.view(),
-                                                                      params,
-                                                                      reduction_factor,
-                                                                      identity,
-                                                                      reducer);
-        } else {
-          axes_warp_reduce_kernel<TPB, SrcT, AccumT><<<blocks, TPB>>>(expr.view(),
-                                                                      res.view(),
-                                                                      params,
-                                                                      reduction_factor,
-                                                                      identity,
-                                                                      reducer);
-        }
+      fill_raw_kernel<AccumT><<<blocks, TPB>>>(d_scratch, identity, res.size());
+
+      if (use_shifts) {
+        axes_reduce_kernel<true, SrcT><<<blocks, TPB>>>(arr,
+                                                        d_scratch,
+                                                        res.view(),
+                                                        params,
+                                                        reducer);
       } else {
-
-        int blocks { static_cast<int>((expr.size() + TPB - 1) / TPB) };
-        bool use_shifts { true };
-        for (ssize_t dim = 0; dim < expr.ndim(); ++dim) {
-          if (!GPUEngine::is_pow2(expr.shape()[dim])) {
-            use_shifts = false;
-            break;
-          }
-        }
-
-        AccumT* d_scratch { nullptr };
-        cudaMalloc(reinterpret_cast<void**>(&d_scratch),
-                   res.size() * sizeof(AccumT));
-
-        fill_raw_kernel<AccumT><<<blocks, TPB>>>(d_scratch, identity, res.size());
-
-        auto reduce_op = [] __device__ (SrcT item,
-                                        auto scratch_ptr,
-                                        auto out_proxy,
-                                        ssize_t idx,
-                                        ssize_t j) {
-          AccumT val = Traits::template transform<SrcT>(idx, item);
-
-          if constexpr (sizeof(AccumT) == 4 || sizeof(AccumT) == 8) {
-
-            // For supported types, use warp collectives to accumulate rapidly
-            unsigned mask = __match_any_sync(__activemask(),
-                                             static_cast<unsigned long long>(j));
-            int leader = __ffs(mask) - 1;
-            int lane = threadIdx.x % 32;
-
-            for (unsigned offset = 16; offset > 0; offset /= 2) {
-              AccumT other = nca_shfl_down(mask, val, offset);
-
-              if ((mask >> (lane + offset)) & 1) {
-                val += other;
-              }
-            }
-
-            if (lane == leader) {
-              // Write once globally
-              OutT& out_item = out_proxy;
-              if constexpr (std::is_same_v<OutT, AccumT>) {
-                Traits::template atomic<SrcT>(&out_item, val);
-              } else {
-                // NOTE: This case is probably unreachable due to the previous size check
-                //       But, for completeness...
-                Traits::template dual_atomic<OutT, SrcT>(&scratch_ptr[j], val, &out_item);
-              }
-            }
-          } else {
-
-            // Complicated or otherwise unsupported types use many global atomics
-            OutT& out_item = out_proxy; // NOTE: Cannot use auto - must coerce type
-            if constexpr (std::is_same_v<OutT, AccumT>) {
-              Traits::template atomic<SrcT>(&out_item, val);
-            } else {
-              Traits::template dual_atomic<OutT, SrcT>(&scratch_ptr[j], val, &out_item);
-            }
-          }
-        };
-
-        if (use_shifts) {
-          if constexpr (Expression<Expr>) {
-            axes_reduce_kernel<true, SrcT><<<blocks, TPB>>>(expr,
-                                                            d_scratch,
-                                                            res.view(),
-                                                            params,
-                                                            reduce_op);
-          } else {
-            axes_reduce_kernel<true, SrcT><<<blocks, TPB>>>(expr.view(),
-                                                            d_scratch,
-                                                            res.view(),
-                                                            params,
-                                                            reduce_op);
-          }
-        } else {
-          if constexpr (Expression<Expr>) {
-            axes_reduce_kernel<false, SrcT><<<blocks, TPB>>>(expr,
-                                                             d_scratch,
-                                                             res.view(),
-                                                             params,
-                                                             reduce_op);
-          } else {
-            axes_reduce_kernel<false, SrcT><<<blocks, TPB>>>(expr.view(),
-                                                             d_scratch,
-                                                             res.view(),
-                                                             params,
-                                                             reduce_op);
-          }
-        }
+        axes_reduce_kernel<false, SrcT><<<blocks, TPB>>>(arr,
+                                                         d_scratch,
+                                                         res.view(),
+                                                         params,
+                                                         reducer);
       }
 
       cudaDeviceSynchronize();
@@ -353,33 +241,17 @@ namespace ncarray {
     // --- Full Reductions (To Scalar) --- //
 
     /**
-     * Perform reduction along a set of axes.
+     * Perform a complete reduction of the array to a single scalar.
      *
-     * Depending on the level of reduction on the properties of the array dimensions
-     * a number of paths may be taken:
-     * 1. For small reductions (e.g. binning by 2x2) binning is fully parallelized at
-     *    1 thread per bin.
-     * 2. At moderate levels, warp-wide collectives are used with 1 bin per warp.
-     * 3. For larger factors block-wide binning.
-     *
-     * For full reduction to a scalar, there is another function available with
-     * generalized atomics across the grid.
-     *
-     * @tparam Traits The holder struct for the type of reduction.
      * @tparam SrcT The datatype of the array.
-     * @tparam OutT The datatype of the final output array - this is not necessarily
-     *              the same as the accumulator datatype.
+     * @tparam Traits The holder struct for the type of reduction.
      * @tparam Array The array type.
-     * @tparam Result The output array type.
      * @param arr Array to be reduced.
-     * @param params Reduction parameters - i.e., axes to be reduced.
-     * @param res Pre-allocated array for the output data.
      */
     template <
       typename SrcT,
       ReductionTraits<SrcT> Traits,
       class Array
-      //ArrayExpression Source
     >
     static Scalar execute_full_reduce(const Array& arr) {
       using AccumT = typename Traits::AccumT<SrcT>;
@@ -409,173 +281,7 @@ namespace ncarray {
 
       return Scalar { final_res };
     }
-    /*
 
-    template <typename T, class ArrayT>
-    static Scalar execute_mean(const ArrayT& arr) {
-      using AccumT = typename op_traits<T>::sum_type;
-      using ResultT = typename op_traits<T>::truediv_type;
-
-      CircularDevicePool<AccumT>& mem_pool = CircularDevicePool<AccumT>::instance();
-      using MemEntry = typename CircularDevicePool<AccumT>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = AccumT { 0 };
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-
-      sum_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      return Scalar {
-        static_cast<ResultT>(*ptrs.h_ptr) / static_cast<double>(arr.size())
-      };
-    }
-    template <typename T, class ArrayT>
-    static Scalar execute_var(const ArrayT& arr, ssize_t ddof) {
-      using ResultT = typename op_traits<T>::truediv_type;
-
-      using Accumulator = VarAccumulator<ResultT>;
-      CircularDevicePool<Accumulator>& mem_pool =
-        CircularDevicePool<Accumulator>::instance();
-      using MemEntry = typename CircularDevicePool<Accumulator>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = { 0.0, ResultT { 0.0 }, ResultT { 0.0 } };
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-
-      var_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      double n = ptrs.h_ptr->count;
-      ResultT var = ptrs.h_ptr->m2 / (n - static_cast<ResultT>(ddof));
-      return Scalar { var };
-    }
-    template <typename T, class ArrayT>
-    static Scalar execute_std(const ArrayT& arr, ssize_t ddof) {
-      Scalar var_scalar = execute_var<T>(arr, ddof);
-      using ResultT = typename op_traits<T>::truediv_type;
-
-      ResultT var = std::get<ResultT>(var_scalar);
-      return Scalar { nca_sqrt(var) }; // nca_sqrt (custom_types.hh) handles vec types
-    }
-
-    template <typename T, class ArrayT>
-    static Scalar execute_max(const ArrayT& arr) {
-      CircularDevicePool<T>& mem_pool = CircularDevicePool<T>::instance();
-      using MemEntry = typename CircularDevicePool<T>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = op_traits<T>::lowest();
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-
-      max_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      return Scalar { *ptrs.h_ptr };
-    }
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_argmax(const A& arr) {
-      using Pair = KeyValPair<ssize_t, T>;
-      CircularDevicePool<Pair>& mem_pool = CircularDevicePool<Pair>::instance();
-      using MemEntry = typename CircularDevicePool<Pair>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      Pair max_pair { -1, op_traits<T>::lowest() };
-      *ptrs.h_ptr = max_pair;
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
-      argmax_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      Pair final_max_pair = *ptrs.h_ptr;
-      return Scalar { final_max_pair.key };
-    }
-
-    template <typename T, class ArrayT>
-    static Scalar execute_min(const ArrayT& arr) {
-      CircularDevicePool<T>& mem_pool = CircularDevicePool<T>::instance();
-      using MemEntry = typename CircularDevicePool<T>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = op_traits<T>::max();
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
-
-      min_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      return Scalar { *ptrs.h_ptr };
-    }
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_argmin(const A& arr) {
-      using Pair = KeyValPair<ssize_t, T>;
-      CircularDevicePool<Pair>& mem_pool = CircularDevicePool<Pair>::instance();
-      using MemEntry = typename CircularDevicePool<Pair>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      Pair min_pair { -1, op_traits<T>::max() };
-      *ptrs.h_ptr = min_pair;
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
-      argmin_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      Pair final_min_pair = *ptrs.h_ptr;
-      return Scalar { final_min_pair.key };
-    }
-
-    // Logical reductions - all and any
-    template <typename T, ArrayLike A>
-    static Scalar execute_all(const A& arr) {
-      CircularDevicePool<bool>& mem_pool = CircularDevicePool<bool>::instance();
-      using MemEntry = typename CircularDevicePool<bool>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = true;
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
-      all_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      return Scalar { *ptrs.h_ptr };
-    }
-
-    template <typename T, ArrayLike A>
-    static Scalar execute_any(const A& arr) {
-      CircularDevicePool<bool>& mem_pool = CircularDevicePool<bool>::instance();
-      using MemEntry = typename CircularDevicePool<bool>::MemEntry;
-
-      MemEntry ptrs { mem_pool.next() };
-
-      *ptrs.h_ptr = false;
-
-      constexpr int TPB { 256 };
-      int blocks { static_cast<int>((arr.size() + TPB - 1) / TPB) };
-      any_kernel<TPB, T><<<blocks, TPB>>>(arr.view(), ptrs.d_ptr);
-      cudaDeviceSynchronize();
-
-      return Scalar { *ptrs.h_ptr };
-    }
-*/
     // --- Copy and Modification --- //
 
     template <typename T, class ArrayT>

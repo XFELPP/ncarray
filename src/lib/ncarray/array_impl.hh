@@ -70,14 +70,6 @@ using std::uint64_t;
 #endif
 #endif
 
-#ifndef NCA_DNI
-#ifdef __CUDACC__
-#define NCA_DNI __noinline__
-#else
-#define NCA_DNI
-#endif
-#endif
-
 #ifndef NCARRAY_MAX_NDIM
 #define NCARRAY_MAX_NDIM 10
 #endif
@@ -533,6 +525,8 @@ namespace ncarray {
 
     // --- Int/slice/ellipsis variadic indexing to view --- //
 
+#if __cplusplus >= 202302L
+
     template <typename... Args>
     requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
     NCA_HD ViewType operator[](Args&&... idx_args) const {
@@ -547,6 +541,8 @@ namespace ncarray {
       }
       return this->template out_from_axes_ptr<ViewType>(this->m_data, axes);
     }
+
+#endif
 
     template <typename... Args>
     requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
@@ -565,6 +561,50 @@ namespace ncarray {
 #endif // nvrtc guard
 
     // --- Linearized indexing to reference (non-const and const) --- //
+
+    NCA_HD ArrayElementProxy operator[](ssize_t idx) {
+      void* out_data = const_cast<void*>(this->data());
+      ssize_t lin_idx { idx };
+
+#if defined(__CUDACC__)
+#pragma unroll
+#elif defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC unroll 10
+#elif defined(__clang__)
+#pragma clang loop unroll(full)
+#endif
+      for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
+        ssize_t dim_shape = this->shape(dim);
+        ssize_t local_idx = lin_idx % dim_shape;
+
+        lin_idx /= this->shape(dim);
+
+        out_data = this->advance(out_data, dim, local_idx);
+      }
+
+      return { out_data, this->dtype() };
+    }
+
+    NCA_HD const ArrayElementProxy operator[](ssize_t idx) const {
+      const void* out_data = this->data();
+      ssize_t lin_idx { idx };
+
+#if defined(__CUDACC__)
+#pragma unroll
+#elif defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC unroll 10
+#elif defined(__clang__)
+#pragma clang loop unroll(full)
+#endif
+      for (ssize_t dim = this->ndim() - 1; dim >= 0; --dim) {
+        ssize_t dim_shape = this->shape(dim);
+        ssize_t local_idx = lin_idx % dim_shape;
+        lin_idx /= dim_shape;
+        out_data = this->advance(out_data, dim, local_idx);
+      }
+
+      return { const_cast<void*>(out_data), this->dtype() };
+    }
 
     template <typename Coords>
     NCA_HD void lin_to_md(ssize_t idx, Coords& coords) {
@@ -1291,7 +1331,7 @@ namespace ncarray {
   // --- Indexing Helpers --- //
 
   template <class Array>
-  NCA_HD inline NCA_DNI ArrayElementProxy static_index(Array arr, unsigned idx) {
+  NCA_HD inline ArrayElementProxy static_index(Array arr, unsigned idx) {
     switch (arr.ndim()) {
     case 1: {
       StaticCoords<1, unsigned> coords;
@@ -1368,4 +1408,4 @@ namespace ncarray {
   }
 } // namespace ncarray
 
-#endif // NCARRAY_POLICIES_HH
+#endif // NCARRAY_ARRAY_IMPL_HH

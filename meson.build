@@ -158,18 +158,15 @@ installed_headers = [
     'src/lib/ncarray/build_macro.hh',
     'src/lib/ncarray/custom_types.hh',
     'src/lib/ncarray/dtype.hh',
-    'src/lib/ncarray/engines/gpuengine.hh',
-    'src/lib/ncarray/engines/hostengine.hh',
     'src/lib/ncarray/engines.hh',
     'src/lib/ncarray/expression.hh',
-    'src/lib/ncarray/host/elementwise.hh',
-    'src/lib/ncarray/host/reductions.hh',
     'src/lib/ncarray/indexing.hh',
     'src/lib/ncarray/mvnode.hh',
     'src/lib/ncarray/layout.hh',
     'src/lib/ncarray/ncarrays.hh',
     'src/lib/ncarray/op_code.hh',
     'src/lib/ncarray/op_traits.hh',
+    'src/lib/ncarray/reductions.hh',
     'src/lib/ncarray/soarrays.hh',
     'src/lib/ncarray/storage.hh',
 ]
@@ -180,6 +177,27 @@ py3.install_sources(
     subdir: 'ncarray/include/ncarray',
 )
 
+installed_host_headers = [
+    'src/lib/ncarray/host/casts.hh',
+    'src/lib/ncarray/host/elementwise.hh',
+]
+
+py3.install_sources(
+    installed_headers,
+    pure: false,
+    subdir: 'ncarray/include/ncarray/host',
+)
+
+installed_engines_headers = [
+    'src/lib/ncarray/engines/gpuengine.hh',
+    'src/lib/ncarray/engines/hostengine.hh',
+]
+
+py3.install_sources(
+    installed_headers,
+    pure: false,
+    subdir: 'ncarray/include/ncarray/engines',
+)
 
 if nca_has_cuda
     jit_headers = [

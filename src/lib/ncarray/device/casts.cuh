@@ -17,7 +17,7 @@ namespace ncarray {
     }
 
     template <typename DestT>
-    __device__ inline __noinline__ DestT device_cast(int src_idx, const void* ptr) {
+    __device__ inline DestT device_cast(int src_idx, const void* ptr) {
       switch (static_cast<DType>(src_idx)) {
       case DType::bool_: {
         return vm_cast_logic<DestT, bool>(ptr);

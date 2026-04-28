@@ -815,7 +815,6 @@ namespace ncarray {
     return result;
   }
 
-
   // --- Full Reductions (To Scalar) --- //
 
   template <class L, class S>
@@ -922,7 +921,7 @@ namespace ncarray {
     auto mean_operation = [&] <typename SrcT> () -> Scalar {
       if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        GPUEngine::execute_full_reduce<SrcT, MeanTraits>(arr_view);
+        return GPUEngine::execute_full_reduce<SrcT, MeanTraits>(arr_view);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif

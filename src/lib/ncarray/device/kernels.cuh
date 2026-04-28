@@ -138,32 +138,85 @@ namespace ncarray {
     j += coord * params.strides[dim];                                       \
   }                                                                         \
                                                                             \
-  T item;                                                                   \
-  if constexpr (Expression<Expr>) {                                         \
-    item = expr.template eval<T>(coords);                                   \
-  } else {                                                                  \
-    T& arr_item = expr[coords];                                             \
-    item = arr_item;                                                        \
-  }                                                                         \
+  T& item = arr[coords];                                                    \
                                                                             \
   auto out_proxy = static_index(out, j);                                    \
   reduce_op(item, scratch, out_proxy, idx, j);
 
+  /**
+   * Perform a reduction using 1 bin per block along specified axes.
+   *
+   * @tparam Pow2 If dims are all powers of 2, division/modulos can be substituted for bitwise ops.
+   * @tparam T The datatype of the array.
+   * @tparam AccumT The datatype of the accumulator for the reduction.
+   * @tparam Array The input array type.
+   * @tparam OutT The output array type.
+   * @tparam ReducerType The reducer type, specifying the reduction operation.
+   * @param arr The input array.
+   * @param scratch A scratch array for holding intermediate results.
+   * @param out The output array for holding the reduced result.
+   * @param params The reduction parameters specifying axes to reduce.
+   * @param reducer The reducer object holding the reduction lambdas.
+   */
   template <
     bool Pow2,
     typename T,
     typename AccumT,
-    ArrayExpression Expr,
+    ViewArrayLike Array,
     ViewArrayLike OutT,
-    class ReduceOp
+    class ReducerType
   >
-  __global__ void axes_reduce_kernel(const Expr expr,
+  __global__ void axes_reduce_kernel(const Array arr,
                                      AccumT* scratch,
                                      OutT out,
                                      ReductionParams params,
-                                     ReduceOp reduce_op) {
+                                     ReducerType reducer) {
     ssize_t idx { static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x) };
-    if (idx < expr.size()) {
+
+    if (idx < arr.size()) {
+
+      auto reduce_op = [&] __device__ (T item,
+                                       auto scratch_ptr,
+                                       auto out_proxy,
+                                       ssize_t idx,
+                                       ssize_t j) {
+        using OutDType = typename ReducerType::OutT;
+        AccumT val = reducer.transform(idx, item);
+
+        if constexpr (sizeof(AccumT) == 4 || sizeof(AccumT) == 8) {
+          unsigned mask = __match_any_sync(__activemask(),
+                                           static_cast<unsigned long long>(j));
+
+          int leader = __ffs(mask) - 1;
+          int lane = threadIdx.x % 32;
+
+          for (unsigned offset = 16; offset > 0; offset /= 2) {
+            AccumT other = nca_shfl_down(mask, val, offset);
+
+            if ((mask >> (lane + offset)) & 1) {
+              val += other;
+            }
+          }
+
+          if (lane == leader) {
+            OutDType& out_item = out_proxy;
+
+            if constexpr (std::is_same_v<OutDType, AccumT>) {
+              reducer.atomic(&out_item, val);
+            } else {
+              reducer.dual_atomic(&scratch_ptr[j], val, &out_item);
+            }
+          }
+        } else {
+          OutDType& out_item = out_proxy;
+          if constexpr (std::is_same_v<OutDType, AccumT>) {
+            reducer.atomic(&out_item, val);
+          } else {
+            reducer.dual_atomic(&scratch_ptr[j], val, &out_item);
+          }
+        }
+      };
+
       switch (params.ndim) {
       case 1: {
         AXES_REDUCE_STATIC_COORDS(1)
@@ -236,13 +289,7 @@ namespace ncarray {
       }                                                                     \
     }                                                                       \
                                                                             \
-    T item;                                                                 \
-    if constexpr (Expression<Expr>) {                                       \
-      item = expr.template eval<T>(coords);                                 \
-    } else {                                                                \
-      T& arr_item = expr[coords];                                           \
-      item = arr_item;                                                      \
-    }                                                                       \
+    T& item = arr[coords];                                                  \
                                                                             \
     auto global_idx { base_idx + bin_offsets[a] };                          \
     bin_sum = reducer.reduce(bin_sum, reducer.transform(global_idx, item)); \
@@ -253,15 +300,29 @@ namespace ncarray {
   OutDType& out_item = static_index(out, j);                                \
   out_item = res;
 
-
+  /**
+   * Perform a reduction using 1 bin per thread along specified axes.
+   *
+   * @tparam T The datatype of the array.
+   * @tparam AccumT The datatype of the accumulator for the reduction.
+   * @tparam Array The input array type.
+   * @tparam OutT The output array type.
+   * @tparam ReducerType The reducer type, specifying the reduction operation.
+   * @param arr The input array.
+   * @param out The output array for holding the reduced result.
+   * @param params The reduction parameters specifying axes to reduce.
+   * @param reduced_elements Total number of reduced elements.
+   * @param identity The identity value for this kind of reduction.
+   * @param reducer The reducer object holding the reduction lambdas.
+   */
   template <
     typename T,
     typename AccumT,
-    ArrayExpression Expr,
+    ViewArrayLike Array,
     ViewArrayLike OutT,
     class ReducerType
   >
-  __global__ void axes_bin_parallel_kernel(Expr expr,
+  __global__ void axes_bin_parallel_kernel(Array arr,
                                            OutT out,
                                            ReductionParams params,
                                            ssize_t reduced_elements,
@@ -356,7 +417,7 @@ namespace ncarray {
     }                                                                           \
   }                                                                             \
                                                                                 \
-  auto warp_transform = [=] __device__ (ssize_t a, const Expr& expr_inner) {    \
+  auto warp_transform = [=] __device__ (ssize_t a, const Array& arr_inner) {    \
     StaticCoords<RANK, unsigned> coords = base_coords;                          \
     ssize_t offset_i { 0 };                                                     \
     ssize_t tmp_a { a };                                                        \
@@ -371,13 +432,7 @@ namespace ncarray {
       }                                                                         \
     }                                                                           \
                                                                                 \
-    T item;                                                                     \
-    if constexpr (Expression<Expr>) {                                           \
-      item = expr_inner.template eval<T>(coords);                               \
-    } else {                                                                    \
-      T& arr_item = expr_inner[coords];                                         \
-      item = arr_item;                                                          \
-    }                                                                           \
+    T& item = arr_inner[coords];                                                \
                                                                                 \
     return reducer.transform(base_idx + offset_i, item);                        \
   };                                                                            \
@@ -387,7 +442,7 @@ namespace ncarray {
   };                                                                            \
                                                                                 \
   AccumT warp_res =                                                             \
-    device::impl::warp_reduce_transform<BlockSize, T, AccumT>(expr,             \
+    device::impl::warp_reduce_transform<BlockSize, T, AccumT>(arr,              \
                                                               warp_transform,   \
                                                               reduced_elements, \
                                                               reduce_op,        \
@@ -400,15 +455,31 @@ namespace ncarray {
     out_item = res;                                                             \
   }
 
+  /**
+   * Perform a reduction using 1 bin per warp along specified axes.
+   *
+   * @tparam BlockSize The size of the block for the kernel launch.
+   * @tparam T The datatype of the array.
+   * @tparam AccumT The datatype of the accumulator for the reduction.
+   * @tparam Array The input array type.
+   * @tparam OutT The output array type.
+   * @tparam ReducerType The reducer type, specifying the reduction operation.
+   * @param arr The input array.
+   * @param out The output array for holding the reduced result.
+   * @param params The reduction parameters specifying axes to reduce.
+   * @param reduced_elements Total number of reduced elements.
+   * @param identity The identity value for this kind of reduction.
+   * @param reducer The reducer object holding the reduction lambdas.
+   */
   template <
     int BlockSize,
     typename T,
     typename AccumT,
-    ArrayExpression Expr,
+    ViewArrayLike Array,
     ViewArrayLike OutT,
     class ReducerType
   >
-  __global__ void axes_warp_reduce_kernel(const Expr expr,
+  __global__ void axes_warp_reduce_kernel(const Array arr,
                                           OutT out,
                                           ReductionParams params,
                                           ssize_t reduced_elements,
@@ -417,9 +488,11 @@ namespace ncarray {
     // One reduction bin per warp
     unsigned wid { (blockIdx.x * (blockDim.x / 32)) + (threadIdx.x / 32) };
     ssize_t j { static_cast<ssize_t>(wid) };
+
     if (j >= out.size()) {
       return;
     }
+
     switch (params.ndim) {
     case 1: {
       WARP_REDUCE_STATIC_COORDS(1)
@@ -465,6 +538,17 @@ namespace ncarray {
     }
   }
 
+  /**
+   * Perform a global reduction of the array to a single scalar.
+   *
+   * @tparam BlockSize The size of the block for the kernel launch.
+   * @tparam T The datatype of the array.
+   * @tparam Array The input array type.
+   * @tparam ReducerType The reducer type, specifying the reduction operation.
+   * @param arr The input array.
+   * @param reducer The reducer object holding the reduction lambdas.
+   * @param accum Pointer to the memory for the reduced result.
+   */
   template <int BlockSize, typename T, ViewArrayLike Array, class ReducerType>
   __global__ void reduce_kernel(const Array arr,
                                 ReducerType reducer,

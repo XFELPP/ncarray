@@ -305,19 +305,19 @@ typedef SSIZE_T ssize_t;
   template void ncarray::HostEngine::execute_reduce_axes<T,                                        \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>,                                         \
-      ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>>(                                       \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>>(                                        \
           const ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&,                              \
           const ncarray::ReductionParams&,                                                         \
-          ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>&);
+          ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&);
 
 #define EXTERN_HOST_VM_REDUCE(T, L, Trait)                                                         \
   extern template void ncarray::HostEngine::execute_reduce_axes<T,                                 \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>,                                         \
-      ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>>(                                       \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>>(                                        \
           const ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&,                              \
           const ncarray::ReductionParams&,                                                         \
-          ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>&);
+          ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&);
 
 /* NOT CURRENTLY DEFINED YET!
 #define INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, Trait)                                               \
@@ -400,6 +400,26 @@ typedef SSIZE_T ssize_t;
 // --- DEVICE MACROS (CUDA-Guarded) ---
 
 #define INSTANTIATE_DEV_VM_REDUCE(T, L, Trait)                                                     \
+  template __global__ void axes_reduce_kernel<true, T,                                             \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
+  template __global__ void axes_reduce_kernel<false, T,                                            \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
   template void ncarray::GPUEngine::execute_reduce_axes<T,                                         \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
@@ -409,21 +429,53 @@ typedef SSIZE_T ssize_t;
           ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
 
 #define EXTERN_DEV_VM_REDUCE(T, L, Trait)                                                          \
+  extern template __global__ void axes_reduce_kernel<true, T,                                      \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
+  extern template __global__ void axes_reduce_kernel<false, T,                                     \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
   extern template void ncarray::GPUEngine::execute_reduce_axes<T,                                  \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
-      ncarray::ArrayImpl<ncarray::L, ncarray::DevOwnerPolicy>>(                                    \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
           const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&,                           \
           const ncarray::ReductionParams&,                                                         \
-          ncarray::ArrayImpl<ncarray::L, ncarray::DevOwnerPolicy>&);
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
 
 #define INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, Trait)                                                \
+  template __global__ void reduce_kernel<256, T,                                                   \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                            \
+          ncarray::Reducer<T, Trait>,                                                              \
+          typename ncarray::Reducer<T, Trait>::AccumT*);                                           \
   template ncarray::Scalar ncarray::GPUEngine::execute_full_reduce<T,                              \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
           const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
 
 #define EXTERN_DEV_VM_FULL_REDUCE(T, L, Trait)                                                     \
+  extern template __global__ void reduce_kernel<256, T,                                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                            \
+          ncarray::Reducer<T, Trait>,                                                              \
+          typename ncarray::Reducer<T, Trait>::AccumT*);                                           \
   extern template ncarray::Scalar ncarray::GPUEngine::execute_full_reduce<T,                       \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \

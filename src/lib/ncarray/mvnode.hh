@@ -80,14 +80,6 @@ using std::uint16_t;
 #endif
 #endif
 
-#ifndef NCA_DNI
-#ifdef __CUDACC__
-#define NCA_DNI __noinline__
-#else
-#define NCA_DNI
-#endif
-#endif
-
 namespace ncarray {
 #ifndef __CUDACC_RTC__
 
@@ -363,7 +355,7 @@ namespace ncarray {
 #endif
 
     template <typename DestT, typename Coords>
-    NCA_HD inline NCA_DNI DestT eval(const Coords& coords) const {
+    NCA_HD inline DestT eval(const Coords& coords) const {
       DestT values[NOperands];
 
       #pragma unroll NViews
@@ -390,7 +382,7 @@ namespace ncarray {
       return res;
     }
     template <typename DestT>
-    NCA_HD inline NCA_DNI DestT apply_op(DestT res, DestT leaf, OpCode op) const {
+    NCA_HD inline DestT apply_op(DestT res, DestT leaf, OpCode op) const {
       if (op == OpCode::ADD) {
         return res + leaf;
       } else if (op == OpCode::SUB) {
@@ -535,7 +527,7 @@ namespace ncarray {
     NCA_HD inline ssize_t itemsize() const { return ncarray::itemsize(this->dtype()); }
 
     template <typename DestT, typename Coords>
-    NCA_HD inline NCA_DNI DestT eval(const Coords& coords) const {
+    NCA_HD inline DestT eval(const Coords& coords) const {
       DestT stack[NInstrs] { 0 };
       int top { -1 };
 
