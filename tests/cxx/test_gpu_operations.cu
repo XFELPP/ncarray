@@ -36,13 +36,13 @@ TEST(NCArrayOperationsTest, GPUBinaryOps) {
   dev_arr1.fill(2.0f);
   dev_arr2.fill(4.0f);
 
-  auto dev_sum = dev_arr1 + dev_arr2; // A kernel!
+  ncarray::NCDevArray dev_sum = dev_arr1 + dev_arr2; // A kernel!
   cudaDeviceSynchronize();
   ncarray::NCArray host_sum(shape, ncarray::DType::float32);
   dev_sum.copy_into(host_sum.data());
 
-  for (ssize_t i = 0; i < dev_sum.size(); ++i) {
-    ASSERT_FLOAT_EQ(static_cast<float>(host_sum(0, 0, i)), 6.0f)
+  for (unsigned i = 0; i < dev_sum.size(); ++i) {
+    ASSERT_FLOAT_EQ(static_cast<float>(host_sum[{0, 0, i}]), 6.0f)
       << "GPU addition failed at index " << i;
   }
 }
@@ -155,12 +155,12 @@ TEST(NCArrayOperationsTest, GPUScalarArithmetic) {
   dev_arr.fill(10.0f);
 
   // Test scalar broadcasting
-  auto res = dev_arr + 5.0f;
+  ncarray::NCDevArray res = dev_arr + 5.0f;
 
   ncarray::NCArray host_res(shape, ncarray::DType::float32);
   res.copy_into(host_res.data());
 
-  EXPECT_EQ(static_cast<float>(host_res(0)), 15.0f);
+  EXPECT_EQ(static_cast<float>(host_res[{0}]), 15.0f);
 }
 
 TEST(NCArrayOperationsTest, GPUComparison) {
@@ -171,26 +171,26 @@ TEST(NCArrayOperationsTest, GPUComparison) {
 #ifdef __CUDACC__
   // Fill only the first values - so we slice and send sliced view in
   using sl = ncarray::Slice;
-  auto view = dev_arr[sl(0,5)];
+  auto view = dev_arr(sl(0,5));
   iota_kernel<float><<<1, 5, 0, ncarray::alloc_stream()>>>(view);
 #endif
 
-  auto mask = dev_arr > 5.0f;
+  ncarray::NCDevArray mask = dev_arr > 5.0f;
 
   EXPECT_EQ(mask.dtype(), ncarray::DType::bool_);
 
   ncarray::NCArray host_res(shape, ncarray::DType::bool_);
   mask.copy_into(host_res.data());
-  EXPECT_FALSE(static_cast<bool>(host_res(0)));
-  EXPECT_FALSE(static_cast<bool>(host_res(1)));
-  EXPECT_FALSE(static_cast<bool>(host_res(2)));
-  EXPECT_FALSE(static_cast<bool>(host_res(3)));
-  EXPECT_FALSE(static_cast<bool>(host_res(4)));
-  EXPECT_TRUE(static_cast<bool>(host_res(5)));
-  EXPECT_TRUE(static_cast<bool>(host_res(6)));
-  EXPECT_TRUE(static_cast<bool>(host_res(7)));
-  EXPECT_TRUE(static_cast<bool>(host_res(8)));
-  EXPECT_TRUE(static_cast<bool>(host_res(9)));
+  EXPECT_FALSE(static_cast<bool>(host_res[{0}]));
+  EXPECT_FALSE(static_cast<bool>(host_res[{1}]));
+  EXPECT_FALSE(static_cast<bool>(host_res[{2}]));
+  EXPECT_FALSE(static_cast<bool>(host_res[{3}]));
+  EXPECT_FALSE(static_cast<bool>(host_res[{4}]));
+  EXPECT_TRUE(static_cast<bool>(host_res[{5}]));
+  EXPECT_TRUE(static_cast<bool>(host_res[{6}]));
+  EXPECT_TRUE(static_cast<bool>(host_res[{7}]));
+  EXPECT_TRUE(static_cast<bool>(host_res[{8}]));
+  EXPECT_TRUE(static_cast<bool>(host_res[{9}]));
 }
 
 #endif

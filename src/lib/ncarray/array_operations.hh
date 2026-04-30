@@ -1034,15 +1034,20 @@ namespace ncarray {
   template <typename OutT>
   void ArrayImpl<L, S>::copy_into_astype(OutT* dest_buffer) const {
     auto arr_view = this->view();
-    if constexpr (std::is_same_v<typename std::decay_t<ArrayImpl<L,S>>::MemType, DevTag>) {
+
+    auto copy_op = [&] <typename SrcT> () {
+      if constexpr (std::is_same_v<typename std::decay_t<ArrayImpl<L,S>>::MemType, DevTag>) {
 #ifdef __CUDACC__
-      GPUEngine::execute_copy_into<OutT>(arr_view, dest_buffer);
+        GPUEngine::execute_copy_into<SrcT>(arr_view, dest_buffer);
 #else
-      throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
 #endif
-    } else {
-      HostEngine::execute_copy_into<OutT>(arr_view, dest_buffer);
-    }
+      } else {
+        HostEngine::execute_copy_into<SrcT>(arr_view, dest_buffer);
+      }
+    };
+
+    dispatch(this->dtype(), copy_op);
   }
 
   template <class L, class S>

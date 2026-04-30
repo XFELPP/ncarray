@@ -375,7 +375,12 @@ namespace ncarray {
     };
 
     std::string nca_inc_dir = get_install_include_path();
-    std::string jit_inc_dir = (fs::path(nca_inc_dir) / "jit").string();
+    std::string jit_inc_dir;
+    if (const char* env_inc = std::getenv("NCARRAY_JIT_INCLUDE_DIR")) {
+      jit_inc_dir = std::string(env_inc);
+    } else {
+      jit_inc_dir = (fs::path(nca_inc_dir) / "jit").string();
+    }
 
     std::string nca_opt { "-I" + nca_inc_dir };
     std::string jit_opt { "-I" + jit_inc_dir };

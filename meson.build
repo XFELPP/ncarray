@@ -404,53 +404,62 @@ deps_for_tests = [gtest_dep, ncarray_dep]
 if nca_has_cuda
     deps_for_tests += cuda_dep
     deps_for_tests += ncdevarray_dep
+    deps_for_tests += ncdevarrayjit_dep
 endif
 
-#test_index = executable(
-#    'test_array_indexing',
-#    [
-#        'tests/cxx/test_indexing.cc',
-#    ],
-#    dependencies: deps_for_tests,
-#    install: false,
-#    include_directories: ncarray_headers,
-#)
-#test('Testing array indexing.', test_index, verbose: true)
+test_index = executable(
+    'test_array_indexing',
+    [
+        'tests/cxx/test_indexing.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing array indexing.', test_index, verbose: true)
 
-#test_ops = executable(
-#    'test_array_operations',
-#    [
-#        'tests/cxx/test_operations.cc',
-#    ],
-#    dependencies: deps_for_tests,
-#    install: false,
-#    include_directories: ncarray_headers,
-#)
-#test('Testing array operations.', test_ops, verbose: true)
+test_ops = executable(
+    'test_array_operations',
+    [
+        'tests/cxx/test_operations.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing array operations.', test_ops, verbose: true)
 
-#test_float_vecs = executable(
-#    'test_float_vecs',
-#    [
-#        'tests/cxx/test_float_vecs.cc',
-#    ],
-#    dependencies: deps_for_tests,
-#    install: false,
-#    include_directories: ncarray_headers,
-#)
-#test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
+test_float_vecs = executable(
+    'test_float_vecs',
+    [
+        'tests/cxx/test_float_vecs.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
 
 if nca_has_cuda
-#    test_gpu_ops = executable(
-#        'test_gpu_array_operations',
-#        [
-#            'tests/cxx/test_gpu_operations.cu',
-#        ],
-#        dependencies: deps_for_tests,
-#        install: false,
-#        include_directories: ncarray_headers,
-#        cuda_args: nca_cuda_args,
-#    )
-#    test('Testing array operations.', test_gpu_ops, verbose: true)
+    test_gpu_ops = executable(
+        'test_gpu_array_operations',
+        [
+            'tests/cxx/test_gpu_operations.cu',
+        ],
+        dependencies: deps_for_tests,
+        install: false,
+        include_directories: ncarray_headers,
+        cuda_args: nca_cuda_args,
+    )
+    test(
+        'Testing GPU array operations.',
+        test_gpu_ops,
+        env: [
+            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+        ],
+        verbose: true
+    )
 endif
 
 #### Example Programs ####

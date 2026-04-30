@@ -525,7 +525,7 @@ namespace ncarray {
 
     // --- Int/slice/ellipsis variadic indexing to view --- //
 
-#if __cplusplus >= 202302L
+#if __cplusplus > 202002L
 
     template <typename... Args>
     requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))

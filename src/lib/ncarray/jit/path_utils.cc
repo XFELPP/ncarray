@@ -79,6 +79,12 @@ namespace ncarray {
   }
 
   std::string get_install_include_path() {
+    if (const char* env_inc = std::getenv("NCARRAY_INCLUDE_DIR")) {
+      // This provides a mechanism to inject an include directory when not installed
+      // E.g., the test suite can run from the build dir using this env var
+      return std::string(env_inc);
+    }
+
     fs::path lib_file = fs::absolute(get_install_library_path());
 
     // The install hierarchy is something like:
