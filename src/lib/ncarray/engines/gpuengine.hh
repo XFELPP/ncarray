@@ -101,54 +101,59 @@ namespace ncarray {
         if (can_linearize(expr)) {
           auto n_views { expr.layouts.size() };
           auto n_scalars { expr.scalars.size() };
+          DType src_dtype { expr.dtypes[0] };
           auto kernel =
             RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
-                                                        expr.dtype(),
+                                                        src_dtype,
                                                         n_views,
                                                         n_scalars,
                                                         expr.instrs,
                                                         expr.soarray);
 
-          // NOTE: I would just use a normal vector<DestT> ... but vector<bool> problems...
-          using ScalarStorageT = std::conditional_t<std::is_same_v<DestT, bool>,
-                                                    std::uint8_t,
-                                                    DestT>;
-          std::vector<ScalarStorageT> casted_scalars;
-          casted_scalars.reserve(expr.scalars.size());
+          auto launch_op = [&] <typename SrcT> () {
+            // NOTE: I would just use a normal vector<DestT> ... but vector<bool> problems...
+            using ScalarStorageT = std::conditional_t<std::is_same_v<SrcT, bool>,
+                                                      std::uint8_t,
+                                                      SrcT>;
+            std::vector<ScalarStorageT> casted_scalars;
+            casted_scalars.reserve(expr.scalars.size());
 
-          auto cast_op = [&](auto&& val) {
-            using ScalarT = std::decay_t<decltype(val)>;
-            // Second cast is a NOOP for everything but bool
-            return static_cast<ScalarStorageT>(op_traits<ScalarT>::template cast<DestT>(val));
+            auto cast_op = [&](auto&& val) {
+              using ScalarT = std::decay_t<decltype(val)>;
+              // Second cast is a NOOP for everything but bool
+              return static_cast<ScalarStorageT>(op_traits<ScalarT>::template cast<SrcT>(val));
+            };
+            for (const auto& scalar : expr.scalars) {
+              casted_scalars.push_back(std::visit(cast_op, scalar));
+            }
+
+            std::vector<void*> args;
+            for (std::size_t i = 0; i < n_views; ++i) {
+              args.push_back(const_cast<void*>(reinterpret_cast<const void*>(&expr.data[i])));
+              args.push_back(const_cast<void*>(reinterpret_cast<const void*>(&expr.layouts[i])));
+            }
+
+            for (std::size_t i = 0; i < n_scalars; ++i) {
+              args.push_back(static_cast<void*>(&casted_scalars[i]));
+            }
+
+            auto view = result.view();
+            args.push_back(reinterpret_cast<void*>(&view));
+
+            CUresult launch_res = cuLaunchKernel(kernel,
+                                                 blocks, 1, 1, // Grid dims  (x, y, z)
+                                                 TPB, 1, 1,    // Block dims (x, y, z)
+                                                 0,            // Shmem in bytes
+                                                 0,            // Stream
+                                                 args.data(),  // Kernel args
+                                                 NULL);
+
+            if (launch_res != CUDA_SUCCESS) {
+              throw std::runtime_error("Kernel launch failed!");
+            }
           };
-          for (const auto& scalar : expr.scalars) {
-            casted_scalars.push_back(std::visit(cast_op, scalar));
-          }
 
-          std::vector<void*> args;
-          for (std::size_t i = 0; i < n_views; ++i) {
-            args.push_back(const_cast<void*>(reinterpret_cast<const void*>(&expr.data[i])));
-            args.push_back(const_cast<void*>(reinterpret_cast<const void*>(&expr.layouts[i])));
-          }
-
-          for (std::size_t i = 0; i < n_scalars; ++i) {
-            args.push_back(static_cast<void*>(&casted_scalars[i]));
-          }
-
-          auto view = result.view();
-          args.push_back(reinterpret_cast<void*>(&view));
-
-          CUresult launch_res = cuLaunchKernel(kernel,
-                                               blocks, 1, 1, // Grid dims  (x, y, z)
-                                               TPB, 1, 1,    // Block dims (x, y, z)
-                                               0,            // Shmem in bytes
-                                               0,            // Stream
-                                               args.data(),  // Kernel args
-                                               NULL);
-
-          if (launch_res != CUDA_SUCCESS) {
-            throw std::runtime_error("Kernel launch failed!");
-          }
+          dispatch(src_dtype, launch_op);
           cuCtxSynchronize();
         } else {
           auto vm = DynamicExprMVNode(expr);
@@ -393,7 +398,6 @@ namespace ncarray {
           // Create a temporary contiguous buffer then cudaMemcpy
           DestT* d_tmp { nullptr };
           CHECK_CUDA_ERROR(cudaMalloc(&d_tmp, arr.size() * sizeof(DestT)));
-          //copy_into_kernel<DestT, SrcT><<<blocks, TPB>>>(d_tmp, arr.view());
 
           auto kernel = RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
                                                                     arr.dtype(),
@@ -481,11 +485,6 @@ namespace ncarray {
       if constexpr (dest_is_dev) {
         if constexpr (src_is_dev) {
           // Device to device
-          //auto dev_dev_op = [&] <typename SrcT> () {
-          //  copy_view_into_view_kernel<DestT, SrcT><<<blocks, TPB>>>(dest, src);
-          //};
-          //dispatch(src.dtype(), dev_dev_op);
-
           auto kernel =
             RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
                                                                        src.dtype(),
@@ -521,11 +520,13 @@ namespace ncarray {
           };
           dispatch(src.dtype(), host_dev_op);
 
+          // NOTE: Since we are using tmp, it now has dest's DType, and it is always
+          //       an NCOffsets-style Array -- so the last argument must be false.
           auto kernel =
             RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                       src.dtype(),
+                                                                       dest.dtype(),
                                                                        dest_is_soarr,
-                                                                       src_is_soarr);
+                                                                       false);
           auto dest_view = dest.view();
           auto src_view = tmp.view();
 
@@ -546,25 +547,18 @@ namespace ncarray {
           cuCtxSynchronize();
 
           cudaDeviceSynchronize();
-
-          //copy_view_into_view_kernel<DestT, DestT><<<blocks, TPB>>>(dest, tmp_view);
-          cudaDeviceSynchronize();
         }
       } else if constexpr (src_is_dev) {
         // Device to host
         NCDevArray tmp(dest.ndim(), dest.shape(), dest_dtype);
         auto tmp_view = tmp.view();
 
-        //auto dev_host_op = [&]<typename SrcT>() {
-        //  copy_view_into_view_kernel<DestT, SrcT><<<blocks, TPB>>>(tmp_view, src);
-        //};
-        //dispatch(src.dtype(), dev_host_op);
-        //cudaDeviceSynchronize();
-
+        // NOTE: Since we are using tmp, it now has dest's DType, and it is always
+        //       an NCOffsets-style Array -- so the last argument must be false.
         auto kernel =
           RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
                                                                      src.dtype(),
-                                                                     dest_is_soarr,
+                                                                     false,
                                                                      src_is_soarr);
         auto dest_view = tmp_view;
         auto src_view = src.view();

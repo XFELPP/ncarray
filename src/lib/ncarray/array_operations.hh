@@ -1084,7 +1084,6 @@ namespace ncarray {
 
   template <class L, class S>
   void ArrayImpl<L, S>::assign(const ArrayLike auto& arr) {
-  //void ArrayImpl<L, S>::assign(const typename ArrayImpl<L, S>::ViewType& arr) {
     if (this->m_read_only) {
       throw type_error("Cannot modify a read-only view!");
     }

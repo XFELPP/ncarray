@@ -389,7 +389,7 @@ namespace ncarray {
 
     template <typename DestT, typename Coords>
     NCA_HD inline DestT eval(const Coords& coords) const {
-      DestT values[NOperands];
+      ArrT values[NOperands];
 
       #pragma unroll NViews
       for (int i = 0; i < NViews; ++i) {
@@ -397,7 +397,7 @@ namespace ncarray {
         const void* leaf_ptr = layout.advance(data[i], coords);
 
         const ArrT item = *reinterpret_cast<const ArrT*>(leaf_ptr);
-        values[i] = op_traits<ArrT>::template cast<DestT>(item);
+        values[i] = item;
       }
 
       #pragma unroll NScalars
@@ -405,31 +405,30 @@ namespace ncarray {
         values[NViews + i] = scalars[i];
       }
 
-      DestT res { values[op_map[0]] };
+      ArrT res { values[op_map[0]] };
 
       #pragma unroll NOps
       for (int i = 0; i < NOps; ++i) {
-        DestT next_v { values[op_map[i + 1]] };
-        res = this->template apply_op<DestT>(res, next_v, ops[i]);
+        ArrT next_v { values[op_map[i + 1]] };
+        res = this->apply_op(res, next_v, ops[i]);
       }
-      return res;
+      return op_traits<ArrT>::template cast<DestT>(res);
     }
-    template <typename DestT>
-    NCA_HD inline DestT apply_op(DestT res, DestT leaf, OpCode op) const {
+    NCA_HD inline ArrT apply_op(ArrT res, ArrT leaf, OpCode op) const {
       if (op == OpCode::ADD) {
-        return res + leaf;
+        return static_cast<ArrT>(res + leaf);
       } else if (op == OpCode::SUB) {
-        return res - leaf;
+        return static_cast<ArrT>(res - leaf);
       } else if (op == OpCode::MUL) {
-        if constexpr (is_same_v<DestT, bool>) {
-          return res && leaf;
+        if constexpr (is_same_v<ArrT, bool>) {
+          return static_cast<ArrT>(res && leaf);
         } else {
-          return res * leaf;
+          return static_cast<ArrT>(res * leaf);
         }
       } else if (op == OpCode::DIV) {
         bool is_finite { false };
 
-        if (leaf == DestT(0)) {
+        if (leaf == ArrT(0)) {
           if constexpr (requires { res.real(); }) {
             is_finite = isfinite(res.real()) && isfinite(res.imag());
           } else {
@@ -437,10 +436,26 @@ namespace ncarray {
           }
           return is_finite ? nan("") : res;
         }
-        return res / leaf;
+        return static_cast<ArrT>(res / leaf);
         // Comparisons
+      } else if (op == OpCode::EQ) {
+        return static_cast<ArrT>(res == leaf);
+      } else if (op == OpCode::NE) {
+        return static_cast<ArrT>(res != leaf);
+      } else if (op == OpCode::LT) {
+        return static_cast<ArrT>(op_traits<ArrT>::less(res, leaf));
+      } else if (op == OpCode::LE) {
+        return static_cast<ArrT>(op_traits<ArrT>::le(res, leaf));
+      } else if (op == OpCode::GT) {
+        return static_cast<ArrT>(op_traits<ArrT>::greater(res, leaf));
+      } else if (op == OpCode::GE) {
+        return static_cast<ArrT>(op_traits<ArrT>::ge(res, leaf));
+      } else if (op == OpCode::LAND) {
+        return static_cast<ArrT>(res && leaf);
+      } else if (op == OpCode::LOR) {
+        return static_cast<ArrT>(res || leaf);
       }
-      return DestT{};
+      return ArrT{};
     }
 
     NCA_HD inline const ssize_t* shape() const { return layouts[0].shape(); }
@@ -456,7 +471,7 @@ namespace ncarray {
     int stack_depth = 0;
     bool seen_arr { false };
     bool expr_soarr { false };
-    DType ref_dtype = node.dtype();
+    DType ref_dtype;
     for (const auto& instr : node.instrs) {
       OpCode op = get_op(instr);
       if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
@@ -464,6 +479,7 @@ namespace ncarray {
 
         if (!seen_arr) {
           seen_arr = true;
+          ref_dtype = node.dtypes[get_index(instr)];
           if (op == OpCode::LOAD_SOARR) {
             expr_soarr = true;
           }

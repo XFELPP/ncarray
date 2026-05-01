@@ -239,7 +239,7 @@ namespace ncarray {
     }
 
     for (int i = 0; i < n_scalars; ++i) {
-      d_params += ", " + dest_t_name + " s" + std::to_string(i);
+      d_params += ", " + src_t_name + " s" + std::to_string(i);
       packing_logic += "  mvnode.scalars[" + std::to_string(i) + "] = s" + std::to_string(i) + ";\n";
     }
 
@@ -269,7 +269,7 @@ namespace ncarray {
       std::to_string(n_scalars)     + ", " +
       std::to_string(instrs.size()) + ", " +
       src_t_name                    + ", " +
-      dest_t_name                   + ", " + // We will pre-cast all scalars to DestT
+      src_t_name                    + ", " + // We will pre-cast all scalars to ArrT
       "ncarray::DevTag"             + ", " +
       layout_t + "> mvnode;\n";
 
