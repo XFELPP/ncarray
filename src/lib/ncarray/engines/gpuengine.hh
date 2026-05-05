@@ -102,26 +102,28 @@ namespace ncarray {
           auto n_views { expr.layouts.size() };
           auto n_scalars { expr.scalars.size() };
           DType src_dtype { expr.dtypes[0] };
+          DType work_dtype { expr.work_dtype };
           auto kernel =
             RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
                                                         src_dtype,
+                                                        work_dtype,
                                                         n_views,
                                                         n_scalars,
                                                         expr.instrs,
                                                         expr.soarray);
 
-          auto launch_op = [&] <typename SrcT> () {
+          auto launch_op = [&] <typename WorkT> () {
             // NOTE: I would just use a normal vector<DestT> ... but vector<bool> problems...
-            using ScalarStorageT = std::conditional_t<std::is_same_v<SrcT, bool>,
+            using ScalarStorageT = std::conditional_t<std::is_same_v<WorkT, bool>,
                                                       std::uint8_t,
-                                                      SrcT>;
+                                                      WorkT>;
             std::vector<ScalarStorageT> casted_scalars;
             casted_scalars.reserve(expr.scalars.size());
 
             auto cast_op = [&](auto&& val) {
               using ScalarT = std::decay_t<decltype(val)>;
               // Second cast is a NOOP for everything but bool
-              return static_cast<ScalarStorageT>(op_traits<ScalarT>::template cast<SrcT>(val));
+              return static_cast<ScalarStorageT>(op_traits<ScalarT>::template cast<WorkT>(val));
             };
             for (const auto& scalar : expr.scalars) {
               casted_scalars.push_back(std::visit(cast_op, scalar));
@@ -153,7 +155,7 @@ namespace ncarray {
             }
           };
 
-          dispatch(src_dtype, launch_op);
+          dispatch(work_dtype, launch_op);
           cuCtxSynchronize();
         } else {
           auto vm = DynamicExprMVNode(expr);
@@ -199,9 +201,9 @@ namespace ncarray {
     static void execute_reduce_axes(const Array& arr,
                                     const ReductionParams& params,
                                     Result& res) {
-      using AccumT = typename Traits::AccumT<SrcT>;
+      using AccumT = typename Traits::template AccumT<SrcT>;
 
-      using OutT = typename Traits::OutT<SrcT>;
+      using OutT = typename Traits::template OutT<SrcT>;
 
       AccumT identity { Traits::template identity<SrcT>() };
 
@@ -220,11 +222,23 @@ namespace ncarray {
         }
       }
 
+      int res_blocks { static_cast<int>((res.size() + TPB - 1) / TPB) };
       AccumT* d_scratch { nullptr };
-      cudaMalloc(reinterpret_cast<void**>(&d_scratch),
-                 res.size() * sizeof(AccumT));
+      if constexpr (!std::is_same_v<AccumT, OutT>) {
+        cudaMalloc(reinterpret_cast<void**>(&d_scratch),
+                   res.size() * sizeof(AccumT));
 
-      fill_raw_kernel<AccumT><<<blocks, TPB>>>(d_scratch, identity, res.size());
+        fill_raw_kernel<AccumT><<<res_blocks, TPB>>>(d_scratch, identity, res.size());
+
+        OutT out_identity { Traits::template fill<SrcT>() };
+        fill_raw_kernel<OutT><<<res_blocks, TPB>>>(reinterpret_cast<OutT*>(res.data()),
+                                                   out_identity,
+                                                   res.size());
+      } else {
+        fill_raw_kernel<AccumT><<<res_blocks, TPB>>>(reinterpret_cast<AccumT*>(res.data()),
+                                                     identity,
+                                                     res.size());
+      }
 
       if (use_shifts) {
         axes_reduce_kernel<true, SrcT><<<blocks, TPB>>>(arr,
@@ -240,6 +254,9 @@ namespace ncarray {
                                                          reducer);
       }
 
+      if constexpr (!std::is_same_v<AccumT, OutT>) {
+        cudaFree(d_scratch);
+      }
       cudaDeviceSynchronize();
     }
 

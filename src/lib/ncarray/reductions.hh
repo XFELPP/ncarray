@@ -196,7 +196,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto fill() { return op_traits<T>::lowest(); }
+    static NCA_HD inline auto fill() { return OutT<T> { -1 }; }
 
     template <typename T>
     static NCA_HD inline AccumT<T> transform(ssize_t idx, T val) {
@@ -297,7 +297,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto fill() { return op_traits<T>::max(); }
+    static NCA_HD inline auto fill() { return OutT<T> { -1 }; }
 
     template <typename T>
     static NCA_HD inline AccumT<T> transform(ssize_t idx, T val) {
@@ -383,11 +383,13 @@ namespace ncarray {
     template <typename T>
     using OutT = AccumT<T>;
 
-    template <typename T> static NCA_HD inline AccumT<T> identity() {
+    template <typename T>
+    static NCA_HD inline AccumT<T> identity() {
       return AccumT<T> { 0 };
     }
 
-    template <typename T> static NCA_HD inline auto fill() {
+    template <typename T>
+    static NCA_HD inline auto fill() {
       return AccumT<T> { 0 };
     }
 

@@ -73,6 +73,7 @@ namespace ncarray {
 
   CUfunction RuntimeCompiler::get_expr_kernel(DType dest_t,
                                               DType src_t,
+                                              DType work_t,
                                               int n_views,
                                               int n_scalars,
                                               const std::vector<Instruction>& instrs,
@@ -80,6 +81,7 @@ namespace ncarray {
     std::string arch_opt = get_arch_opt();
     std::string kernel_str = get_expression_kernel_str(dest_t,
                                                        src_t,
+                                                       work_t,
                                                        n_views,
                                                        n_scalars,
                                                        instrs,
@@ -204,6 +206,7 @@ namespace ncarray {
 
   std::string RuntimeCompiler::get_expression_kernel_str(DType dest_t,
                                                          DType src_t,
+                                                         DType work_t, // Intermediate evals and Scalars
                                                          int n_views,
                                                          int n_scalars,
                                                          const std::vector<Instruction>& instrs,
@@ -214,6 +217,7 @@ namespace ncarray {
 
     std::string dest_t_name = dispatch(dest_t, get_dtype_name);
     std::string src_t_name = dispatch(src_t, get_dtype_name);
+    std::string work_t_name = dispatch(work_t, get_dtype_name);
 
     std::string result_type;
     std::string layout_t;
@@ -239,7 +243,7 @@ namespace ncarray {
     }
 
     for (int i = 0; i < n_scalars; ++i) {
-      d_params += ", " + src_t_name + " s" + std::to_string(i);
+      d_params += ", " + work_t_name + " s" + std::to_string(i);
       packing_logic += "  mvnode.scalars[" + std::to_string(i) + "] = s" + std::to_string(i) + ";\n";
     }
 
@@ -268,8 +272,8 @@ namespace ncarray {
       std::to_string(n_views)       + ", " +
       std::to_string(n_scalars)     + ", " +
       std::to_string(instrs.size()) + ", " +
-      src_t_name                    + ", " +
-      src_t_name                    + ", " + // We will pre-cast all scalars to ArrT
+      src_t_name                    + ", " + // Array datatype ArrT
+      work_t_name                   + ", " + // We will pre-cast all scalars to WorkT
       "ncarray::DevTag"             + ", " +
       layout_t + "> mvnode;\n";
 

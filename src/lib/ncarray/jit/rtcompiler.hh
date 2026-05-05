@@ -114,6 +114,7 @@ namespace ncarray {
 
     CUfunction get_expr_kernel(DType dest_t,
                                DType src_t,
+                               DType work_t,
                                int n_views,
                                int n_scalars,
                                const std::vector<Instruction>& instrs,
@@ -143,6 +144,7 @@ namespace ncarray {
 
     std::string get_expression_kernel_str(DType dest_t,
                                           DType src_t,
+                                          DType work_t,
                                           int n_views,
                                           int n_scalars,
                                           const std::vector<Instruction>& instrs,

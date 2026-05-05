@@ -24,10 +24,13 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #ifdef __CUDACC_RTC__
+#include <cuda/std/cmath>
 #include <cuda/std/complex>
 #include <cuda/std/cstdint>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+
+using cuda::std::isfinite;
 
 using cuda::std::complex;
 using cuda::std::is_same_v;
@@ -44,9 +47,12 @@ using cuda::std::uint32_t;
 using cuda::std::uint64_t;
 
 #else
+#include <cmath>
 #include <complex>
 #include <cstdint>
 #include <limits>
+
+using std::isfinite;
 
 using std::complex;
 using std::is_same_v;
@@ -124,6 +130,53 @@ namespace ncarray {
         return static_cast<To>(val);
       }
     }
+
+    NCA_HD static bool land(const T& a, const T& b) {
+      if constexpr (requires { a.real(); }) {
+        // Complex
+        if (a.real() && b.real()) {
+          return a.imag() && b.imag();
+        }
+        return false;
+      } else if constexpr (Vector4DType<T>) {
+        return (a.x && b.x) && (a.y && b.y) && (a.z && b.z) && (a.w && b.w);
+      } else if constexpr (Vector3DType<T>) {
+        return (a.x && b.x) && (a.y && b.y) && (a.z && b.z);
+      } else if constexpr (Vector2DType<T>) {
+        return (a.x && b.x) && (a.y && b.y);
+      } else {
+        return a && b;
+      }
+    }
+    NCA_HD static bool lor(const T& a, const T& b) {
+      if constexpr (requires { a.real(); }) {
+        // Complex
+        if (a.real() || b.real()) {
+          return true;
+        }
+        return a.imag() || b.imag();
+      } else if constexpr (Vector4DType<T>) {
+        return (a.x || b.x) || (a.y || b.y) || (a.z || b.z) || (a.w || b.w);
+      } else if constexpr (Vector3DType<T>) {
+        return (a.x || b.x) || (a.y || b.y) || (a.z || b.z);
+      } else if constexpr (Vector2DType<T>) {
+        return (a.x || b.x) || (a.y || b.y);
+      } else {
+        return a || b;
+      }
+    }
+
+    NCA_HD static bool isfinite(const T& v) {
+      if constexpr (Vector4DType<T>) {
+        return ::isfinite(v.x) && ::isfinite(v.y) && ::isfinite(v.z) && ::isfinite(v.w);
+      } else if constexpr (Vector3DType<T>) {
+        return ::isfinite(v.x) && ::isfinite(v.y) && ::isfinite(v.z);
+      } else if constexpr (Vector2DType<T>) {
+        return ::isfinite(v.x) && ::isfinite(v.y);
+      } else {
+        return ::isfinite(v);
+      }
+    }
   };
 
   template <typename T>
@@ -199,6 +252,23 @@ namespace ncarray {
         // Complex to scalar cast (narrowed to real)
         return static_cast<To>(val.real());
       }
+    }
+
+    NCA_HD static bool land(const complex<T>& a, const complex<T>& b) {
+      if (a.real() && b.real()) {
+        return a.imag() && b.imag();
+      }
+      return false;
+    }
+    NCA_HD static bool lor(const complex<T>& a, const complex<T>& b) {
+      if (a.real() || b.real()) {
+        return true;
+      }
+      return a.imag() || b.imag();
+    }
+
+    NCA_HD static bool isfinite(const complex<T>& v) {
+      return ::isfinite(v.real()) && ::isfinite(v.imag());
     }
   };
 

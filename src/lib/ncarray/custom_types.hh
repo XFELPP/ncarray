@@ -626,34 +626,6 @@ namespace ncarray {
     oss << "}";
     return oss;
   }
-
-  template <Vector2DType T>
-  NCA_HD bool isfinite(const T& v) {
-    if constexpr (Vector4DType<T>) {
-      return
-        std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z) && std::isfinite(v.w);
-    } else if constexpr (Vector3DType<T>) {
-      return
-        std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-    } else {
-      return std::isfinite(v.x) && std::isfinite(v.y);
-    }
-  }
-#else
-  template <Vector2DType T>
-  NCA_HD bool isfinite(const T& v) {
-    if constexpr (Vector4DType<T>) {
-      return
-        cuda::std::isfinite(v.x) && cuda::std::isfinite(v.y) &&
-        cuda::std::isfinite(v.z) && cuda::std::isfinite(v.w);
-    } else if constexpr (Vector3DType<T>) {
-      return
-        cuda::std::isfinite(v.x) && cuda::std::isfinite(v.y) &&
-        cuda::std::isfinite(v.z);
-    } else {
-      return cuda::std::isfinite(v.x) && cuda::std::isfinite(v.y);
-    }
-  }
 #endif
 
   template <typename T>

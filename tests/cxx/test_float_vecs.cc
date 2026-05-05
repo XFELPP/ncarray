@@ -9,6 +9,7 @@
 #include "gtest/gtest.h"
 
 #include "ncarray/custom_types.hh"
+#include "ncarray/op_traits.hh"
 
 TEST(CustomTypes, VectorArithmetic) {
     ncarray::Float2 a { 1.0f, 2.0f };
@@ -54,7 +55,7 @@ TEST(CustomTypes, CastingAndBroadcasting) {
   EXPECT_FLOAT_EQ(casted.z, 0.0f); // Should be zero-filled
 
   ncarray::Float2 inf_vec { 1.0f, std::numeric_limits<float>::infinity() };
-  EXPECT_FALSE(ncarray::isfinite(inf_vec));
+  EXPECT_FALSE(ncarray::op_traits<ncarray::Float2>::isfinite(inf_vec));
 
   ncarray::Double4 vec4_d(1.23f);
   EXPECT_FLOAT_EQ(vec4_d.x, 1.23);
@@ -66,5 +67,5 @@ TEST(CustomTypes, CastingAndBroadcasting) {
   EXPECT_FLOAT_EQ(casted_d.z, 0.0);
 
   ncarray::Double2 inf_vec_d { 1.0, std::numeric_limits<double>::infinity() };
-  EXPECT_FALSE(ncarray::isfinite(inf_vec_d));
+  EXPECT_FALSE(ncarray::op_traits<ncarray::Double2>::isfinite(inf_vec_d));
 }

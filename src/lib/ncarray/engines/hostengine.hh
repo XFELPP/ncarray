@@ -52,6 +52,7 @@ namespace ncarray {
 
       bool use_32bit { (size < (1LL << 31)) };
 
+      auto vm = DynamicExprMVNode<HostTag>(expr);
       auto launch_recursive = [&](auto rank) {
         constexpr int NDim = decltype(rank)::value;
 
@@ -70,12 +71,12 @@ namespace ncarray {
             coords[0] = i;
 
             if constexpr (NDim > 1) {
-              host::execute_expression_recursive<DestT, CoordsT>(expr,
+              host::execute_expression_recursive<DestT, CoordsT>(vm,
                                                                  result,
                                                                  coords,
                                                                  starting_axis);
             } else {
-              result[coords] = expr.template eval<DestT>(coords);
+              result[coords] = vm.template eval<DestT>(coords);
             }
           }
         } else {
@@ -88,12 +89,12 @@ namespace ncarray {
             CoordsT coords;
             coords[0] = i;
             if constexpr (NDim > 1) {
-              host::execute_expression_recursive<DestT, CoordsT>(expr,
+              host::execute_expression_recursive<DestT, CoordsT>(vm,
                                                                  result,
                                                                  coords,
                                                                  starting_axis);
             } else {
-              result[coords] = expr.template eval<DestT>(coords);
+              result[coords] = vm.template eval<DestT>(coords);
             }
           }
         }
