@@ -597,6 +597,8 @@ namespace ncarray {
     uint8_t n_scalars { 0 };
     uint8_t n_instrs { 0 };
 
+    size_t arr_alignment { 16 };
+
 #ifndef __CUDACC_RTC__
     DynamicExprMVNode(const ExprMVNode<MemTag>& node,
                       const uint8_t* buf,
@@ -607,6 +609,7 @@ namespace ncarray {
       : n_layouts(n_arrays_)
       , n_scalars(n_scalars_)
       , n_instrs(n_instrs_)
+      , arr_alignment(alignment)
     {
       expr_dtype = node.expr_dtype;
       work_dtype = node.work_dtype;
@@ -620,9 +623,9 @@ namespace ncarray {
       offset += n_instrs * sizeof(Instruction);
       offset = align(offset);
 
+      size_t aligned_layout_size { align(sizeof(SOArrayPolicy)) };
       layouts = reinterpret_cast<const SOArrayPolicy*>(buf + offset);
-      offset += n_layouts * sizeof(SOArrayPolicy);
-      offset = align(offset);
+      offset += n_layouts * aligned_layout_size;
 
       data = reinterpret_cast<const void* const *>(buf + offset);
       offset += n_layouts * sizeof(void**);
@@ -668,7 +671,10 @@ namespace ncarray {
           case OpCode::LOAD_NCARR:
           case OpCode::LOAD_SOARR: {
             int arr_idx = get_index(instr);
-            const auto& view = layouts[arr_idx];
+            const uint8_t* layout_ptr = reinterpret_cast<const uint8_t*>(layouts);
+            size_t aligned_offset =
+              arr_idx * ((sizeof(SOArrayPolicy) + (arr_alignment - 1)) & ~(arr_alignment - 1));
+            const auto& view = *reinterpret_cast<const SOArrayPolicy*>(layout_ptr + aligned_offset);
 
             DType src_dtype { arr_dtypes[arr_idx] };
             const void* ptr { nullptr };
@@ -791,14 +797,16 @@ namespace ncarray {
     auto n_instrs = node.instrs.size();
     auto n_arrays = node.layouts.size();
     auto n_scalars = node.scalars.size();
+
+    size_t aligned_layout_size { align(sizeof(SOArrayPolicy)) };
     size_t total_bytes =
-      align(n_instrs  * sizeof(Instruction))   + // Packed instructions
-      align(n_arrays  * sizeof(SOArrayPolicy)) + // Array layout structs
-      align(n_arrays  * sizeof(void*))         + // Array data
-      align(n_arrays  * sizeof(DType))         + // Array data types
-      align(n_scalars * sizeof(DType))         + // Scalar data types
-      align(n_scalars * 2)                     + // 2 bytes for each scalar offset
-      align(n_scalars * 32);                     // Largest supported scalar type is 32 bytes
+      align(n_instrs  * sizeof(Instruction)) + // Packed instructions
+      n_arrays  * aligned_layout_size        + // Array layout structs
+      align(n_arrays  * sizeof(void*))       + // Array data
+      align(n_arrays  * sizeof(DType))       + // Array data types
+      align(n_scalars * sizeof(DType))       + // Scalar data types
+      align(n_scalars * 2)                   + // 2 bytes for each scalar offset
+      align(n_scalars * 32);                   // Largest supported scalar type is 32 bytes
 
     return (total_bytes + (alignment - 1)) & ~(alignment - 1);
   }
@@ -821,11 +829,12 @@ namespace ncarray {
     offset += node.instrs.size() * sizeof(Instruction);
     offset = align(offset);
 
-    std::copy(node.layouts.begin(),
-              node.layouts.end(),
-              reinterpret_cast<SOArrayPolicy*>(h_ptr + offset));
-    offset += node.layouts.size() * sizeof(SOArrayPolicy);
-    offset = align(offset);
+    size_t aligned_layout_size { align(sizeof(SOArrayPolicy)) };
+    for (size_t i = 0; i < n_arrays; ++i) {
+      auto* layout_ptr = reinterpret_cast<SOArrayPolicy*>(h_ptr + offset + i * aligned_layout_size);
+      *layout_ptr = node.layouts[i];
+    }
+    offset += aligned_layout_size * n_arrays;
 
     std::copy(node.data.begin(),
               node.data.end(),
