@@ -14,6 +14,7 @@
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
 #include "ncarray/expression.hh"
+#include "ncarray/host/allocator.hh"
 #include "ncarray/host/elementwise.hh"
 #include "ncarray/host/reductions.hh"
 #include "ncarray/indexing.hh"
@@ -35,6 +36,7 @@ typedef SSIZE_T ssize_t;
 
 #include <cstdint>
 #include <type_traits>
+#include <vector>
 
 namespace ncarray {
   /**
@@ -53,8 +55,11 @@ namespace ncarray {
 
         bool use_32bit { (size < (1LL << 31)) };
 
+        // total_bytes will be aligned. Default arg is 16 bytes
+        // Vector doesn't guarantee alignment, so use custom allocator. GPU-side has
+        // alignment guarantees via its custom mempool allocations.
         auto total_bytes = bytes_for_dynamic_vm(expr);
-        std::vector<std::uint8_t> h_buf(total_bytes);
+        std::vector<std::uint8_t, host::impl::AlignedAllocator<std::uint8_t>> h_buf(total_bytes);
         auto vm = get_dynamic_mv_node(expr, h_buf.data());
 
         auto launch_recursive = [&](auto rank) {

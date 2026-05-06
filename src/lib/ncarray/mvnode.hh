@@ -494,7 +494,7 @@ namespace ncarray {
         bool is_finite { op_traits<OpT>::isfinite(res) };
 
         if (leaf == OpT(0)) {
-          return is_finite ? nan("") : res;
+          return is_finite ? static_cast<OpT>(nan("")) : res;
         }
         return static_cast<OpT>(res / leaf);
         // Comparisons
@@ -528,8 +528,8 @@ namespace ncarray {
 
   template <class MemTag>
   bool can_linearize(const ExprMVNode<MemTag>& node) {
-    if (node.instrs.size() > 16) {
-      // Bow out early if there are many instructions
+    if (node.layouts.size() > 16 || node.instrs.size() > 32) {
+      // Bow out early if there are many instructions/arrays to pass by value on stack
       return false;
     }
     int stack_depth = 0;
@@ -588,16 +588,18 @@ namespace ncarray {
     // Largest supported scalar type is 32 bytes.
     const uint8_t* constants_buf { nullptr };      ///< Byte stream of scalars
 
-    Metadata m_shape;
-    ssize_t m_size;
-    DType m_dtype;
+    Metadata final_shape; ///< The result shape
+    ssize_t final_size;   ///< The result number of elements
+    DType expr_dtype;     ///< The DType for the final evaluated expression
+    DType work_dtype;     ///< The DType for intermediate sub-expression evaluations
 
     uint8_t n_layouts { 0 };
     uint8_t n_scalars { 0 };
     uint8_t n_instrs { 0 };
 
 #ifndef __CUDACC_RTC__
-    DynamicExprMVNode(const uint8_t* buf,
+    DynamicExprMVNode(const ExprMVNode<MemTag>& node,
+                      const uint8_t* buf,
                       uint8_t n_instrs_,
                       uint8_t n_arrays_,
                       uint8_t n_scalars_,
@@ -606,6 +608,11 @@ namespace ncarray {
       , n_scalars(n_scalars_)
       , n_instrs(n_instrs_)
     {
+      expr_dtype = node.expr_dtype;
+      work_dtype = node.work_dtype;
+      final_size = node.size();
+      final_shape.set(node.shape(), node.ndim());
+
       auto align = [&](size_t off) { return (off + (alignment - 1)) & ~(alignment - 1); };
 
       uint16_t offset { 0 };
@@ -637,13 +644,13 @@ namespace ncarray {
     }
 #endif
 
-    NCA_HD inline ssize_t ndim() const { return m_shape.ndim; }
+    NCA_HD inline ssize_t ndim() const { return final_shape.ndim; }
 
-    NCA_HD inline const ssize_t* shape() const { return m_shape.data; }
+    NCA_HD inline const ssize_t* shape() const { return final_shape.data; }
 
-    NCA_HD inline DType dtype() const { return m_dtype; }
+    NCA_HD inline DType dtype() const { return expr_dtype; }
 
-    NCA_HD inline ssize_t size() const { return m_size; }
+    NCA_HD inline ssize_t size() const { return final_size; }
 
     NCA_HD inline ssize_t itemsize() const { return ncarray::itemsize(this->dtype()); }
 
@@ -728,7 +735,7 @@ namespace ncarray {
       };
 
       if constexpr (std::is_same_v<DestT, bool>) {
-        return dispatch(this->arr_dtypes[0], eval_op);
+        return dispatch(this->work_dtype, eval_op);
       } else {
         return dispatch(dtype_traits<DestT>::value, eval_op);
       }
@@ -750,7 +757,7 @@ namespace ncarray {
         bool is_finite { op_traits<OpT>::isfinite(res) };
 
         if (leaf == OpT(0)) {
-          return is_finite ? nan("") : res;
+          return is_finite ? static_cast<OpT>(nan("")) : res;
         }
         return static_cast<OpT>(res / leaf);
         // Comparisons
@@ -869,9 +876,9 @@ namespace ncarray {
     }
 
     if constexpr (is_same_v<MemTag, HostTag>) {
-      return DynamicExprMVNode<MemTag>(h_ptr, n_instrs, n_arrays, n_scalars, alignment);
+      return DynamicExprMVNode<MemTag>(node, h_ptr, n_instrs, n_arrays, n_scalars, alignment);
     } else {
-      return DynamicExprMVNode<MemTag>(d_ptr, n_instrs, n_arrays, n_scalars, alignment);
+      return DynamicExprMVNode<MemTag>(node, d_ptr, n_instrs, n_arrays, n_scalars, alignment);
     }
   }
 

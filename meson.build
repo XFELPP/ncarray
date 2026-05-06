@@ -178,8 +178,10 @@ py3.install_sources(
 )
 
 installed_host_headers = [
+    'src/lib/ncarray/host/allocator.hh',
     'src/lib/ncarray/host/casts.hh',
     'src/lib/ncarray/host/elementwise.hh',
+    'src/lib/ncarray/host/reductions.hh',
 ]
 
 py3.install_sources(
