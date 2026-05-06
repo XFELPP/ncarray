@@ -158,7 +158,12 @@ namespace ncarray {
           dispatch(work_dtype, launch_op);
           cuCtxSynchronize();
         } else {
-          auto vm = DynamicExprMVNode(expr);
+          auto total_bytes = bytes_for_dynamic_vm(expr);
+          auto& mem_pool = CircularDevicePool<uint8_t, 1024 * 1024>::instance();
+          using MemEntry = typename CircularDevicePool<uint8_t, 1024 * 1024>::MemEntry;
+
+          MemEntry ptrs { mem_pool.get_block(total_bytes) };
+          auto vm = get_dynamic_mv_node(expr, ptrs.h_ptr, ptrs.d_ptr);
 
           execute_expression_kernel<DestT><<<blocks, TPB>>>(vm, result.view());
         }

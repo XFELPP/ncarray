@@ -48,69 +48,74 @@ namespace ncarray {
 
     template <typename DestT, class Expr, OwningArrayLike Result>
     static void execute_binary_expression(const Expr& expr, Result& result) {
-      ssize_t size { result.size() };
+      if constexpr (is_exprmv_node_v<Expr>) {
+        ssize_t size { result.size() };
 
-      bool use_32bit { (size < (1LL << 31)) };
+        bool use_32bit { (size < (1LL << 31)) };
 
-      auto vm = DynamicExprMVNode<HostTag>(expr);
-      auto launch_recursive = [&](auto rank) {
-        constexpr int NDim = decltype(rank)::value;
+        auto total_bytes = bytes_for_dynamic_vm(expr);
+        std::vector<std::uint8_t> h_buf(total_bytes);
+        auto vm = get_dynamic_mv_node(expr, h_buf.data());
 
-        constexpr ssize_t starting_axis { 1 };
+        auto launch_recursive = [&](auto rank) {
+          constexpr int NDim = decltype(rank)::value;
 
-        const ssize_t limit { result.shape(0) };
+          constexpr ssize_t starting_axis { 1 };
 
-        if (use_32bit) {
-          using CoordsT = StaticCoords<NDim, std::uint32_t>;
+          const ssize_t limit { result.shape(0) };
 
-#ifdef NCA_HAS_OPENMP
-          #pragma omp parallel for schedule(static)
-#endif
-          for (ssize_t i = 0; i < limit; ++i) {
-            CoordsT coords;
-            coords[0] = i;
+          if (use_32bit) {
+            using CoordsT = StaticCoords<NDim, std::uint32_t>;
 
-            if constexpr (NDim > 1) {
-              host::execute_expression_recursive<DestT, CoordsT>(vm,
-                                                                 result,
-                                                                 coords,
-                                                                 starting_axis);
-            } else {
-              result[coords] = vm.template eval<DestT>(coords);
+  #ifdef NCA_HAS_OPENMP
+            #pragma omp parallel for schedule(static)
+  #endif
+            for (ssize_t i = 0; i < limit; ++i) {
+              CoordsT coords;
+              coords[0] = i;
+
+              if constexpr (NDim > 1) {
+                host::execute_expression_recursive<DestT, CoordsT>(vm,
+                                                                   result,
+                                                                   coords,
+                                                                   starting_axis);
+              } else {
+                result[coords] = vm.template eval<DestT>(coords);
+              }
+            }
+          } else {
+            using CoordsT = StaticCoords<NDim, ssize_t>;
+
+  #ifdef NCA_HAS_OPENMP
+            #pragma omp parallel for schedule(static)
+  #endif
+            for (ssize_t i = 0; i < limit; ++i) {
+              CoordsT coords;
+              coords[0] = i;
+              if constexpr (NDim > 1) {
+                host::execute_expression_recursive<DestT, CoordsT>(vm,
+                                                                   result,
+                                                                   coords,
+                                                                   starting_axis);
+              } else {
+                result[coords] = vm.template eval<DestT>(coords);
+              }
             }
           }
-        } else {
-          using CoordsT = StaticCoords<NDim, ssize_t>;
+        };
 
-#ifdef NCA_HAS_OPENMP
-          #pragma omp parallel for schedule(static)
-#endif
-          for (ssize_t i = 0; i < limit; ++i) {
-            CoordsT coords;
-            coords[0] = i;
-            if constexpr (NDim > 1) {
-              host::execute_expression_recursive<DestT, CoordsT>(vm,
-                                                                 result,
-                                                                 coords,
-                                                                 starting_axis);
-            } else {
-              result[coords] = vm.template eval<DestT>(coords);
-            }
-          }
+        switch (result.ndim()) {
+        case 1:  launch_recursive(std::integral_constant<int, 1>  {});  break;
+        case 2:  launch_recursive(std::integral_constant<int, 2>  {});  break;
+        case 3:  launch_recursive(std::integral_constant<int, 3>  {});  break;
+        case 4:  launch_recursive(std::integral_constant<int, 4>  {});  break;
+        case 5:  launch_recursive(std::integral_constant<int, 5>  {});  break;
+        case 6:  launch_recursive(std::integral_constant<int, 6>  {});  break;
+        case 7:  launch_recursive(std::integral_constant<int, 7>  {});  break;
+        case 8:  launch_recursive(std::integral_constant<int, 8>  {});  break;
+        case 9:  launch_recursive(std::integral_constant<int, 9>  {});  break;
+        case 10: launch_recursive(std::integral_constant<int, 10> {});  break;
         }
-      };
-
-      switch (result.ndim()) {
-      case 1:  launch_recursive(std::integral_constant<int, 1>  {});  break;
-      case 2:  launch_recursive(std::integral_constant<int, 2>  {});  break;
-      case 3:  launch_recursive(std::integral_constant<int, 3>  {});  break;
-      case 4:  launch_recursive(std::integral_constant<int, 4>  {});  break;
-      case 5:  launch_recursive(std::integral_constant<int, 5>  {});  break;
-      case 6:  launch_recursive(std::integral_constant<int, 6>  {});  break;
-      case 7:  launch_recursive(std::integral_constant<int, 7>  {});  break;
-      case 8:  launch_recursive(std::integral_constant<int, 8>  {});  break;
-      case 9:  launch_recursive(std::integral_constant<int, 9>  {});  break;
-      case 10: launch_recursive(std::integral_constant<int, 10> {});  break;
       }
     }
 

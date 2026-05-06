@@ -528,6 +528,10 @@ namespace ncarray {
 
   template <class MemTag>
   bool can_linearize(const ExprMVNode<MemTag>& node) {
+    if (node.instrs.size() > 16) {
+      // Bow out early if there are many instructions
+      return false;
+    }
     int stack_depth = 0;
     bool seen_arr { false };
     bool expr_soarr { false };
@@ -570,18 +574,19 @@ namespace ncarray {
 
 #endif
 
-  template <class MemTag = DevTag, int NLayouts = 16, int NScalars = 8, int NInstrs = 24>
+  template <class MemTag = DevTag, int MaxStackSize = 24>
   struct DynamicExprMVNode : public ExpressionTag {
-    Instruction instrs[NInstrs > 1 ? NInstrs : 1];                 ///< Instruction stack
+    const Instruction* instrs { nullptr };         ///< Instruction stack
 
-    SOArrayPolicy layouts[NLayouts > 1 ? NLayouts : 1];            ///< Array layout operands
-    const void* data[NLayouts > 1 ? NLayouts : 1];                 ///< Array data
-    DType arr_dtypes[NLayouts > 1 ? NLayouts : 1];                 ///< Datatypes for arrays
+    const SOArrayPolicy* layouts { nullptr };      ///< Array layout operands
+    const void* const * data { nullptr };          ///< Array data
+    const DType* arr_dtypes { nullptr };           ///< Datatypes for arrays
 
+    // Scalars
+    const DType* constants_dtypes { nullptr };     ///< Scalar data types
+    const uint16_t* constants_offsets { nullptr }; ///< Scalar offset in byte stream
     // Largest supported scalar type is 32 bytes.
-    uint8_t constants_buf[NScalars > 1 ? NScalars * 32 : 1] { 0 }; ///< Scalars as byte stream
-    uint16_t constants_offsets[NScalars > 1 ? NScalars : 1] { 0 }; ///< Offset in stream
-    DType constants_dtypes[NScalars > 1 ? NScalars : 1];           ///< Scalar datatypes
+    const uint8_t* constants_buf { nullptr };      ///< Byte stream of scalars
 
     Metadata m_shape;
     ssize_t m_size;
@@ -592,36 +597,34 @@ namespace ncarray {
     uint8_t n_instrs { 0 };
 
 #ifndef __CUDACC_RTC__
-    DynamicExprMVNode(const ExprMVNode<MemTag>& node) {
-      uint16_t c_off { 0 };
+    DynamicExprMVNode(const uint8_t* buf,
+                      uint8_t n_instrs_,
+                      uint8_t n_arrays_,
+                      uint8_t n_scalars_)
+      : n_layouts(n_arrays_)
+      , n_scalars(n_scalars_)
+      , n_instrs(n_instrs_)
+    {
+      uint16_t offset { 0 };
+      instrs = reinterpret_cast<const Instruction*>(buf);
+      offset += n_instrs * sizeof(Instruction);
 
-      auto scalar_cast = [&] (auto&& val) {
-        using SrcT = std::decay_t<decltype(val)>;
-        auto* bytes = reinterpret_cast<const uint8_t*>(&val);
-        constants_dtypes[n_scalars] = dtype_traits<SrcT>::value;
-        uint16_t off = c_off;
-        constants_offsets[n_scalars] = off;
-        c_off += sizeof(val);
-        for (unsigned i = 0; i < sizeof(val); ++i) {
-          constants_buf[off + i] = bytes[i];
-        }
-        n_scalars++;
-      };
-      n_layouts = node.layouts.size();
-      for (unsigned i = 0; i < n_layouts; ++i) {
-        layouts[i] = node.layouts[i];
-        data[i] = node.data[i];
-        arr_dtypes[i] = node.dtypes[i];
-      }
+      layouts = reinterpret_cast<const SOArrayPolicy*>(buf + offset);
+      offset += n_layouts * sizeof(SOArrayPolicy);
 
-      n_instrs = node.instrs.size();
-      for (int i = 0; i < n_instrs; ++i) {
-        instrs[i] = node.instrs[i];
-      }
+      data = reinterpret_cast<const void* const *>(buf + offset);
+      offset += n_layouts * sizeof(void**);
 
-      for (const auto& scalar : node.scalars) {
-        std::visit(scalar_cast, scalar);
-      }
+      arr_dtypes = reinterpret_cast<const DType*>(buf + offset);
+      offset += n_layouts * sizeof(DType);
+
+      constants_dtypes = reinterpret_cast<const DType*>(buf + offset);
+      offset += n_scalars * sizeof(DType);
+
+      constants_offsets = reinterpret_cast<const uint16_t*>(buf + offset);
+      offset += n_scalars * 2;
+
+      constants_buf = buf + offset;
     }
 #endif
 
@@ -638,7 +641,7 @@ namespace ncarray {
     template <typename DestT, typename Coords>
     NCA_HD inline DestT eval(const Coords& coords) const {
       auto eval_op = [&] <typename WorkT> () {
-        WorkT stack[NInstrs] { 0 };
+        WorkT stack[MaxStackSize] { 0 };
         int top { -1 };
 
         for (int i = 0; i < n_instrs; ++i) {
@@ -708,87 +711,6 @@ namespace ncarray {
             stack[++top] = this->apply_op(left, right, op);
             break;
           }
-          /*
-          // Arithmetic
-          case OpCode::ADD: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left + right;
-            break;
-          }
-          case OpCode::SUB: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left - right;
-            break;
-          }
-          case OpCode::MUL: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            if constexpr (is_same_v<DestT, bool>) {
-              stack[++top] = left && right;
-            } else {
-              stack[++top] = left * right;
-            }
-            break;
-          }
-          case OpCode::DIV: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left / right;
-            break;
-          }
-          // Comparisons
-          case OpCode::EQ: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left == right;
-            break;
-          }
-          case OpCode::NE: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left != right;
-            break;
-          }
-          case OpCode::LT: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = op_traits<DestT>::less(left, right);
-            break;
-          }
-          case OpCode::LE: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = op_traits<DestT>::le(left, right);
-            break;
-          }
-          case OpCode::GT: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = op_traits<DestT>::greater(left, right);
-            break;
-          }
-          case OpCode::GE: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = op_traits<DestT>::ge(left, right);
-            break;
-          }
-            */
-          // Logical
-            /*
-          case OpCode::LAND: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left && right;
-          }
-          case OpCode::LOR: {
-            DestT right = stack[top--];
-            DestT left = stack[top--];
-            stack[++top] = left || right;
-          }
-            */
           default:
             break;
           }
@@ -846,6 +768,93 @@ namespace ncarray {
   };
 
 #ifndef __CUDACC_RTC__
+
+  template <typename MemTag>
+  inline size_t bytes_for_dynamic_vm(const ExprMVNode<MemTag>& node) {
+    auto n_instrs = node.instrs.size();
+    auto n_arrays = node.layouts.size();
+    auto n_scalars = node.scalars.size();
+    size_t total_bytes =
+      n_instrs  * sizeof(Instruction)   + // Packed instructions
+      n_arrays  * sizeof(SOArrayPolicy) + // Array layout structs
+      n_arrays  * sizeof(void*)         + // Array data
+      n_arrays  * sizeof(DType)         + // Array data types
+      n_scalars * sizeof(DType)         + // Scalar data types
+      n_scalars * 2                     + // 2 bytes for each scalar offset
+      n_scalars * 32;                     // Largest supported scalar type is 32 bytes
+
+    return total_bytes;
+  }
+
+  template <typename MemTag>
+  inline DynamicExprMVNode<MemTag> get_dynamic_mv_node(const ExprMVNode<MemTag>& node,
+                                                       uint8_t* h_ptr,
+                                                       uint8_t* d_ptr = nullptr) {
+    auto n_instrs = node.instrs.size();
+    auto n_arrays = node.layouts.size();
+    auto n_scalars = node.scalars.size();
+
+    size_t offset { 0 };
+    std::copy(node.instrs.begin(),
+              node.instrs.end(),
+              reinterpret_cast<Instruction*>(h_ptr));
+    offset += node.instrs.size() * sizeof(Instruction);
+
+    std::copy(node.layouts.begin(),
+              node.layouts.end(),
+              reinterpret_cast<SOArrayPolicy*>(h_ptr + offset));
+    offset += node.layouts.size() * sizeof(SOArrayPolicy);
+
+    std::copy(node.data.begin(),
+              node.data.end(),
+              reinterpret_cast<void**>(h_ptr + offset));
+    offset += node.data.size() * sizeof(void**);
+
+    std::copy(node.dtypes.begin(),
+              node.dtypes.end(),
+              reinterpret_cast<DType*>(h_ptr + offset));
+    offset += node.dtypes.size() * sizeof(DType);
+
+
+    auto scalar_dtype_bytes { sizeof(DType) * node.scalars.size() };
+    auto scalar_off_bytes { 2 * node.scalars.size() };
+
+    unsigned scalar_cnt { 0 };
+    uint16_t scalar_off { 0 };
+
+    auto scalar_cast = [&](auto&& val) {
+      using SrcT = std::decay_t<decltype(val)>;
+      auto* bytes = reinterpret_cast<const uint8_t*>(&val);
+      // Data types begin at memory: (offset + sizeof(DType) * scalar_cnt)
+      auto* dtype_buf = reinterpret_cast<DType*>(h_ptr + offset);
+      dtype_buf[scalar_cnt] = dtype_traits<SrcT>::value;
+
+      // Scalar offsets begin at:
+      // (offset + node.scalars.size() * sizeof(DType) + scalar_cnt * 2)
+      auto* offsets_buf = reinterpret_cast<uint16_t*>(h_ptr + offset + scalar_dtype_bytes);
+      uint16_t off = scalar_off;
+      offsets_buf[scalar_cnt] = off;
+      scalar_off += sizeof(val);
+
+      // Actual scalars buffer begin at:
+      // (offset + scalar_dtype_bytes + scalar_off_bytes)
+      uint8_t* scalars_buf = h_ptr + offset + scalar_dtype_bytes + scalar_off_bytes;
+      for (unsigned i = 0; i < sizeof(val); ++i) {
+        scalars_buf[off + i] = bytes[i];
+      }
+      scalar_cnt++;
+    };
+
+    for (const auto& scalar : node.scalars) {
+      std::visit(scalar_cast, scalar);
+    }
+
+    if constexpr (is_same_v<MemTag, HostTag>) {
+      return DynamicExprMVNode<MemTag>(h_ptr, n_instrs, n_arrays, n_scalars);
+    } else {
+      return DynamicExprMVNode<MemTag>(d_ptr, n_instrs, n_arrays, n_scalars);
+    }
+  }
 
   // --- Additional Traits and Concepts --- //
 

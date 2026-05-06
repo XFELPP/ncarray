@@ -335,17 +335,17 @@ typedef SSIZE_T ssize_t;
 
 #define INSTANTIATE_HOST_VM_OPS(T, L)                                                              \
   template void ncarray::HostEngine::execute_binary_expression<                                    \
-      T, ncarray::DynamicExprMVNode<ncarray::HostTag>,                                             \
+      T, ncarray::ExprMVNode<ncarray::HostTag>,                                                    \
       ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>>(                                       \
-      const ncarray::DynamicExprMVNode<ncarray::HostTag>&,                                         \
+      const ncarray::ExprMVNode<ncarray::HostTag>&,                                                \
       ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>&);
 
 
 #define EXTERN_HOST_VM_OPS(T, L)                                                                   \
   extern template void ncarray::HostEngine::execute_binary_expression<                             \
-      T, ncarray::DynamicExprMVNode<ncarray::HostTag>,                                             \
+      T, ncarray::ExprMVNode<ncarray::HostTag>,                                                    \
       ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>>(                                       \
-      const ncarray::DynamicExprMVNode<ncarray::HostTag>&,                                         \
+      const ncarray::ExprMVNode<ncarray::HostTag>&,                                                \
       ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>&);                                      \
   EXTERN_HOST_VM_REDUCE(T, L, SumTraits)                                                           \
   EXTERN_HOST_VM_REDUCE(T, L, MaxTraits)                                                           \
