@@ -12,6 +12,19 @@
 #include "ncarray/dtype.hh"
 #include "ncarray/op_traits.hh"
 
+#ifdef __CUDACC_RTC__
+#include <cuda/std/type_traits>
+
+using cuda::std::enable_if_t;
+
+#else
+
+#include <type_traits>
+
+using std::enable_if_t;
+
+#endif
+
 namespace ncarray {
   // --- Array Element Proxy --- //
   /**
@@ -24,15 +37,15 @@ namespace ncarray {
    * an `get<T>` function is provided.
    */
   struct ArrayElementProxy {
-    void* __restrict__ m_data;
+    void* m_data;
     DType m_dtype;
 
-    template <typename T>
+    template <typename T, typename = enable_if_t<is_in_type_list_v<T, all_supported_types>>>
     NCA_HD inline operator T&() const {
       return *reinterpret_cast<T*>(m_data);
     }
 
-    template <typename T>
+    template <typename T, typename = enable_if_t<is_in_type_list_v<T, all_supported_types>>>
     NCA_HD inline operator const T&() const {
       return *reinterpret_cast<const T*>(m_data);
     }
@@ -43,6 +56,9 @@ namespace ncarray {
         *reinterpret_cast<ArrayT*>(m_data) = op_traits<T>::template cast<ArrayT>(val);
       };
 
+      // NOTE: The dispatch operation only works on base_types.
+      // Proxy objects may refer to all_supported_types (like accumulators.)
+      // TODO: Consider whether those extended types need to be dispatched as well....
       dispatch(m_dtype, assign_op);
       return *this;
     }

@@ -863,7 +863,7 @@ namespace ncarray {
 
       // Actual scalars buffer begin at:
       // (offset + scalar_dtype_bytes + scalar_off_bytes)
-      size_t scalars_buf_off = align(offset + scalar_dtype_bytes + scalar_off_bytes);
+      size_t scalars_buf_off = align(align(offset + scalar_dtype_bytes) + scalar_off_bytes);
       uint8_t* scalars_buf = h_ptr + scalars_buf_off;
       for (unsigned i = 0; i < sizeof(val); ++i) {
         scalars_buf[off + i] = bytes[i];

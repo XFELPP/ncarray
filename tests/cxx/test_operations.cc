@@ -66,7 +66,7 @@ TEST(NCArrayOperationsTest, Comparisons) {
   ncarray::NCArray arr2(shape, ncarray::DType::float32);
 
   for (ssize_t i = 0; i < 5; ++i) {
-    arr1[{i}] = i;
+    arr1[{i}] = static_cast<float>(i);
   }
   arr2.fill(2.0f);
 

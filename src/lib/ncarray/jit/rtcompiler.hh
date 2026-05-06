@@ -78,36 +78,6 @@ do {                                                     \
 namespace fs = std::filesystem;
 
 namespace ncarray {
-
-  using PreCompiledTypes = std::tuple<
-    //float,
-    double
-    //std::uint16_t,
-    //std::uint32_t,
-    //std::int32_t,
-    //std::int64_t,
-    //bool
-  >;
-
-  template <typename T, typename TypeList>
-  struct is_in_type_list;
-
-  template <typename T, typename... Types>
-  struct is_in_type_list<T, std::tuple<Types...>> {
-    static constexpr bool value = (std::is_same_v<T, Types> || ... );
-  };
-
-  template <typename T, typename... Types>
-  struct is_in_type_list<T, std::variant<Types...>> {
-    static constexpr bool value = (std::is_same_v<T, Types> || ...);
-  };
-
-  template <typename T, typename... Types>
-  static constexpr bool is_in_type_list_v = is_in_type_list<T, Types...>::value;
-
-  template <typename T, typename... Types>
-  constexpr bool is_any_of_v = (std::is_same_v<T, Types> || ...);
-
   class RuntimeCompiler {
   public:
     static RuntimeCompiler& instance();

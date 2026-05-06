@@ -159,7 +159,6 @@ namespace ncarray {
   }
 #endif
 
-#ifdef NCA_HAS_CUDA
   template <typename VarT>
   struct VarAccumulator {
     double count;
@@ -191,7 +190,6 @@ namespace ncarray {
       return { n, m, s };
     }
   };
-#endif
 
 #define DEFINE_VECTOR_OPS(VECDTYPE, ...)                             \
   NCA_HD constexpr VECDTYPE operator+(const VECDTYPE& other) const { \
