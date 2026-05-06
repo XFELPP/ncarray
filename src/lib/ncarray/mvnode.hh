@@ -600,29 +600,38 @@ namespace ncarray {
     DynamicExprMVNode(const uint8_t* buf,
                       uint8_t n_instrs_,
                       uint8_t n_arrays_,
-                      uint8_t n_scalars_)
+                      uint8_t n_scalars_,
+                      size_t alignment = 16)
       : n_layouts(n_arrays_)
       , n_scalars(n_scalars_)
       , n_instrs(n_instrs_)
     {
+      auto align = [&](size_t off) { return (off + (alignment - 1)) & ~(alignment - 1); };
+
       uint16_t offset { 0 };
       instrs = reinterpret_cast<const Instruction*>(buf);
       offset += n_instrs * sizeof(Instruction);
+      offset = align(offset);
 
       layouts = reinterpret_cast<const SOArrayPolicy*>(buf + offset);
       offset += n_layouts * sizeof(SOArrayPolicy);
+      offset = align(offset);
 
       data = reinterpret_cast<const void* const *>(buf + offset);
       offset += n_layouts * sizeof(void**);
+      offset = align(offset);
 
       arr_dtypes = reinterpret_cast<const DType*>(buf + offset);
       offset += n_layouts * sizeof(DType);
+      offset = align(offset);
 
       constants_dtypes = reinterpret_cast<const DType*>(buf + offset);
       offset += n_scalars * sizeof(DType);
+      offset = align(offset);
 
       constants_offsets = reinterpret_cast<const uint16_t*>(buf + offset);
       offset += n_scalars * 2;
+      offset = align(offset);
 
       constants_buf = buf + offset;
     }
@@ -770,26 +779,30 @@ namespace ncarray {
 #ifndef __CUDACC_RTC__
 
   template <typename MemTag>
-  inline size_t bytes_for_dynamic_vm(const ExprMVNode<MemTag>& node) {
+  inline size_t bytes_for_dynamic_vm(const ExprMVNode<MemTag>& node, size_t alignment = 16) {
+    auto align = [&](size_t off) { return (off + (alignment - 1)) & ~(alignment - 1); };
     auto n_instrs = node.instrs.size();
     auto n_arrays = node.layouts.size();
     auto n_scalars = node.scalars.size();
     size_t total_bytes =
-      n_instrs  * sizeof(Instruction)   + // Packed instructions
-      n_arrays  * sizeof(SOArrayPolicy) + // Array layout structs
-      n_arrays  * sizeof(void*)         + // Array data
-      n_arrays  * sizeof(DType)         + // Array data types
-      n_scalars * sizeof(DType)         + // Scalar data types
-      n_scalars * 2                     + // 2 bytes for each scalar offset
-      n_scalars * 32;                     // Largest supported scalar type is 32 bytes
+      align(n_instrs  * sizeof(Instruction))   + // Packed instructions
+      align(n_arrays  * sizeof(SOArrayPolicy)) + // Array layout structs
+      align(n_arrays  * sizeof(void*))         + // Array data
+      align(n_arrays  * sizeof(DType))         + // Array data types
+      align(n_scalars * sizeof(DType))         + // Scalar data types
+      align(n_scalars * 2)                     + // 2 bytes for each scalar offset
+      align(n_scalars * 32);                     // Largest supported scalar type is 32 bytes
 
-    return total_bytes;
+    return (total_bytes + (alignment - 1)) & ~(alignment - 1);
   }
 
   template <typename MemTag>
   inline DynamicExprMVNode<MemTag> get_dynamic_mv_node(const ExprMVNode<MemTag>& node,
                                                        uint8_t* h_ptr,
-                                                       uint8_t* d_ptr = nullptr) {
+                                                       uint8_t* d_ptr = nullptr,
+                                                       size_t alignment = 16) {
+    auto align = [&](size_t off) { return (off + (alignment - 1)) & ~(alignment - 1); };
+
     auto n_instrs = node.instrs.size();
     auto n_arrays = node.layouts.size();
     auto n_scalars = node.scalars.size();
@@ -799,22 +812,25 @@ namespace ncarray {
               node.instrs.end(),
               reinterpret_cast<Instruction*>(h_ptr));
     offset += node.instrs.size() * sizeof(Instruction);
+    offset = align(offset);
 
     std::copy(node.layouts.begin(),
               node.layouts.end(),
               reinterpret_cast<SOArrayPolicy*>(h_ptr + offset));
     offset += node.layouts.size() * sizeof(SOArrayPolicy);
+    offset = align(offset);
 
     std::copy(node.data.begin(),
               node.data.end(),
               reinterpret_cast<void**>(h_ptr + offset));
     offset += node.data.size() * sizeof(void**);
+    offset = align(offset);
 
     std::copy(node.dtypes.begin(),
               node.dtypes.end(),
               reinterpret_cast<DType*>(h_ptr + offset));
     offset += node.dtypes.size() * sizeof(DType);
-
+    offset = align(offset);
 
     auto scalar_dtype_bytes { sizeof(DType) * node.scalars.size() };
     auto scalar_off_bytes { 2 * node.scalars.size() };
@@ -826,19 +842,22 @@ namespace ncarray {
       using SrcT = std::decay_t<decltype(val)>;
       auto* bytes = reinterpret_cast<const uint8_t*>(&val);
       // Data types begin at memory: (offset + sizeof(DType) * scalar_cnt)
-      auto* dtype_buf = reinterpret_cast<DType*>(h_ptr + offset);
+      size_t dtypes_off = align(offset);
+      auto* dtype_buf = reinterpret_cast<DType*>(h_ptr + dtypes_off);
       dtype_buf[scalar_cnt] = dtype_traits<SrcT>::value;
 
       // Scalar offsets begin at:
       // (offset + node.scalars.size() * sizeof(DType) + scalar_cnt * 2)
-      auto* offsets_buf = reinterpret_cast<uint16_t*>(h_ptr + offset + scalar_dtype_bytes);
+      size_t offsets_off = align(offset + scalar_dtype_bytes);
+      auto* offsets_buf = reinterpret_cast<uint16_t*>(h_ptr + offsets_off);
       uint16_t off = scalar_off;
       offsets_buf[scalar_cnt] = off;
       scalar_off += sizeof(val);
 
       // Actual scalars buffer begin at:
       // (offset + scalar_dtype_bytes + scalar_off_bytes)
-      uint8_t* scalars_buf = h_ptr + offset + scalar_dtype_bytes + scalar_off_bytes;
+      size_t scalars_buf_off = align(offset + scalar_dtype_bytes + scalar_off_bytes);
+      uint8_t* scalars_buf = h_ptr + scalars_buf_off;
       for (unsigned i = 0; i < sizeof(val); ++i) {
         scalars_buf[off + i] = bytes[i];
       }
@@ -850,9 +869,9 @@ namespace ncarray {
     }
 
     if constexpr (is_same_v<MemTag, HostTag>) {
-      return DynamicExprMVNode<MemTag>(h_ptr, n_instrs, n_arrays, n_scalars);
+      return DynamicExprMVNode<MemTag>(h_ptr, n_instrs, n_arrays, n_scalars, alignment);
     } else {
-      return DynamicExprMVNode<MemTag>(d_ptr, n_instrs, n_arrays, n_scalars);
+      return DynamicExprMVNode<MemTag>(d_ptr, n_instrs, n_arrays, n_scalars, alignment);
     }
   }
 
