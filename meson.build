@@ -34,9 +34,8 @@ nca_cuda_args = [
     #'-gencode', 'arch=compute_90,code=[sm_90,compute_90]',
 ]
 
-#openmp_dep = dependency('openmp', required: false)
-#nca_has_openmp = openmp_dep.found()
-nca_has_openmp = false
+openmp_dep = dependency('openmp', required: false)
+nca_has_openmp = openmp_dep.found()
 if nca_has_openmp
     add_project_arguments('-DNCA_HAS_OPENMP', language: ['cpp', 'cuda'])
 endif

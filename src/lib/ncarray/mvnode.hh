@@ -243,6 +243,12 @@ namespace ncarray {
         this->instrs.push_back(pack_instruction(code,
                                                 static_cast<int>(this->layouts.size()) - 1));
       } else if constexpr(std::is_base_of_v<ExprMVNode, Node>){
+        // When inserting new arrays and scalars, the instruction indices must
+        // be shifted. They were calculated relative to the start of the node
+        // so now need to get shifted by this' current size of each vector
+        size_t arr_idx_shift { this->layouts.size() };
+        size_t scalar_idx_shift { this->scalars.size() };
+
         this->layouts.insert(this->layouts.end(),
                              node.layouts.begin(),
                              node.layouts.end());
@@ -251,11 +257,6 @@ namespace ncarray {
                             node.dtypes.end());
         this->data.insert(this->data.end(), node.data.begin(), node.data.end());
 
-        // When inserting new arrays and scalars, the instruction indices must
-        // be shifted. They were calculated relative to the start of the node
-        // so now need to get shifted by this' current size of each vector
-        size_t arr_idx_shift { this->layouts.size() - 1 };
-        size_t scalar_idx_shift { this->scalars.size() - 1 };
         for (const auto& instr : node.instrs) {
           OpCode op = get_op(instr);
           int idx = get_index(instr);
@@ -281,9 +282,20 @@ namespace ncarray {
       }
     }
 
-    inline const ssize_t* shape() const { return this->layouts[0].shape(); }
-    inline ssize_t size() const { return this->layouts[0].size(); }
-    inline ssize_t ndim() const { return this->layouts[0].ndim(); }
+    // NOTE: It is extraordinarily unlikely that these functions will be called before
+    //       a layout is inserted. However, it is theoretically possible as an ExprMVNode
+    //       can be constructed (using the converting constructor) from a scalar only.
+    //       It should in theory be used immediately to combine with an array; however,
+    //       we'll guard the empty layout case just in case.
+    inline const ssize_t* shape() const {
+      return this->layouts.empty() ? nullptr : this->layouts[0].shape();
+    }
+    inline ssize_t size() const {
+      return this->layouts.empty() ? 1 : this->layouts[0].size();
+    }
+    inline ssize_t ndim() const {
+      return this->layouts.empty() ? 0 : this->layouts[0].ndim();
+    }
     inline DType dtype() const { return this->expr_dtype; }
 
     // Arithmetic
