@@ -123,25 +123,21 @@ typedef SSIZE_T ssize_t;
                              /* Binary Arithmetic */                                               \
                                                                                                    \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+(const ncarray::ArrayImpl<ncarray::L,   \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+(const ncarray::Scalar&) const;         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-(const ncarray::ArrayImpl<ncarray::L,   \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-(const ncarray::Scalar&) const;         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*(const ncarray::ArrayImpl<ncarray::L,   \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*(const ncarray::Scalar&) const;         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(const ncarray::ArrayImpl<ncarray::L,   \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(const ncarray::Scalar&) const;         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
                                                                                                    \
                         /* Binary Inplace Arithmetic */                                            \
                                                                                                    \
@@ -163,50 +159,42 @@ typedef SSIZE_T ssize_t;
                               /* Comparisons */                                                    \
                                                                                                    \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator==(const ncarray::ArrayImpl<ncarray::L,  \
-      ncarray::S>&) const;                                                                         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator==(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator==(const ncarray::Scalar&) const;        \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!=(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!=(const ncarray::ArrayImpl<ncarray::L,  \
-      ncarray::S>&) const;                                                                         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!=(const ncarray::Scalar&) const;        \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<=(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<(const ncarray::ArrayImpl<ncarray::L,   \
-      ncarray::S>&) const;                                                                         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<(const ncarray::Scalar&) const;         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<=(const ncarray::ArrayImpl<ncarray::L,  \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<=(const ncarray::Scalar&) const;        \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>(const ncarray::ArrayImpl<ncarray::L,   \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>(const ncarray::Scalar&) const;         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>=(const ncarray::ArrayImpl<ncarray::L,  \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>=(const ncarray::Scalar&) const;        \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>=(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
 
 #define BASE_LOGICAL_LIST(ACTION, L, S)                                                            \
                                                                                                    \
                         /* Logical Operations */                                                   \
                                                                                                    \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&&(const ncarray::ArrayImpl<ncarray::L,  \
-      ncarray::S>&) const;                                                                         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&&(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&&(const ncarray::Scalar&) const;        \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator||(const ncarray::ArrayImpl<ncarray::L,  \
-      ncarray::S>&) const;                                                                         \
-  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator||(const ncarray::Scalar&) const;        \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator||(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
                                                                                                    \
                         /* Logical Inplace Operations */                                           \
                                                                                                    \

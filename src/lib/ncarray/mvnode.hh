@@ -250,9 +250,26 @@ namespace ncarray {
                             node.dtypes.begin(),
                             node.dtypes.end());
         this->data.insert(this->data.end(), node.data.begin(), node.data.end());
-        this->instrs.insert(this->instrs.end(),
-                            node.instrs.begin(),
-                            node.instrs.end());
+
+        // When inserting new arrays and scalars, the instruction indices must
+        // be shifted. They were calculated relative to the start of the node
+        // so now need to get shifted by this' current size of each vector
+        size_t arr_idx_shift { this->layouts.size() - 1 };
+        size_t scalar_idx_shift { this->scalars.size() - 1 };
+        for (const auto& instr : node.instrs) {
+          OpCode op = get_op(instr);
+          int idx = get_index(instr);
+
+          if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+            this->instrs.push_back(pack_instruction(op, idx + arr_idx_shift));
+          } else if (op == OpCode::LOAD_CONST) {
+            this->instrs.push_back(pack_instruction(op, idx + scalar_idx_shift));
+          } else {
+            // For non-load ops, the index is irrelevant
+            this->instrs.push_back(instr);
+          }
+        }
+
         this->scalars.insert(this->scalars.end(),
                              node.scalars.begin(),
                              node.scalars.end());

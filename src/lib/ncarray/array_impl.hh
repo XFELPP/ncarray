@@ -560,7 +560,7 @@ namespace ncarray {
     }
 #endif // nvrtc guard
 
-    // --- Linearized indexing to reference (non-const and const) --- //
+    // --- Indexing to reference (non-const and const) --- //
 
     NCA_HD ArrayElementProxy operator[](ssize_t idx) {
       void* out_data = const_cast<void*>(this->data());
@@ -606,6 +606,17 @@ namespace ncarray {
       return { const_cast<void*>(out_data), this->dtype() };
     }
 
+    /**
+     * Convert a linearized ravel index into a multi-dimensional coords struct.
+     *
+     * NOTE: The coords object must be correctly sized for the array! Dimensionality
+     * is not checked in this function, as this allows for efficient compiler optimizations
+     * in hot loops.
+     *
+     * @tparam Coords A specialization of the StaticCoords object.
+     * @param[in] idx The linearized input index.
+     * @param[out] coords The pre-created coords struct to be populated.
+     */
     template <typename Coords>
     NCA_HD void lin_to_md(ssize_t idx, Coords& coords) {
       ssize_t lin_idx { idx };
@@ -624,6 +635,30 @@ namespace ncarray {
         lin_idx /= dim_shape;
       }
       coords[0] = lin_idx % this->shape(0);
+    }
+
+    /**
+     * Convert a multi-dimensional coords struct to a linearized index.
+     *
+     * NOTE: The coords object must be correctly sized for the array! Dimensionality
+     * is not checked in this function, as this allows for efficient compiler optimizations
+     * in hot loops.
+     *
+     * @tparam Coords A specialization of the StaticCoords object.
+     * @param[in] coords The pre-created coords struct with multi-dimensional indices.
+     * @returns idx The linearized index.
+     */
+    template <typename Coords>
+    NCA_HD ssize_t md_to_lin(Coords& coords) {
+      ssize_t lin_idx { 0 };
+      ssize_t cum_stride { 1 };
+
+      for (auto dim = coords.size() - 1; dim >= 0; --dim) {
+        lin_idx += static_cast<ssize_t>(coords[dim]) * cum_stride;
+        cum_stride *= this->shape(dim);
+      }
+
+      return lin_idx;
     }
 
     template <typename Coords>
@@ -650,15 +685,13 @@ namespace ncarray {
       return { const_cast<void*>(out_data), this->dtype() };
     }
 
-    // --- Indexing to reference --- //
-
     /**
      * The initializer list overloader are for indexing down to a single point reference.
      * For semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
      * C++20, code, the variadic operator().
      */
     NCA_HD ArrayElementProxy operator[](initializer_list<uint64_t> coords) {
-      assert(coords.size() == this->ndim());
+      assert(coords.size() == static_cast<size_t>(this->ndim()));
       void* out_data = const_cast<void*>(this->data());
 
       ssize_t axis { 0 };
@@ -675,6 +708,7 @@ namespace ncarray {
      * C++20, code, the variadic operator().
      */
     NCA_HD const ArrayElementProxy operator[](initializer_list<uint64_t> coords) const {
+      assert(coords.size() == static_cast<size_t>(this->ndim()));
       const void* out_data = this->data();
 
       ssize_t axis { 0 };
@@ -1001,17 +1035,13 @@ namespace ncarray {
 
     using ExprResult = ExprMVNode<MemType>;
 
-    template <class RHS>
-    ExprResult operator+(const RHS& right) const;
+    ExprResult operator+(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator-(const RHS& right) const;
+    ExprResult operator-(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator*(const RHS& right) const;
+    ExprResult operator*(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator/(const RHS& right) const;
+    ExprResult operator/(const ExprResult& right) const;
 
     // --- Binary Inplace Operations --- //
 
@@ -1025,31 +1055,23 @@ namespace ncarray {
 
     // --- Comparisons --- //
 
-    template <class RHS>
-    ExprResult operator==(const RHS& right) const;
+    ExprResult operator==(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator!=(const RHS& right) const;
+    ExprResult operator!=(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator<(const RHS& right) const;
+    ExprResult operator<(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator<=(const RHS& right) const;
+    ExprResult operator<=(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator>(const RHS& right) const;
+    ExprResult operator>(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator>=(const RHS& right) const;
+    ExprResult operator>=(const ExprResult& right) const;
 
     // --- Logical Operations --- //
 
-    template <class RHS>
-    ExprResult operator&&(const RHS& right) const;
+    ExprResult operator&&(const ExprResult& right) const;
 
-    template <class RHS>
-    ExprResult operator||(const RHS& right) const;
+    ExprResult operator||(const ExprResult& right) const;
 
     ExprResult operator!() const;
 

@@ -67,9 +67,8 @@ namespace ncarray {
 
   // Addition
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator+(const RHS& right) const {
+  ArrayImpl<L, S>::operator+(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -81,9 +80,8 @@ namespace ncarray {
 
   // Subtraction
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator-(const RHS& right) const {
+  ArrayImpl<L, S>::operator-(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -95,9 +93,8 @@ namespace ncarray {
 
   // Multiplication
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator*(const RHS& right) const {
+  ArrayImpl<L, S>::operator*(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -109,9 +106,8 @@ namespace ncarray {
 
   // True division
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator/(const RHS& right) const {
+  ArrayImpl<L, S>::operator/(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -238,9 +234,8 @@ namespace ncarray {
 
   // Is Equal
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator==(const RHS& right) const {
+  ArrayImpl<L, S>::operator==(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -252,9 +247,8 @@ namespace ncarray {
 
   // Not equal
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator!=(const RHS& right) const {
+  ArrayImpl<L, S>::operator!=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -266,9 +260,8 @@ namespace ncarray {
 
   // Less than
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator<(const RHS& right) const {
+  ArrayImpl<L, S>::operator<(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -280,9 +273,8 @@ namespace ncarray {
 
   // Less than or equal
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator<=(const RHS& right) const {
+  ArrayImpl<L, S>::operator<=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -294,9 +286,8 @@ namespace ncarray {
 
   // Greater than
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator>(const RHS& right) const {
+  ArrayImpl<L, S>::operator>(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -308,9 +299,8 @@ namespace ncarray {
 
   // Greater than or equal
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator>=(const RHS& right) const {
+  ArrayImpl<L, S>::operator>=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -324,9 +314,8 @@ namespace ncarray {
 
   // Logical and
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator&&(const RHS& right) const {
+  ArrayImpl<L, S>::operator&&(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -338,9 +327,8 @@ namespace ncarray {
 
   // Logical or
   template <class L, class S>
-  template <class RHS>
   inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator||(const RHS& right) const {
+  ArrayImpl<L, S>::operator||(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;

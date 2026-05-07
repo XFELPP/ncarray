@@ -82,7 +82,7 @@ namespace ncarray {
     LOR,        ///< Logical or
     // Bitwise
     BAND,       ///< Bitwise and (&)
-    BOR,        ///< Bitwise and (|)
+    BOR,        ///< Bitwise or (|)
     XOR,        ///< Bitwise XOR (^)
     LSHFT,      ///< Left shift (<<)
     RSHFT       ///< Right shift (>>)
