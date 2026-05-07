@@ -8,7 +8,6 @@
 
 #include "gtest/gtest.h"
 
-#include "ncarray/array_operations.hh"
 #include "ncarray/ncarrays.hh"
 #include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
@@ -42,7 +41,7 @@ TEST(NCArrayOperationsTest, BinaryOps) {
     for (unsigned j = 0; j < 4; ++j) {
       for (unsigned k = 0; k < 4; ++k) {
         ASSERT_FLOAT_EQ(static_cast<float>(sum_res[{i, j, k}]), 6.0f)
-          << "Sum failed at index " << i;
+          << "Sum failed at index " << i << ", " << j << ", " << k;
       }
     }
   }
@@ -54,7 +53,7 @@ TEST(NCArrayOperationsTest, BinaryOps) {
     for (unsigned j = 0; j < 4; ++j) {
       for (unsigned k = 0; k < 4; ++k) {
         ASSERT_FLOAT_EQ(static_cast<double>(div_res[{i, j, k}]), 0.5)
-          << "Division failed at index " << i;
+          << "Division failed at index " << i << ", " << j << ", " << k;
       }
     }
   }
@@ -82,7 +81,7 @@ TEST(NCArrayOperationsTest, InplaceBinaryOps) {
   }
 
   // --- Binary Division (6.0 / 4.0 = 1.5) --- //
-  arr1 /= arr2;
+  arr1 /= arr2; // Unlike above, in-place ops won't convert type, for obvious reasons.
 
   for (unsigned i = 0; i < 4; ++i) {
     for (unsigned j = 0; j < 4; ++j) {
@@ -94,12 +93,40 @@ TEST(NCArrayOperationsTest, InplaceBinaryOps) {
   }
 }
 
+TEST(NCArrayOperationsTest, ScalarArithmetic) {
+  std::vector<ssize_t> shape { 100 };
+  ncarray::NCArray arr(shape, ncarray::DType::float32);
+  arr.fill(10.0f);
+
+  // Test scalar broadcasting
+  ncarray::NCArray res = arr + 5.0f;
+
+  for (unsigned i = 0; i < 10; ++i) {
+    EXPECT_EQ(static_cast<float>(res[{i}]), 15.0f);
+    EXPECT_EQ(static_cast<float>(res[{99 - i}]), 15.0f);
+  }
+}
+
+TEST(NCArrayOperationsTest, InplaceScalarArithmetic) {
+  std::vector<ssize_t> shape { 100 };
+  ncarray::NCArray arr(shape, ncarray::DType::float32);
+  arr.fill(10.0f);
+
+  // Test scalar broadcasting
+  arr += 5.0f;
+
+  for (unsigned i = 0; i < 10; ++i) {
+    EXPECT_EQ(static_cast<float>(arr[{i}]), 15.0f);
+    EXPECT_EQ(static_cast<float>(arr[{99 - i}]), 15.0f);
+  }
+}
+
 TEST(NCArrayOperationsTest, Comparisons) {
   std::vector<ssize_t> shape { 5 };
   ncarray::NCArray arr1(shape, ncarray::DType::float32);
   ncarray::NCArray arr2(shape, ncarray::DType::float32);
 
-  for (ssize_t i = 0; i < 5; ++i) {
+  for (unsigned i = 0; i < 5; ++i) {
     arr1[{i}] = static_cast<float>(i);
   }
   arr2.fill(2.0f);
@@ -126,13 +153,15 @@ TEST(NCArrayOperationsTest, SlicedBinaryOps) {
   arr1.fill(1.0f);
   arr2.fill(2.0f);
 
-  ncarray::IndexItem region[] = {
-    ncarray::IndexItem(ncarray::Slice(1, 3)),
-    ncarray::IndexItem(ncarray::Slice(1, 3)),
-    ncarray::IndexItem(ncarray::Slice(1, 3))
+  using sl = ncarray::Slice;
+  using Idx = ncarray::IndexItem;
+  Idx region[] = {
+    Idx(sl(1, 3)),
+    Idx(sl(1, 3)),
+    Idx(sl(1, 3))
   };
 
-  auto view1 = arr1.view_from_indices(region, 3);
+  auto view1 = arr1[sl(1, 3), sl(1, 3), sl(1, 3)];
   auto view2 = arr2.view_from_indices(region, 3);
   ncarray::NCArray res = view1 + view2;
 
@@ -142,9 +171,13 @@ TEST(NCArrayOperationsTest, SlicedBinaryOps) {
   EXPECT_EQ(res.shape(1), 2);
   EXPECT_EQ(res.shape(2), 2);
 
-  for (ssize_t i = 0; i < res.size(); ++i) {
-    ASSERT_FLOAT_EQ(static_cast<float>(res[{0, 0, i}]), 3.0f)
-      << "Slice addition failed at index " << i;
+  for (unsigned i = 0; i < 2; ++i) {
+    for (unsigned j = 0; j < 2; ++j) {
+      for (unsigned k = 0; k < 2; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(res[{i, j, k}]), 3.0f)
+          << "Slice addition failed at index " << i;
+      }
+    }
   }
 }
 

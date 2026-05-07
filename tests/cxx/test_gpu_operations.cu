@@ -8,8 +8,6 @@
 
 #include "gtest/gtest.h"
 
-#include "ncarray/array_operations.hh"
-#include "ncarray/array_traits.hh"
 #include "ncarray/ncarrays.hh"
 #ifdef NCA_HAS_CUDA
 #include "ncarray/ncdevarrays.cuh"
@@ -36,16 +34,73 @@ TEST(NCArrayOperationsTest, GPUBinaryOps) {
   dev_arr1.fill(2.0f);
   dev_arr2.fill(4.0f);
 
-  ncarray::NCDevArray dev_sum = dev_arr1 + dev_arr2; // A kernel!
-  cudaDeviceSynchronize();
+  // --- Binary Addition (2.0 + 4.0 = 6.0) --- //
+  ncarray::NCDevArray dev_sum = dev_arr1 + dev_arr2;
   ncarray::NCArray host_sum(shape, ncarray::DType::float32);
   dev_sum.copy_into(host_sum.data());
 
-  for (unsigned i = 0; i < dev_sum.size(); ++i) {
-    ASSERT_FLOAT_EQ(static_cast<float>(host_sum[{0, 0, i}]), 6.0f)
-      << "GPU addition failed at index " << i;
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(host_sum[{i, j, k}]), 6.0f)
+          << "GPU addition failed at index " << i << ", " << j << ", " << k;
+      }
+    }
+  }
+
+  // --- Binary Division (2.0 / 4.0 = 0.5) --- //
+  ncarray::NCDevArray dev_div = dev_arr1 / dev_arr2; // Will be a double!
+  ncarray::NCArray host_div(shape, ncarray::DType::float64);
+  dev_div.copy_into(host_div.data());
+
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<double>(host_div[{i, j, k}]), 0.5)
+          << "Division failed at index " << i << ", " << j << ", " << k;
+      }
+    }
   }
 }
+
+TEST(NCArrayOperationsTest, GPUInplaceBinaryOps) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+
+  ncarray::NCDevArray dev_arr1(shape, ncarray::DType::float32);
+  ncarray::NCDevArray dev_arr2(shape, ncarray::DType::float32);
+
+  dev_arr1.fill(2.0f);
+  dev_arr2.fill(4.0f);
+
+  // --- Binary Addition (2.0 + 4.0 = 6.0) --- //
+  dev_arr1 += dev_arr2;
+  ncarray::NCArray host_sum(shape, ncarray::DType::float32);
+  dev_arr1.copy_into(host_sum.data());
+
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(host_sum[{i, j, k}]), 6.0f)
+          << "GPU addition failed at index " << i << ", " << j << ", " << k;
+      }
+    }
+  }
+
+  // --- Binary Division (6.0 / 4.0 = 1.5) --- //
+  dev_arr1 /= dev_arr2; // Will remain a float!
+  ncarray::NCArray host_div(shape, ncarray::DType::float32);
+  dev_arr1.copy_into(host_div.data());
+
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(host_div[{i, j, k}]), 1.5)
+          << "Division failed at index " << i << ", " << j << ", " << k;
+      }
+    }
+  }
+}
+
 
 #ifdef __CUDACC__
 template <typename T, ncarray::ViewArrayLike OutT>
@@ -82,16 +137,13 @@ TEST(NCArrayOperationsTest, GPUSlicedReduction) {
 
   // Slice the middle 2x2 section and fill with 10.0f
   // NOTE: Sadly, GPU code (nvcc) is limited to C++20, so this nice syntax won't work
-  // That can be used in CPU only code
-  //dev_arr[ncarray::Slice(1, 3), ncarray::Slice(1, 3)].fill(10.0f);
-  // We instead use the slightly more verbose version
-  using Idx = ncarray::IndexItem;
+  // That can be used in CPU only code when using multi-dim operator[]
+  // dev_arr[ncarray::Slice(1, 3), ncarray::Slice(1, 3)].fill(10.0f);
+  // We can use multi-dim operator() on GPU/C++20.
+
   using sl = ncarray::Slice;
-  Idx region[] = {
-    Idx(sl(1, 3)),
-    Idx(sl(1, 3))
-  };
-  auto view = dev_arr.view_from_indices(region, 2); // Pass number of indices
+
+  auto view = dev_arr(sl(1,3), sl(1,3)); // Pass number of indices
   view.fill(10.0f);
 
   auto total_sum = dev_arr.sum();
@@ -160,7 +212,27 @@ TEST(NCArrayOperationsTest, GPUScalarArithmetic) {
   ncarray::NCArray host_res(shape, ncarray::DType::float32);
   res.copy_into(host_res.data());
 
-  EXPECT_EQ(static_cast<float>(host_res[{0}]), 15.0f);
+  for (unsigned i = 0; i < 10; ++i) {
+    EXPECT_EQ(static_cast<float>(host_res[{i}]), 15.0f);
+    EXPECT_EQ(static_cast<float>(host_res[{99 - i}]), 15.0f);
+  }
+}
+
+TEST(NCArrayOperationsTest, GPUInplaceScalarArithmetic) {
+  std::vector<ssize_t> shape { 100 };
+  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
+  dev_arr.fill(10.0f);
+
+  // Test scalar broadcasting
+  dev_arr += 5.0f;
+
+  ncarray::NCArray host_res(shape, ncarray::DType::float32);
+  dev_arr.copy_into(host_res.data());
+
+  for (unsigned i = 0; i < 10; ++i) {
+    EXPECT_EQ(static_cast<float>(host_res[{i}]), 15.0f);
+    EXPECT_EQ(static_cast<float>(host_res[{99 - i}]), 15.0f);
+  }
 }
 
 TEST(NCArrayOperationsTest, GPUComparison) {
