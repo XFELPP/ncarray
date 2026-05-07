@@ -7,7 +7,6 @@
 import contextlib
 import os
 
-from ncarray.core.vm import set_eager, _eager_eval
 from ncarray.core._pyncarray import *
 try:
     from ncarray.core._pyncdevarray import *
@@ -26,7 +25,7 @@ def get_lib_dir() -> str:
 def lazy_mode():
     """Context manager to delay immediate evaluation of results."""
 
-    old: bool = _eager_eval
+    old: bool = is_eager()
     set_eager(False)
     try:
         yield

@@ -11,7 +11,6 @@
 
 #include "python/utilities.hh"
 
-//#include "ncarray/array_operations.hh"
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
 #include "ncarray/ncarrays.hh"
@@ -44,6 +43,15 @@ typedef SSIZE_T ssize_t;
 namespace py = pybind11;
 
 namespace pyncarray {
+  /**
+   * Global toggle for whether Python will eagerly convert Expr objects to arrays.
+   */
+  extern bool g_eager_eval;
+
+  void set_eager(bool eager);
+
+  bool is_eager();
+
   template <class LPolicy, class MemType>
   inline bool is_nc_array(const py::handle& val) {
     using ncarray::ArrayImpl;
@@ -139,29 +147,41 @@ namespace pyncarray {
    *       take the array directly.
    */
 #define REGISTER_OPERATION(PYMETHOD, OP)                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const ArrayT& other) {          \
-      ncarray::ExprMVNode<typename ArrayT::MemType> node;                           \
-      auto view = self.view();                                                      \
-      node.build_node(view);                                                        \
-      return py::cast(node OP other);                                               \
+    .def("__" PYMETHOD "__",                                                        \
+         [](const ArrayT& self,                                                     \
+            const ncarray::ArrayImpl<typename ArrayT::LayoutPolicy,                 \
+                                     typename ncarray::StoragePolicyTraits<         \
+                                     typename ArrayT::MemType>::View>& other) {     \
+      auto expr = self.view() OP other;                                             \
+      if (is_eager()) {                                                             \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
+      }                                                                             \
+      return py::cast(expr);                                                        \
     },                                                                              \
       py::is_operator())                                                            \
     .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
-      ncarray::ExprMVNode<typename ArrayT::MemType> node;                           \
-      auto view = self.view();                                                      \
-      node.build_node(view);                                                        \
-      return py::cast(node OP pyarray_to_view<typename ArrayT::ViewType>(other));   \
+      auto expr = self.view() OP pyarray_to_view<typename ArrayT::ViewType>(other); \
+      if (is_eager()) {                                                             \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
+      }                                                                             \
+      return py::cast(expr);                                                        \
     },                                                                              \
       py::is_operator())                                                            \
     .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
-      ncarray::ExprMVNode<typename ArrayT::MemType> node;                           \
       auto view = pyarray_to_view<typename ArrayT::ViewType>(other);                \
-      node.build_node(view);                                                        \
-      return py::cast(node OP self);                                                \
+      auto expr = view OP self.view();                                              \
+      if (is_eager()) {                                                             \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
+      }                                                                             \
+      return py::cast(expr);                                                        \
     },                                                                              \
       py::is_operator())                                                            \
     .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) { \
-      return py::cast(self OP other);                                               \
+      auto expr = self.view() OP other;                                             \
+      if (is_eager()) {                                                             \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
+      }                                                                             \
+      return py::cast(expr);                                                        \
     },                                                                              \
       py::is_operator())
 

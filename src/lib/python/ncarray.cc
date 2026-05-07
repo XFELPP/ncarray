@@ -32,12 +32,17 @@ using namespace pyncarray;
 
 namespace {
   py::object materialize(const py::object& expr) {
+    if (py::isinstance<ncarray::ExprMVNode<ncarray::HostTag>>(expr) ||
+        py::isinstance<ncarray::ExprMVNode<ncarray::DevTag>>(expr)) {
 #ifdef NCA_HAS_CUDA
-    if (needs_device_vm(expr)) {
-      return py::cast(pyncarray::eval_python_expr<ncarray::DevTag>(expr));
-    }
+      if (needs_device_vm(expr)) {
+        return py::cast(pyncarray::eval_python_expr<ncarray::DevTag>(expr));
+      }
 #endif
-    return py::cast(pyncarray::eval_python_expr<ncarray::HostTag>(expr));
+      return py::cast(pyncarray::eval_python_expr<ncarray::HostTag>(expr));
+    }
+    // If not an expression just pass through, essentially a no-op
+    return expr;
   }
 } // anonymous namespace
 
@@ -147,6 +152,13 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
   pyncarray::register_expr_class<ncarray::HostTag>(ncarray_module, "HostExpr");
 
   ncarray_module.def("materialize", &materialize, py::arg("expr"));
+  ncarray_module.def("set_eager",
+                     &pyncarray::set_eager,
+                     py::arg("is_eager"),
+                     "Toggle whether expressions are eagerily evaluated to arrays or not.");
+  ncarray_module.def("is_eager",
+                     &pyncarray::is_eager,
+                     "Whether expressions are currently being eagerily evaluated.");
 
   // --- Namesake NCArray* array classes --- //
   auto ncview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView");

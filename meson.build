@@ -334,15 +334,39 @@ py3.install_sources(
     subdir: 'ncarray/include/python',
 )
 
-py_mod = py3.extension_module(
-    '_pyncarray',
+libeagereval = shared_library(
+    'eagereval',
     [
-        'src/lib/python/ncarray.cc'
+        'src/lib/python/eager.cc',
     ],
     install: true,
     install_dir: pyncarray_install_dir,
     include_directories: ncarray_headers,
     dependencies : deps_for_py_mod,
+    install_rpath: py_to_lib_install_rpath,
+    build_rpath: py_to_lib_install_rpath,
+    version: '1',
+    soversion: '1',
+)
+
+eager_dep = declare_dependency(
+    link_with: [
+        libeagereval,
+    ],
+    dependencies: deps_for_py_mod,
+    include_directories: ncarray_headers,
+)
+
+
+py_mod = py3.extension_module(
+    '_pyncarray',
+    [
+        'src/lib/python/ncarray.cc',
+    ],
+    install: true,
+    install_dir: pyncarray_install_dir,
+    include_directories: ncarray_headers,
+    dependencies : deps_for_py_mod + eager_dep,
     install_rpath: py_to_lib_install_rpath,
     build_rpath: py_to_lib_install_rpath,
 )
@@ -364,7 +388,7 @@ if nca_has_cuda
         install: true,
         install_dir: pyncarray_install_dir,
         include_directories: ncarray_headers,
-        dependencies : deps_for_py_mod,
+        dependencies : deps_for_py_mod + eager_dep,
         install_rpath: py_to_lib_install_rpath,
         build_rpath: py_to_lib_install_rpath,
         cuda_args: nca_cuda_args,
@@ -383,7 +407,6 @@ py3.install_sources(
 
 placeholders = [
     'src/ncarray/core/__init__.py',
-    'src/ncarray/core/vm.py',
 ]
 
 py3.install_sources(
