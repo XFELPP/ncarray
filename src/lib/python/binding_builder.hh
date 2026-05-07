@@ -174,18 +174,14 @@ namespace pyncarray {
    */
 #define REGISTER_INPLACE_OPERATION(PYMETHOD, OP)                                    \
     .def("__" PYMETHOD "__", [](ArrayT& self, const ArrayT& other) {                \
-      ncarray::ExprMVNode<typename ArrayT::MemType> node;                           \
       auto view = other.view();                                                     \
-      node.build_node(view);                                                        \
-      self OP node;                                                                 \
+      self OP view;                                                                 \
       return self;                                                                  \
     },                                                                              \
       py::is_operator())                                                            \
     .def("__" PYMETHOD "__", [](ArrayT& self, const py::array& other) {             \
-      ncarray::ExprMVNode<typename ArrayT::MemType> node;                           \
       auto view = pyarray_to_view<typename ArrayT::ViewType>(other);                \
-      node.build_node(view);                                                        \
-      self OP node;                                                                 \
+      self OP view;                                                                 \
       return self;                                                                  \
     },                                                                              \
       py::is_operator())                                                            \

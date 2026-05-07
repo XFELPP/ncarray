@@ -149,22 +149,14 @@ typedef SSIZE_T ssize_t;
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+=(const ncarray::ExprMVNode<            \
       typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+=(const ncarray::Scalar&);              \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-=(const ncarray::ExprMVNode<            \
       typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-=(const ncarray::Scalar&);              \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*=(const ncarray::ExprMVNode<            \
       typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*=(const ncarray::Scalar&);              \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/=(const ncarray::ExprMVNode<            \
       typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/=(const ncarray::Scalar&);              \
 
 #define BASE_COMPARISON_LIST(ACTION, L, S)                                                         \
                                                                                                    \
@@ -222,12 +214,8 @@ typedef SSIZE_T ssize_t;
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&=(const ncarray::ExprMVNode<            \
       typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&=(const ncarray::Scalar&);              \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(const ncarray::ExprMVNode<            \
       typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(const ncarray::Scalar&);              \
 
 
 #define BASE_REDUCTIONS_LIST(ACTION, L, S)                                                         \

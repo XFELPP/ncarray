@@ -124,8 +124,8 @@ namespace ncarray {
   // --- Inplace Binary Operations --- //
 
   template <class L, class S>
-  template <class RHS>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator+=(const RHS& right) {
+  inline ArrayImpl<L, S>&
+  ArrayImpl<L, S>::operator+=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -152,8 +152,8 @@ namespace ncarray {
 
   // Subtraction
   template <class L, class S>
-  template <class RHS>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator-=(const RHS& right) {
+  inline ArrayImpl<L, S>&
+  ArrayImpl<L, S>::operator-=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -180,8 +180,8 @@ namespace ncarray {
 
   // Multiplication
   template <class L, class S>
-  template <class RHS>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator*=(const RHS& right) {
+  inline ArrayImpl<L, S>&
+  ArrayImpl<L, S>::operator*=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -208,8 +208,8 @@ namespace ncarray {
 
   // True division
   template <class L, class S>
-  template <class RHS>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator/=(const RHS& right) {
+  inline ArrayImpl<L, S>&
+  ArrayImpl<L, S>::operator/=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -367,8 +367,8 @@ namespace ncarray {
 
   // Logical and
   template <class L, class S>
-  template <class RHS>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator&=(const RHS& right) {
+  inline ArrayImpl<L, S>&
+  ArrayImpl<L, S>::operator&=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -396,8 +396,8 @@ namespace ncarray {
 
   // Logical or
   template <class L, class S>
-  template <class RHS>
-  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator|=(const RHS& right) {
+  inline ArrayImpl<L, S>&
+  ArrayImpl<L, S>::operator|=(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) {
     using MemType = typename ArrayImpl<L, S>::MemType;
 
     ExprMVNode<MemType> node;
@@ -422,7 +422,6 @@ namespace ncarray {
     dispatch(this->dtype(), op);
     return *this;
   }
-
 
   // --- Axis-Aware Reductions --- //
 

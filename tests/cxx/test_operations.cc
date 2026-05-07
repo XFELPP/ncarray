@@ -60,6 +60,40 @@ TEST(NCArrayOperationsTest, BinaryOps) {
   }
 }
 
+TEST(NCArrayOperationsTest, InplaceBinaryOps) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
+
+  arr1.fill(2.0f);
+  arr2.fill(4.0f);
+
+  // --- Binary Addition (2.0 + 4.0 = 6.0) --- //
+  arr1 += arr2;
+
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(arr1[{i, j, k}]), 6.0f)
+            << "Sum failed at index " << i;
+      }
+    }
+  }
+
+  // --- Binary Division (6.0 / 4.0 = 1.5) --- //
+  arr1 /= arr2;
+
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<float>(arr1[{i, j, k}]), 1.5f)
+            << "Division failed at index " << i;
+      }
+    }
+  }
+}
+
 TEST(NCArrayOperationsTest, Comparisons) {
   std::vector<ssize_t> shape { 5 };
   ncarray::NCArray arr1(shape, ncarray::DType::float32);

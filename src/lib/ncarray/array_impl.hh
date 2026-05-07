@@ -1015,17 +1015,13 @@ namespace ncarray {
 
     // --- Binary Inplace Operations --- //
 
-    template <class RHS>
-    ArrayImpl& operator+=(const RHS& right);
+    ArrayImpl& operator+=(const ExprResult& right);
 
-    template <class RHS>
-    ArrayImpl& operator-=(const RHS& right);
+    ArrayImpl& operator-=(const ExprResult& right);
 
-    template <class RHS>
-    ArrayImpl& operator*=(const RHS& right);
+    ArrayImpl& operator*=(const ExprResult& right);
 
-    template <class RHS>
-    ArrayImpl& operator/=(const RHS& right);
+    ArrayImpl& operator/=(const ExprResult& right);
 
     // --- Comparisons --- //
 
@@ -1059,11 +1055,9 @@ namespace ncarray {
 
     // --- Logical Inplace Operations --- //
 
-    template <class RHS>
-    ArrayImpl& operator&=(const RHS& right);
+    ArrayImpl& operator&=(const ExprResult& right);
 
-    template <class RHS>
-    ArrayImpl& operator|=(const RHS& right);
+    ArrayImpl& operator|=(const ExprResult& right);
 
     // -- Iterators --- //
 

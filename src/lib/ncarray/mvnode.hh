@@ -83,8 +83,17 @@ using std::uint16_t;
 namespace ncarray {
 #ifndef __CUDACC_RTC__
 
+  /**
+   * Test for supported types of objects when creating expressions for evaluation.
+   *
+   * This includes anything that descends from the ExpressionTag, the Scalar variant
+   * and true C++ types if they reside in the many type list from dtype.hh.
+   */
   template <typename T>
-  concept AnyExpressionOrScalar = AnyExpression<T> || std::is_same_v<T, Scalar>;
+  concept AnyExpressionOrScalar =
+    AnyExpression<T>                               ||
+    std::is_same_v<std::decay_t<T>, Scalar>        ||
+    is_in_type_list_v<std::decay_t<T>, base_types>;
 
   /**
    * The enum DTypes are already ordered. For expressions' working dtype, promote
@@ -113,6 +122,22 @@ namespace ncarray {
     DType expr_dtype; ///< The DType for the final evaluated expression
     DType work_dtype; ///< The DType for intermediate sub-expression evaluations
     bool has_expr_dtype { false };
+
+    /**
+     * Default constructor provided as the converting one below exists.
+     */
+    ExprMVNode() = default;
+
+    /**
+     * A converting constructor is provided for ergonomics.
+     *
+     * This mostly allows inplace operators to work without end-users needing to think
+     * or know about the underlying expression tape/tree/node/etc....
+     */
+    template <AnyExpressionOrScalar Node>
+    ExprMVNode(const Node& node) {
+      this->build_node(node);
+    }
 
     template <typename DestT, typename Coords>
     inline DestT eval(const Coords& coords) const {
@@ -182,7 +207,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar Node>
-    NCA_HD inline auto build_node(const Node& node) {
+    inline auto build_node(const Node& node) {
       if (!has_expr_dtype) {
         // If we have never seen an operand before, set the total expr dtype
         // to the dtype of the operand
@@ -239,15 +264,15 @@ namespace ncarray {
       }
     }
 
-    NCA_HD inline const ssize_t* shape() const { return this->layouts[0].shape(); }
-    NCA_HD inline ssize_t size() const { return this->layouts[0].size(); }
-    NCA_HD inline ssize_t ndim() const { return this->layouts[0].ndim(); }
-    NCA_HD inline DType dtype() const { return this->expr_dtype; }
+    inline const ssize_t* shape() const { return this->layouts[0].shape(); }
+    inline ssize_t size() const { return this->layouts[0].size(); }
+    inline ssize_t ndim() const { return this->layouts[0].ndim(); }
+    inline DType dtype() const { return this->expr_dtype; }
 
     // Arithmetic
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator+(const RightNode& right) {
+    inline auto operator+(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -257,7 +282,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator-(const RightNode& right) {
+    inline auto operator-(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -267,7 +292,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator*(const RightNode& right) {
+    inline auto operator*(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -277,7 +302,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator/(const RightNode& right) {
+    inline auto operator/(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -289,7 +314,7 @@ namespace ncarray {
     // Comparisons
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator==(const RightNode& right) {
+    inline auto operator==(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -299,7 +324,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator!=(const RightNode& right) {
+    inline auto operator!=(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -309,7 +334,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator<(const RightNode& right) {
+    inline auto operator<(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -319,7 +344,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator<=(const RightNode& right) {
+    inline auto operator<=(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -329,7 +354,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator>(const RightNode& right) {
+    inline auto operator>(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -339,7 +364,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator>=(const RightNode& right) {
+    inline auto operator>=(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -351,7 +376,7 @@ namespace ncarray {
     // Logical
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator&&(const RightNode& right) {
+    inline auto operator&&(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -361,7 +386,7 @@ namespace ncarray {
     }
 
     template <AnyExpressionOrScalar RightNode>
-    NCA_HD inline auto operator||(const RightNode& right) {
+    inline auto operator||(const RightNode& right) {
       build_node(right);
       DType r_dtype { node_dtype(right) };
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
@@ -370,7 +395,7 @@ namespace ncarray {
       return *this;
     }
 
-    NCA_HD inline auto operator!() {
+    inline auto operator!() {
       this->expr_dtype = determine_dtype_for_op(OpCode::LNOT, this->expr_dtype);
       this->instrs.push_back(pack_instruction(OpCode::LNOT, 0));
 
