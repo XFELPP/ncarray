@@ -41,6 +41,8 @@ using cuda::std::true_type;
 using cuda::std::uint8_t;
 using cuda::std::uint16_t;
 
+using cuda::std::decay_t;
+
 #else
 
 #ifdef _WIN32
@@ -65,6 +67,8 @@ using std::nan;
 using std::true_type;
 using std::uint8_t;
 using std::uint16_t;
+
+using std::decay_t;
 
 #endif
 
@@ -474,8 +478,14 @@ namespace ncarray {
 #ifndef __CUDACC_RTC__
     StaticExprMVNode(const ExprMVNode<MemTag>& node) {
       for (int i = 0; i < NViews; ++i) {
-        layouts[i] = node.layouts[i];
-        data[i] = node.data[i];
+        // IDX generators are counted as virtual views.
+        // Need to guard to avoid reading past the actual arrays that are present
+        if (i < static_cast<int>(node.layouts.size())) {
+          layouts[i] = node.layouts[i];
+          data[i] = node.data[i];
+        } else {
+          data[i] = nullptr;
+        }
       }
 
       auto cast_op = [&](auto&& val) {
@@ -496,6 +506,11 @@ namespace ncarray {
 
         if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
           op_map[operand_ptr++] = idx;
+        } else if (op == OpCode::IDX) {
+          // The IDX/IOTA (APL style index generator) is treated as a virtual load
+          // It occupies a "array" slot and increments the operand_ptr.
+          // Care must be taken to make sure NViews has accounted for this.
+          op_map[operand_ptr++] = -1; // Use a negative value as a sentinal
         } else if (op == OpCode::LOAD_CONST) {
           op_map[operand_ptr++] = NViews + idx;
         } else {
@@ -511,11 +526,18 @@ namespace ncarray {
 
       #pragma unroll NViews
       for (int i = 0; i < NViews; ++i) {
-        auto& layout = layouts[i];
-        const void* leaf_ptr = layout.advance(data[i], coords);
+        short map_val = op_map[i];
 
-        const ArrT item = *reinterpret_cast<const ArrT*>(leaf_ptr);
-        values[i] = op_traits<ArrT>::template cast<ScalarT>(item);
+        if (map_val < 0) {
+          // Negative values are sentinals for IDX generator
+          values[i] = this->md_to_lin<ScalarT>(coords);
+        } else {
+          auto& layout = layouts[i];
+          const void* leaf_ptr = layout.advance(data[i], coords);
+
+          const ArrT item = *reinterpret_cast<const ArrT*>(leaf_ptr);
+          values[i] = op_traits<ArrT>::template cast<ScalarT>(item);
+        }
       }
 
       #pragma unroll NScalars
@@ -524,17 +546,50 @@ namespace ncarray {
       }
 
       ScalarT res { values[op_map[0]] };
+      int operand_cur { 1 }; // Cursor starts at the second, since we pulled the first
 
       #pragma unroll NOps
       for (int i = 0; i < NOps; ++i) {
-        ScalarT next_v { values[op_map[i + 1]] };
-        res = this->apply_op(res, next_v, ops[i]);
+        // Check for Binary/Unary. Binary ops begin with OpCode::ADD
+        OpCode op = ops[i];
+        if (static_cast<int>(op) >= static_cast<int>(OpCode::ADD)) {
+          ScalarT next_v { values[op_map[operand_cur++]] };
+          res = this->apply_op(res, next_v, op);
+        } else {
+          // Unary ops only work on the res value
+          res = this->apply_op(res, ScalarT(0), op);
+        }
       }
       return op_traits<ArrT>::template cast<DestT>(res);
     }
+
+    template <typename OpT, typename Coords>
+    NCA_HD inline OpT md_to_lin(Coords coords) const {
+      using IdxT = decay_t<decltype(coords[0])>;
+      IdxT lin_idx { 0 };
+      IdxT cum_stride { 1 };
+
+      for (int dim = static_cast<int>(coords.size()) - 1; dim >= 0; --dim) {
+        lin_idx += coords[dim] * cum_stride;
+        cum_stride *= this->shape()[dim];
+      }
+
+      return static_cast<OpT>(lin_idx);
+    }
+
     template <typename OpT>
     NCA_HD inline OpT apply_op(OpT res, OpT leaf, OpCode op) const {
-      if (op == OpCode::ADD) {
+      // --- Unary ops --- //
+      if (op == OpCode::NEG) {
+        return static_cast<OpT>(op_traits<OpT>::neg(res));
+      } else if (op == OpCode::INC) {
+        return static_cast<OpT>(op_traits<OpT>::inc(res));
+      } else if (op == OpCode::DEC) {
+        return static_cast<OpT>(op_traits<OpT>::dec(res));
+      // Skipping SZOF, ADDR, INDR, CAST, LNOT, BNOT
+      // --- Binary ops --- //
+      // Arithmetic
+      } else if (op == OpCode::ADD) {
         return static_cast<OpT>(res + leaf);
       } else if (op == OpCode::SUB) {
         return static_cast<OpT>(res - leaf);
@@ -551,7 +606,10 @@ namespace ncarray {
           return is_finite ? static_cast<OpT>(nan("")) : res;
         }
         return static_cast<OpT>(res / leaf);
-        // Comparisons
+      //} else if (op == OpCode::MOD) {
+      //  return static_cast<OpT>(op_traits<OpT>::mod(res, leaf));
+      // Skipping FDIV
+      // Comparisons
       } else if (op == OpCode::EQ) {
         return static_cast<OpT>(res == leaf);
       } else if (op == OpCode::NE) {
@@ -564,11 +622,13 @@ namespace ncarray {
         return static_cast<OpT>(op_traits<OpT>::greater(res, leaf));
       } else if (op == OpCode::GE) {
         return static_cast<OpT>(op_traits<OpT>::ge(res, leaf));
+      // Logical
       } else if (op == OpCode::LAND) {
         return static_cast<OpT>(op_traits<OpT>::land(res, leaf));
       } else if (op == OpCode::LOR) {
         return static_cast<OpT>(op_traits<OpT>::lor(res, leaf));
       }
+      // Skipping BAND, BOR, XOR, LSHFT, RSHFT
       return OpT{};
     }
 
@@ -610,13 +670,20 @@ namespace ncarray {
           // Arrays of different dtypes
           return false;
         }
-      } else if (op == OpCode::LOAD_CONST) {
+      } else if (op == OpCode::LOAD_CONST || op == OpCode::IDX) {
+        // IDX, the index generator, is like a virtual load.
         stack_depth++;
-      } else {
+      } else if (static_cast<int>(op) >= static_cast<int>(OpCode::ADD)) {
+        // Binary operations begin at ADD. The stack must be 2 deep
         if (stack_depth < 2) {
           return false;
         }
         stack_depth--;
+      } else {
+        // Unary ops require a stack depth of 1
+        if (stack_depth < 1) {
+          return false;
+        }
       }
 
       if (stack_depth > 2) {
@@ -722,6 +789,11 @@ namespace ncarray {
           OpCode op = get_op(instr);
 
           switch (op) {
+          // --- Loads and generators --- //
+          case OpCode::IDX: {
+            stack[++top] = this->md_to_lin<WorkT>(coords);
+            break;
+          }
           case OpCode::LOAD_NCARR:
           case OpCode::LOAD_SOARR: {
             int arr_idx = get_index(instr);
@@ -767,6 +839,16 @@ namespace ncarray {
             }
             break;
           }
+          // --- Unary ops --- //
+          case OpCode::NEG:
+          case OpCode::INC:
+          case OpCode::DEC: {
+            // The unary ops transform the top in place. Second operand ignored.
+            stack[top] = this->apply_op(stack[top], WorkT(0), op);
+            break;
+          }
+          // Skipping SZOF, ADDR, INDR, CAST, LNOT, BNOT
+          // --- Binary ops --- //
           // Arithmetic
           case OpCode::ADD:
           case OpCode::SUB:
@@ -787,6 +869,7 @@ namespace ncarray {
             stack[++top] = this->apply_op(left, right, op);
             break;
           }
+          // Skipping BAND, BOR, XOR, LSHFT, RSHFT
           default:
             break;
           }
@@ -801,9 +884,33 @@ namespace ncarray {
       }
     }
 
+    template <typename OpT, typename Coords>
+    NCA_HD inline OpT md_to_lin(Coords coords) const {
+      using IdxT = decay_t<decltype(coords[0])>;
+      IdxT lin_idx { 0 };
+      IdxT cum_stride { 1 };
+
+      for (int dim = static_cast<int>(coords.size()) - 1; dim >= 0; --dim) {
+        lin_idx += coords[dim] * cum_stride;
+        cum_stride *= this->shape()[dim];
+      }
+
+      return static_cast<OpT>(lin_idx);
+    }
+
     template <typename OpT>
     NCA_HD inline OpT apply_op(OpT res, OpT leaf, OpCode op) const {
-      if (op == OpCode::ADD) {
+      // --- Unary ops --- //
+      if (op == OpCode::NEG) {
+        return static_cast<OpT>(op_traits<OpT>::neg(res));
+      } else if (op == OpCode::INC) {
+        return static_cast<OpT>(op_traits<OpT>::inc(res));
+      } else if (op == OpCode::DEC) {
+        return static_cast<OpT>(op_traits<OpT>::dec(res));
+      // Skipping SZOF, ADDR, INDR, CAST, LNOT, BNOT
+      // --- Binary ops --- //
+      // Arithmetic
+      } else if (op == OpCode::ADD) {
         return static_cast<OpT>(res + leaf);
       } else if (op == OpCode::SUB) {
         return static_cast<OpT>(res - leaf);
@@ -820,7 +927,10 @@ namespace ncarray {
           return is_finite ? static_cast<OpT>(nan("")) : res;
         }
         return static_cast<OpT>(res / leaf);
-        // Comparisons
+      //} else if (op == OpCode::MOD) {
+      //  return static_cast<OpT>(op_traits<OpT>::mod(res, leaf));
+      // Skipping FDIV
+      // Comparisons
       } else if (op == OpCode::EQ) {
         return static_cast<OpT>(res == leaf);
       } else if (op == OpCode::NE) {
@@ -833,14 +943,15 @@ namespace ncarray {
         return static_cast<OpT>(op_traits<OpT>::greater(res, leaf));
       } else if (op == OpCode::GE) {
         return static_cast<OpT>(op_traits<OpT>::ge(res, leaf));
+      // Logical
       } else if (op == OpCode::LAND) {
         return static_cast<OpT>(op_traits<OpT>::land(res, leaf));
       } else if (op == OpCode::LOR) {
         return static_cast<OpT>(op_traits<OpT>::lor(res, leaf));
       }
+      // Skipping BAND, BOR, XOR, LSHFT, RSHFT
       return OpT{};
     }
-
   };
 
 #ifndef __CUDACC_RTC__

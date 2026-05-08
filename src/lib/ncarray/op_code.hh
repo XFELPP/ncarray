@@ -68,7 +68,7 @@ namespace ncarray {
     SUB,        ///< Subtraction
     MUL,        ///< Multiplication
     DIV,        ///< True division
-    MOD,        ///< Modoulo
+    MOD,        ///< Modulo
     FDIV,       ///< Floor (integer) division
     // Comparisons
     EQ,         ///< Equal to

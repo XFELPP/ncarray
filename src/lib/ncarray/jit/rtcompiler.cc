@@ -249,12 +249,17 @@ namespace ncarray {
 
     int operand_ptr { 0 };
     int op_ptr { 0 };
+    int n_indices { 0 };
     for (const auto& instr : instrs) {
       int idx = get_index(instr);
       OpCode op = get_op(instr);
 
       if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
         packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(idx) + ";\n";
+      } else if (op == OpCode::IDX) {
+        // Negative values are sentinals for IDX "virtual loads"
+        packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = -1;\n";
+        n_indices++; // We encode the indices now into hte template var as a "View"
       } else if (op == OpCode::LOAD_CONST) {
         packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(n_views + idx) + ";\n";
       } else {
@@ -267,14 +272,15 @@ namespace ncarray {
       "extern \"C\" __global__ void jit_expression_kernel(" + d_params + ", " + result_type + " result) {\n";
 
 
+    // NViews actually encodes "true" arrays AND the virtual arrays from IDX operations
     // StaticExprMVNode<NViews, NScalars, NInstrs, ArrT, ScalarT, MemTag, Layout>
     std::string StaticExprMVNode_n = "ncarray::StaticExprMVNode<" +
-      std::to_string(n_views)       + ", " +
-      std::to_string(n_scalars)     + ", " +
-      std::to_string(instrs.size()) + ", " +
-      src_t_name                    + ", " + // Array datatype ArrT
-      work_t_name                   + ", " + // We will pre-cast all scalars to WorkT
-      "ncarray::DevTag"             + ", " +
+      std::to_string(n_views + n_indices) + ", " + // Arrays AND IDX loads
+      std::to_string(n_scalars)           + ", " +
+      std::to_string(instrs.size())       + ", " +
+      src_t_name                          + ", " + // Array datatype ArrT
+      work_t_name                         + ", " + // We will pre-cast all scalars to WorkT
+      "ncarray::DevTag"                   + ", " +
       layout_t + "> mvnode;\n";
 
     std::string wrapper =

@@ -46,6 +46,8 @@ using cuda::std::uint16_t;
 using cuda::std::uint32_t;
 using cuda::std::uint64_t;
 
+using cuda::std::decay_t;
+
 #else
 #include <cmath>
 #include <complex>
@@ -67,6 +69,8 @@ using std::uint8_t;
 using std::uint16_t;
 using std::uint32_t;
 using std::uint64_t;
+
+using std::decay_t;
 #endif
 
 #ifndef NCA_HD
@@ -93,6 +97,47 @@ namespace ncarray {
     using sum_type = T;
     using diff_type = T;
     using truediv_type = double;
+
+    // --- Unary ops --- //
+    NCA_HD static T neg(const T& v) {
+      if constexpr (Vector4DType<T>) {
+        return { -v.x, -v.y, -v.z, -v.w };
+      } else if constexpr (Vector3DType<T>) {
+        return { -v.x, -v.y, -v.z };
+      } else if constexpr (Vector2DType<T>) {
+        return { -v.x, -v.y };
+      } else {
+        return -v;
+      }
+    }
+    NCA_HD static T inc(const T& v) {
+      if constexpr (Vector4DType<T>) {
+        using U = decay_t<decltype(v.x)>;
+        return { v.x + U(1), v.y + U(1), v.z + U(1), v.w + U(1) };
+      } else if constexpr (Vector3DType<T>) {
+        using U = decay_t<decltype(v.x)>;
+        return { v.x + U(1), v.y + U(1), v.z + U(1) };
+      } else if constexpr (Vector2DType<T>) {
+        using U = decay_t<decltype(v.x)>;
+        return { v.x + U(1), v.y + U(1) };
+      } else {
+        return v + T(1);
+      }
+    }
+    NCA_HD static T dec(const T& v) {
+      if constexpr (Vector4DType<T>) {
+        using U = decay_t<decltype(v.x)>;
+        return { v.x - U(1), v.y - U(1), v.z - U(1), v.w - U(1) };
+      } else if constexpr (Vector3DType<T>) {
+        using U = decay_t<decltype(v.x)>;
+        return { v.x - U(1), v.y - U(1), v.z - U(1) };
+      } else if constexpr (Vector2DType<T>) {
+        using U = decay_t<decltype(v.x)>;
+        return { v.x - U(1), v.y - U(1) };
+      } else {
+        return v - T(1);
+      }
+    }
 
     // Comparisons and identities -- needed especially for specializations below
     // on things like complex
@@ -177,6 +222,29 @@ namespace ncarray {
         return ::isfinite(v);
       }
     }
+
+    NCA_HD static T mod(const T& a, const T& b) {
+      /*
+      if constexpr (Vector4DType<T>) {
+        using U = decay_t<decltype(a.x)>;
+        return a;
+      } else if constexpr (Vector3DType<T>) {
+        using U = decay_t<decltype(a.x)>;
+        return a;
+      } else if constexpr (Vector2DType<T>) {
+        using U = decay_t<decltype(a.x)>;
+        return a;
+      } else {
+        bool is_finite { BaseOpTraits<T>::isfinite(a) };
+
+        if (b == T(0)) {
+          return is_finite ? static_cast<T>(nan("")) : a;
+        }
+        return a % b;
+      }
+      */
+      return a;
+    }
   };
 
   template <typename T>
@@ -189,6 +257,16 @@ namespace ncarray {
     using sum_type = complex<T>;
     using diff_type = complex<T>;
     using truediv_type = complex<double>;
+
+    NCA_HD static complex<T> neg(const complex<T>& v) {
+      return v * complex<T>(-1);
+    }
+    NCA_HD static complex<T> inc(const complex<T>& v) {
+      return v + complex<T>(1);
+    }
+    NCA_HD static complex<T> dec(const complex<T>& v) {
+      return v - complex<T>(1);
+    }
 
     NCA_HD static bool greater(const complex<T>& a, const complex<T>& b) {
       if (a.real() != b.real()) {
