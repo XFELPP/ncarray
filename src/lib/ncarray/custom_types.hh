@@ -191,6 +191,35 @@ namespace ncarray {
     }
   };
 
+
+#define DEFINE_VECTOR_PRE_UNARY_OPS(VECDTYPE, ...)                   \
+  NCA_HD constexpr VECDTYPE operator+() const {                      \
+    return { __VA_ARGS__(+) };                                       \
+  }                                                                  \
+  NCA_HD constexpr VECDTYPE operator-() const {                      \
+    return { __VA_ARGS__(-) };                                       \
+  }
+
+#define DEFINE_VECTOR_INC_DEC_OPS(VECDTYPE, ...)                     \
+  NCA_HD constexpr VECDTYPE& operator++() {                          \
+    __VA_ARGS__(++)                                                  \
+    return *this;                                                    \
+  }                                                                  \
+  NCA_HD constexpr VECDTYPE& operator--() {                          \
+    __VA_ARGS__(--)                                                  \
+    return *this;                                                    \
+  }                                                                  \
+  NCA_HD constexpr VECDTYPE operator++(int) {                        \
+    VECDTYPE tmp = *this;                                            \
+    ++(*this);                                                       \
+    return tmp;                                                      \
+  }                                                                  \
+  NCA_HD constexpr VECDTYPE operator--(int) {                        \
+    VECDTYPE tmp = *this;                                            \
+    --(*this);                                                       \
+    return tmp;                                                      \
+  }
+
 #define DEFINE_VECTOR_OPS(VECDTYPE, ...)                             \
   NCA_HD constexpr VECDTYPE operator+(const VECDTYPE& other) const { \
     return { __VA_ARGS__(+) };                                       \
@@ -278,6 +307,13 @@ namespace ncarray {
     return __VA_ARGS__(a, b, >=);                                       \
   }
 
+#define PREUNARYOPS2(OP) OP x, OP y
+#define PREUNARYOPS3(OP) OP x, OP y, OP z
+#define PREUNARYOPS4(OP) OP x, OP y, OP z, OP w
+
+#define INCDECOPS2(OP) OP x; OP y;
+#define INCDECOPS3(OP) OP x; OP y; OP z;
+#define INCDECOPS4(OP) OP x; OP y; OP z; OP w;
 
 #define BINOPS2(OP) x OP other.x, y OP other.y
 #define BINOPS3(OP) x OP other.x, y OP other.y, z OP other.z
@@ -347,6 +383,8 @@ namespace ncarray {
       return x || y;
     }
 
+    DEFINE_VECTOR_PRE_UNARY_OPS(Float2, PREUNARYOPS2)
+    DEFINE_VECTOR_INC_DEC_OPS(Float2, INCDECOPS2)
     DEFINE_VECTOR_OPS(Float2, BINOPS2)
     DEFINE_SCALAR_OPS(Float2, SCALAROPS2)
     DEFINE_VECTOR_COMPARISONS(Float2, COMPOPS2)
@@ -395,6 +433,8 @@ namespace ncarray {
       return x || y || z;
     }
 
+    DEFINE_VECTOR_PRE_UNARY_OPS(Float3, PREUNARYOPS3)
+    DEFINE_VECTOR_INC_DEC_OPS(Float3, INCDECOPS3)
     DEFINE_VECTOR_OPS(Float3, BINOPS3)
     DEFINE_SCALAR_OPS(Float3, SCALAROPS3)
     DEFINE_VECTOR_COMPARISONS(Float3, COMPOPS3)
@@ -449,6 +489,8 @@ namespace ncarray {
       return x || y || z || w;
     }
 
+    DEFINE_VECTOR_PRE_UNARY_OPS(Float4, PREUNARYOPS4)
+    DEFINE_VECTOR_INC_DEC_OPS(Float4, INCDECOPS4)
     DEFINE_VECTOR_OPS(Float4, BINOPS4)
     DEFINE_SCALAR_OPS(Float4, SCALAROPS4)
     DEFINE_VECTOR_COMPARISONS(Float4, COMPOPS4)
@@ -490,6 +532,8 @@ namespace ncarray {
       return x || y;
     }
 
+    DEFINE_VECTOR_PRE_UNARY_OPS(Double2, PREUNARYOPS2)
+    DEFINE_VECTOR_INC_DEC_OPS(Double2, INCDECOPS2)
     DEFINE_VECTOR_OPS(Double2, BINOPS2)
     DEFINE_SCALAR_OPS(Double2, SCALAROPS2)
     DEFINE_VECTOR_COMPARISONS(Double2, COMPOPS2)
@@ -538,6 +582,8 @@ namespace ncarray {
       return x || y || z;
     }
 
+    DEFINE_VECTOR_PRE_UNARY_OPS(Double3, PREUNARYOPS3)
+    DEFINE_VECTOR_INC_DEC_OPS(Double3, INCDECOPS3)
     DEFINE_VECTOR_OPS(Double3, BINOPS3)
     DEFINE_SCALAR_OPS(Double3, SCALAROPS3)
     DEFINE_VECTOR_COMPARISONS(Double3, COMPOPS3)
@@ -592,12 +638,20 @@ namespace ncarray {
       return x || y || z || w;
     }
 
+    DEFINE_VECTOR_PRE_UNARY_OPS(Double4, PREUNARYOPS4)
+    DEFINE_VECTOR_INC_DEC_OPS(Double4, INCDECOPS4)
     DEFINE_VECTOR_OPS(Double4, BINOPS4)
     DEFINE_SCALAR_OPS(Double4, SCALAROPS4)
     DEFINE_VECTOR_COMPARISONS(Double4, COMPOPS4)
   };
 #pragma pack(pop)
 
+#undef PREUNARYOPS2
+#undef PREUNARYOPS3
+#undef PREUNARYOPS4
+#undef INCDECOPS2
+#undef INCDECOPS3
+#undef INCDECOPS4
 #undef BINOPS4
 #undef BINOPS3
 #undef BINOPS2
@@ -607,6 +661,8 @@ namespace ncarray {
 #undef COMPOPS4
 #undef COMPOPS3
 #undef COMPOPS2
+#undef DEFINE_VECTOR_PRE_UNARY_OPS
+#undef DEFINE_VECTOR_INC_DEC_OPS
 #undef DEFINE_SCALAR_OPS
 #undef DEFINE_VECTOR_OPS
 #undef DEFINE_VECTOR_COMPARISONS

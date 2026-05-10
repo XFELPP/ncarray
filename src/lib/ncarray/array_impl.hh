@@ -1031,9 +1031,37 @@ namespace ncarray {
     template <Expression Expr>
     ArrayImpl& operator=(const Expr& expr);
 
-    // --- Binary operations --- //
-
     using ExprResult = ExprMVNode<MemType>;
+
+    // --- Generators --- //
+
+    /**
+     * Generate an array using the APL-style index generator.
+     *
+     * Use the ravel index to populate the values of the array based on the shape
+     * of the instance it is called on.
+     */
+    ExprResult iota() const;
+
+#ifndef __CUDACC_RTC__
+    /**
+     * Create a new array of specified shape populated by the ravel index.
+     */
+    static OwnerType iota(const std::vector<ssize_t>& shape, DType dtype = DType::int64) {
+      OwnerType res(shape, dtype);
+      res = res.iota(); // Triggers the expression engine to evaluate the IDX op
+      return res;
+    }
+#endif // nvrtc guard
+
+    // --- Unary operations --- //
+
+    ExprResult operator-() const;
+    ArrayImpl& operator++();
+    ArrayImpl& operator--();
+    ExprResult operator!() const;
+
+    // --- Binary operations --- //
 
     ExprResult operator+(const ExprResult& right) const;
 
@@ -1042,6 +1070,8 @@ namespace ncarray {
     ExprResult operator*(const ExprResult& right) const;
 
     ExprResult operator/(const ExprResult& right) const;
+
+    ExprResult operator%(const ExprResult& right) const;
 
     // --- Binary Inplace Operations --- //
 
@@ -1072,8 +1102,6 @@ namespace ncarray {
     ExprResult operator&&(const ExprResult& right) const;
 
     ExprResult operator||(const ExprResult& right) const;
-
-    ExprResult operator!() const;
 
     // --- Logical Inplace Operations --- //
 

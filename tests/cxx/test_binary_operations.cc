@@ -6,13 +6,13 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "gtest/gtest.h"
-
 #include "ncarray/ncarrays.hh"
 #include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
 #include "ncarray/ncdevarrays.cuh"
 #endif
+
+#include "gtest/gtest.h"
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -25,7 +25,7 @@ typedef SSIZE_T ssize_t;
 #include <variant>
 #include <vector>
 
-TEST(NCArrayOperationsTest, BinaryOps) {
+TEST(NCArrayBinaryOperationsTest, Addition) {
   std::vector<ssize_t> shape { 4, 4, 4 };
 
   ncarray::NCArray arr1(shape, ncarray::DType::float32);
@@ -59,7 +59,29 @@ TEST(NCArrayOperationsTest, BinaryOps) {
   }
 }
 
-TEST(NCArrayOperationsTest, InplaceBinaryOps) {
+TEST(NCArrayBinaryOperationsTest, Division) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
+
+  arr1.fill(2.0f);
+  arr2.fill(4.0f);
+
+  // --- Binary Division (2.0 / 4.0 = 0.5) --- //
+  ncarray::NCArray div_res = arr1 / arr2; // op_traits mean this will be double!
+
+  for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned j = 0; j < 4; ++j) {
+      for (unsigned k = 0; k < 4; ++k) {
+        ASSERT_FLOAT_EQ(static_cast<double>(div_res[{i, j, k}]), 0.5)
+          << "Division failed at index " << i << ", " << j << ", " << k;
+      }
+    }
+  }
+}
+
+TEST(NCArrayBinaryOperationsTest, InplaceAddition) {
   std::vector<ssize_t> shape { 4, 4, 4 };
 
   ncarray::NCArray arr1(shape, ncarray::DType::float32);
@@ -79,6 +101,16 @@ TEST(NCArrayOperationsTest, InplaceBinaryOps) {
       }
     }
   }
+}
+
+TEST(NCArrayBinaryOperationsTest, InplaceDivision) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+
+  ncarray::NCArray arr1(shape, ncarray::DType::float32);
+  ncarray::NCArray arr2(shape, ncarray::DType::float32);
+
+  arr1.fill(6.0f);
+  arr2.fill(4.0f);
 
   // --- Binary Division (6.0 / 4.0 = 1.5) --- //
   arr1 /= arr2; // Unlike above, in-place ops won't convert type, for obvious reasons.
@@ -93,7 +125,7 @@ TEST(NCArrayOperationsTest, InplaceBinaryOps) {
   }
 }
 
-TEST(NCArrayOperationsTest, ScalarArithmetic) {
+TEST(NCArrayBinaryOperationsTest, ScalarArithmetic) {
   std::vector<ssize_t> shape { 100 };
   ncarray::NCArray arr(shape, ncarray::DType::float32);
   arr.fill(10.0f);
@@ -107,7 +139,7 @@ TEST(NCArrayOperationsTest, ScalarArithmetic) {
   }
 }
 
-TEST(NCArrayOperationsTest, InplaceScalarArithmetic) {
+TEST(NCArrayBinaryOperationsTest, InplaceScalarArithmetic) {
   std::vector<ssize_t> shape { 100 };
   ncarray::NCArray arr(shape, ncarray::DType::float32);
   arr.fill(10.0f);
@@ -121,7 +153,7 @@ TEST(NCArrayOperationsTest, InplaceScalarArithmetic) {
   }
 }
 
-TEST(NCArrayOperationsTest, Comparisons) {
+TEST(NCArrayBinaryOperationsTest, Comparisons) {
   std::vector<ssize_t> shape { 5 };
   ncarray::NCArray arr1(shape, ncarray::DType::float32);
   ncarray::NCArray arr2(shape, ncarray::DType::float32);
@@ -146,7 +178,7 @@ TEST(NCArrayOperationsTest, Comparisons) {
   EXPECT_FALSE(res_lt[{4}]);
 }
 
-TEST(NCArrayOperationsTest, SlicedBinaryOps) {
+TEST(NCArrayBinaryOperationsTest, SlicedBinaryOps) {
   std::vector<ssize_t> shape { 4, 4, 4 };
   ncarray::NCArray arr1(shape, ncarray::DType::float32);
   ncarray::NCArray arr2(shape, ncarray::DType::float32);
@@ -181,7 +213,23 @@ TEST(NCArrayOperationsTest, SlicedBinaryOps) {
   }
 }
 
-TEST(NCArray, VectorArrayAddition) {
+TEST(NCArrayUnaryOperationsTest, Modulo) {
+  std::vector<ssize_t> shape { 5 };
+  ncarray::NCArray arr1(shape, ncarray::DType::uint32);
+  ncarray::NCArray arr2(shape, ncarray::DType::uint32);
+
+  for (unsigned i = 0; i < 5; ++i) {
+    arr1[{i}] = 10 + i; // 10, 11, 12, 13, 14
+    arr2[{i}] = 3;
+  }
+
+  ncarray::NCArray mod_res = arr1 % arr2;
+  EXPECT_EQ(static_cast<unsigned>(mod_res[{0}]), 1); // 10 % 3
+  EXPECT_EQ(static_cast<unsigned>(mod_res[{1}]), 2); // 11 % 3
+  EXPECT_EQ(static_cast<unsigned>(mod_res[{2}]), 0); // 12 % 3
+}
+
+TEST(NCArrayBinaryOperationsTest, VectorArrayAddition) {
   std::vector<ssize_t> shape { 2 };
   ncarray::NCArray a(shape, ncarray::DType::vfloat2);
   ncarray::NCArray b(shape, ncarray::DType::vfloat2);
@@ -202,32 +250,4 @@ TEST(NCArray, VectorArrayAddition) {
   EXPECT_FLOAT_EQ(f2_0.y, 12.0f);
   EXPECT_FLOAT_EQ(f2_1.x, 6.0f);
   EXPECT_FLOAT_EQ(f2_1.y, 7.0f);
-}
-
-TEST(NCArrayOperationsTest, Reductions) {
-  std::vector<ssize_t> shape { 10 };
-  ncarray::NCArray arr(shape, ncarray::dtype_traits<int32_t>::value);
-
-  arr.fill(static_cast<int32_t>(2));
-
-  auto a_sum = arr.sum();
-  auto a_max = arr.max();
-  auto a_min = arr.min();
-  EXPECT_EQ(std::get<int32_t>(a_sum), 20);
-  EXPECT_EQ(std::get<int32_t>(a_max), 2);
-  EXPECT_EQ(std::get<int32_t>(a_min), 2);
-}
-
-TEST(SOArrayOperationsTest, Reductions) {
-  std::vector<ssize_t> shape { 5 };
-  ncarray::SOArray arr(shape, ncarray::dtype_traits<float>::value);
-
-  arr.fill(1.5f);
-
-  auto a_sum = arr.sum();
-  auto a_max = arr.max();
-  auto a_min = arr.min();
-  EXPECT_EQ(std::get<float>(a_sum), 7.5f);
-  EXPECT_EQ(std::get<float>(a_max), 1.5f);
-  EXPECT_EQ(std::get<float>(a_min), 1.5f);
 }

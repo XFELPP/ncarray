@@ -46,6 +46,14 @@ typedef SSIZE_T ssize_t;
       const ncarray::DynamicExprMVNode<                                                            \
           typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                         \
                                                                                                    \
+                                /* Generators */                                                   \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::iota() const;                                    \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::iota(const std::vector<ssize_t>&,                \
+                                                       ncarray::DType);                            \
+                                                                                                   \
                         /* Copy, assignment, reshaping */                                          \
                                                                                                    \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::assign(                                  \
@@ -116,9 +124,18 @@ typedef SSIZE_T ssize_t;
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<ncarray::Double4>(         \
       std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;
 
-
-
 #define BASE_ARITHMETIC_LIST(ACTION, L, S)                                                         \
+                                                                                                   \
+                             /* Unary ops */                                                       \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-() const;                               \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator++();                                    \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator--();                                    \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!() const;                               \
                                                                                                    \
                              /* Binary Arithmetic */                                               \
                                                                                                    \
@@ -136,6 +153,10 @@ typedef SSIZE_T ssize_t;
           ncarray::S>::MemType>&) const;                                                           \
   ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator%(                                       \
           const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
           ncarray::S>::MemType>&) const;                                                           \
                                                                                                    \

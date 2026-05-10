@@ -442,16 +442,38 @@ test_index = executable(
 )
 test('Testing array indexing.', test_index, verbose: true)
 
-test_ops = executable(
-    'test_array_operations',
+test_binary_ops = executable(
+    'test_array_binary_operations',
     [
-        'tests/cxx/test_operations.cc',
+        'tests/cxx/test_binary_operations.cc',
     ],
     dependencies: deps_for_tests,
     install: false,
     include_directories: ncarray_headers,
 )
-test('Testing array operations.', test_ops, verbose: true)
+test('Testing array binary operations.', test_binary_ops, verbose: true)
+
+test_unary_ops = executable(
+    'test_array_unary_operations',
+    [
+        'tests/cxx/test_unary_operations.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing array unary operations.', test_unary_ops, verbose: true)
+
+test_reduction_ops = executable(
+    'test_array_reductions',
+    [
+        'tests/cxx/test_reductions.cc',
+    ],
+    dependencies: deps_for_tests,
+    install: false,
+    include_directories: ncarray_headers,
+)
+test('Testing array reductions.', test_reduction_ops, verbose: true)
 
 test_float_vecs = executable(
     'test_float_vecs',
@@ -466,9 +488,9 @@ test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
 
 if nca_has_cuda
     test_gpu_ops = executable(
-        'test_gpu_array_operations',
+        'test_gpu_array_binary_operations',
         [
-            'tests/cxx/test_gpu_operations.cu',
+            'tests/cxx/test_gpu_binary_operations.cu',
         ],
         dependencies: deps_for_tests,
         install: false,
@@ -476,7 +498,7 @@ if nca_has_cuda
         cuda_args: nca_cuda_args,
     )
     test(
-        'Testing GPU array operations.',
+        'Testing GPU array binary operations.',
         test_gpu_ops,
         env: [
             'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',

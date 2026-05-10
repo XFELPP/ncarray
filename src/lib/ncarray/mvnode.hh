@@ -302,6 +302,36 @@ namespace ncarray {
     }
     inline DType dtype() const { return this->expr_dtype; }
 
+    // -- Unary ops --- //
+
+    inline auto operator-() {
+      this->expr_dtype = determine_dtype_for_op(OpCode::NEG, this->work_dtype);
+      this->instrs.push_back(pack_instruction(OpCode::NEG, 0));
+
+      return *this;
+    }
+
+    inline auto operator++() {
+      this->expr_dtype = determine_dtype_for_op(OpCode::INC, this->work_dtype);
+      this->instrs.push_back(pack_instruction(OpCode::INC, 0));
+
+      return *this;
+    }
+
+    inline auto operator--() {
+      this->expr_dtype = determine_dtype_for_op(OpCode::DEC, this->work_dtype);
+      this->instrs.push_back(pack_instruction(OpCode::DEC, 0));
+
+      return *this;
+    }
+
+    inline auto operator!() {
+      this->expr_dtype = determine_dtype_for_op(OpCode::LNOT, this->work_dtype);
+      this->instrs.push_back(pack_instruction(OpCode::LNOT, 0));
+
+      return *this;
+    }
+
     // Arithmetic
 
     template <AnyExpressionOrScalar RightNode>
@@ -341,6 +371,16 @@ namespace ncarray {
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
       this->expr_dtype = determine_dtype_for_op(OpCode::DIV, this->work_dtype);
       this->instrs.push_back(pack_instruction(OpCode::DIV, 0));
+      return *this;
+    }
+
+    template <AnyExpressionOrScalar RightNode>
+    inline auto operator%(const RightNode& right) {
+      build_node(right);
+      DType r_dtype { node_dtype(right) };
+      this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
+      this->expr_dtype = determine_dtype_for_op(OpCode::MOD, this->work_dtype);
+      this->instrs.push_back(pack_instruction(OpCode::MOD, 0));
       return *this;
     }
 
@@ -425,13 +465,6 @@ namespace ncarray {
       this->work_dtype = promote_expr_types(this->work_dtype, r_dtype);
       this->expr_dtype = determine_dtype_for_op(OpCode::LOR, this->work_dtype);
       this->instrs.push_back(pack_instruction(OpCode::LOR, 0));
-      return *this;
-    }
-
-    inline auto operator!() {
-      this->expr_dtype = determine_dtype_for_op(OpCode::LNOT, this->expr_dtype);
-      this->instrs.push_back(pack_instruction(OpCode::LNOT, 0));
-
       return *this;
     }
 
@@ -606,8 +639,8 @@ namespace ncarray {
           return is_finite ? static_cast<OpT>(nan("")) : res;
         }
         return static_cast<OpT>(res / leaf);
-      //} else if (op == OpCode::MOD) {
-      //  return static_cast<OpT>(op_traits<OpT>::mod(res, leaf));
+      } else if (op == OpCode::MOD) {
+        return static_cast<OpT>(op_traits<OpT>::mod(res, leaf));
       // Skipping FDIV
       // Comparisons
       } else if (op == OpCode::EQ) {
@@ -927,8 +960,8 @@ namespace ncarray {
           return is_finite ? static_cast<OpT>(nan("")) : res;
         }
         return static_cast<OpT>(res / leaf);
-      //} else if (op == OpCode::MOD) {
-      //  return static_cast<OpT>(op_traits<OpT>::mod(res, leaf));
+      } else if (op == OpCode::MOD) {
+        return static_cast<OpT>(op_traits<OpT>::mod(res, leaf));
       // Skipping FDIV
       // Comparisons
       } else if (op == OpCode::EQ) {

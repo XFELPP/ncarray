@@ -63,6 +63,99 @@ namespace ncarray {
     return *this;
   }
 
+  // --- Generators --- //
+  template <class L, class S>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::iota() const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node(this->view());
+    node.instrs.clear(); // Clear the load of the array, we only want the IDX values
+    node.instrs.push_back(pack_instruction(OpCode::IDX, 0));
+    return node;
+  }
+
+  // --- Unary operations --- //
+  // Negation
+  template <class L, class S>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator-() const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return -node;
+  }
+
+  // Increment
+  template <class L, class S>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator++() {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto inc_expr = ++node;
+    auto op = [&] <typename DestT> () {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(inc_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(inc_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // Decrement
+  template <class L, class S>
+  inline ArrayImpl<L, S>& ArrayImpl<L, S>::operator--() {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    auto dec_expr = --node;
+    auto op = [&]<typename DestT>() {
+      using MemType = typename std::decay_t<ArrayImpl<L, S>>::MemType;
+      if constexpr (std::is_same_v<MemType, DevTag>) {
+#ifdef __CUDACC__
+        GPUEngine::execute_binary_expression<DestT>(dec_expr, view);
+#else
+        throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++.");
+#endif
+      } else {
+        HostEngine::execute_binary_expression<DestT>(dec_expr, view);
+      }
+    };
+
+    dispatch(this->dtype(), op);
+    return *this;
+  }
+
+  // Logical not
+  template <class L, class S>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator!() const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return !node;
+  }
+
   // --- Binary Operations --- //
 
   // Addition
@@ -115,6 +208,19 @@ namespace ncarray {
     node.build_node(view);
 
     return node / right;
+  }
+
+  // Modulo
+  template <class L, class S>
+  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
+  ArrayImpl<L, S>::operator%(const ExprMVNode<typename ArrayImpl<L, S>::MemType>& right) const {
+    using MemType = typename ArrayImpl<L, S>::MemType;
+
+    ExprMVNode<MemType> node;
+    auto view = this->view();
+    node.build_node(view);
+
+    return node % right;
   }
 
   // --- Inplace Binary Operations --- //
@@ -336,19 +442,6 @@ namespace ncarray {
     node.build_node(view);
 
     return node || right;
-  }
-
-  // Logical not
-  template <class L, class S>
-  inline ExprMVNode<typename ArrayImpl<L, S>::MemType>
-  ArrayImpl<L, S>::operator!() const {
-    using MemType = typename ArrayImpl<L, S>::MemType;
-
-    ExprMVNode<MemType> node;
-    auto view = this->view();
-    node.build_node(view);
-
-    return !node;
   }
 
   // --- Logical Inplace Operations --- //

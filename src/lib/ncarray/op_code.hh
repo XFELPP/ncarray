@@ -110,6 +110,10 @@ namespace ncarray {
         // TODO: Consider unsigned behaviour for negation
         return dtype_traits<SrcT>::value;
       }
+      case OpCode::INC:
+      case OpCode::DEC: {
+        return dtype_traits<SrcT>::value;
+      }
       case OpCode::LNOT: {
         return dtype_traits<bool>::value;
       }
@@ -131,6 +135,10 @@ namespace ncarray {
       case OpCode::DIV: {
         using DivT = typename op_traits<SrcT>::truediv_type;
         return dtype_traits<DivT>::value;
+      }
+      case OpCode::MOD: {
+        // TODO: Use truediv_type for modulo?
+        return dtype_traits<SrcT>::value;
       }
       // Comparisons
       case OpCode::EQ:
