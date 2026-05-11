@@ -101,7 +101,7 @@ namespace ncarray {
         if (can_linearize(expr)) {
           auto n_views { expr.layouts.size() };
           auto n_scalars { expr.scalars.size() };
-          DType src_dtype { expr.dtypes[0] };
+          DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
           DType work_dtype { expr.work_dtype };
           auto kernel =
             RuntimeCompiler::instance().get_expr_kernel(result.dtype(),

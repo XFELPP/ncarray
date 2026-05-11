@@ -71,6 +71,9 @@ namespace ncarray {
 
     ExprMVNode<MemType> node(this->view());
     node.instrs.clear(); // Clear the load of the array, we only want the IDX values
+    node.layouts.clear();
+    node.data.clear();
+    node.dtypes.clear(); // The node tracks expr_dtype separately than this vector
     node.instrs.push_back(pack_instruction(OpCode::IDX, 0));
     return node;
   }

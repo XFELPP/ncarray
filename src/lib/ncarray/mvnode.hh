@@ -123,6 +123,8 @@ namespace ncarray {
     std::vector<Scalar> scalars;
     bool soarray { true };
 
+    Metadata final_shape;
+    ssize_t final_size { 0 };
     DType expr_dtype; ///< The DType for the final evaluated expression
     DType work_dtype; ///< The DType for intermediate sub-expression evaluations
     bool has_expr_dtype { false };
@@ -219,6 +221,8 @@ namespace ncarray {
         if constexpr (ArrayLike<Node> || std::is_base_of_v<ExprMVNode, Node>) {
           expr_dtype = node.dtype();
           work_dtype = node.dtype();
+          final_shape.set(node.shape(), node.ndim());
+          final_size = node.size();
         } else {
           // Ensure both true types and the variant get processed
           Scalar tmp = node;
@@ -228,6 +232,9 @@ namespace ncarray {
           };
           expr_dtype = std::visit(get_dtype, tmp);
           work_dtype = expr_dtype;
+          final_shape.data[0] = 0;
+          final_shape.ndim = 0;
+          final_size = 0;
         }
         has_expr_dtype = true;
       }
@@ -292,13 +299,13 @@ namespace ncarray {
     //       It should in theory be used immediately to combine with an array; however,
     //       we'll guard the empty layout case just in case.
     inline const ssize_t* shape() const {
-      return this->layouts.empty() ? nullptr : this->layouts[0].shape();
+      return this->layouts.empty() ? final_shape.data : this->layouts[0].shape();
     }
     inline ssize_t size() const {
-      return this->layouts.empty() ? 1 : this->layouts[0].size();
+      return this->layouts.empty() ? final_size : this->layouts[0].size();
     }
     inline ssize_t ndim() const {
-      return this->layouts.empty() ? 0 : this->layouts[0].ndim();
+      return this->layouts.empty() ? final_shape.ndim : this->layouts[0].ndim();
     }
     inline DType dtype() const { return this->expr_dtype; }
 

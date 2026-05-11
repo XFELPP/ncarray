@@ -238,9 +238,11 @@ namespace ncarray {
     std::string d_params;
     std::string packing_logic;
 
+    // Place scalars and array data in their respective arrays
     for (int i = 0; i < n_views; ++i) {
       auto s_idx = std::to_string(i);
       if (i > 0) {
+        // Only add a comma after the first array
         d_params += ", ";
       }
       d_params += "const void* d" + s_idx + ", " + layout_t + " l" + s_idx;
@@ -249,10 +251,17 @@ namespace ncarray {
     }
 
     for (int i = 0; i < n_scalars; ++i) {
-      d_params += ", " + work_t_name + " s" + std::to_string(i);
+      if (n_views == 0 && i == 0) {
+        // If there are new arrays, and this is the first scalar, no comma
+        d_params += work_t_name + " s" + std::to_string(i);
+      } else {
+        // Otherwise, use a comma
+        d_params += ", " + work_t_name + " s" + std::to_string(i);
+      }
       packing_logic += "  mvnode.scalars[" + std::to_string(i) + "] = s" + std::to_string(i) + ";\n";
     }
 
+    // Fill in the operations and operand indices
     int operand_ptr { 0 };
     int op_ptr { 0 };
     int n_indices { 0 };
@@ -274,6 +283,8 @@ namespace ncarray {
       }
     }
 
+    // Setup the final result shape and dimensionality information.
+    packing_logic += "  mvnode.final_shape.ndim = " + std::to_string(ndim) + ";\n";
     for (ssize_t dim = 0; dim < ndim; ++dim) {
       packing_logic += "  mvnode.final_shape[" + std::to_string(dim) + "] = " + std::to_string(final_shape[dim]) + ";\n";
     }
@@ -281,8 +292,16 @@ namespace ncarray {
       std::accumulate(final_shape, final_shape + ndim, 1, std::multiplies<ssize_t>{});
     packing_logic += "  mvnode.final_size = " + std::to_string(final_size) + ";\n";
 
-    std::string jit_expression_k_sig =
-      "extern \"C\" __global__ void jit_expression_kernel(" + d_params + ", " + result_type + " result) {\n";
+    std::string jit_expression_k_sig;
+    if (n_views > 0 || n_scalars > 0) {
+      // Include d_params only if we have arrays and/or scalars
+      jit_expression_k_sig =
+        "extern \"C\" __global__ void jit_expression_kernel(" + d_params + ", " + result_type + " result) {\n";
+    } else {
+      // Otherwise, no d_params. This is the case for IDX/iota when no other ops used.
+      jit_expression_k_sig =
+        "extern \"C\" __global__ void jit_expression_kernel(" + result_type + " result) {\n";
+    }
 
 
     // NViews actually encodes "true" arrays AND the virtual arrays from IDX operations
