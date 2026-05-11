@@ -109,6 +109,8 @@ namespace ncarray {
                                                         work_dtype,
                                                         n_views,
                                                         n_scalars,
+                                                        expr.ndim(),
+                                                        expr.shape(),
                                                         expr.instrs,
                                                         expr.soarray);
 

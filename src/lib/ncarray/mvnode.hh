@@ -505,11 +505,16 @@ namespace ncarray {
     ScalarT scalars[NScalars > 1 ? NScalars : 1];
     OpCode ops[NOps > 1 ? NOps : 1];
     short op_map[NOperands > 1 ? NOperands : 1];
+    Metadata final_shape; ///< The result shape
+    ssize_t final_size;   ///< The result number of elements
 
     StaticExprMVNode() = default;
 
 #ifndef __CUDACC_RTC__
     StaticExprMVNode(const ExprMVNode<MemTag>& node) {
+      final_shape.set(node.shape(), node.ndim());
+      final_size = node.size();
+
       for (int i = 0; i < NViews; ++i) {
         // IDX generators are counted as virtual views.
         // Need to guard to avoid reading past the actual arrays that are present
@@ -665,9 +670,9 @@ namespace ncarray {
       return OpT{};
     }
 
-    NCA_HD inline const ssize_t* shape() const { return layouts[0].shape(); }
-    NCA_HD inline ssize_t size() const { return layouts[0].size(); }
-    NCA_HD inline ssize_t ndim() const { return layouts[0].ndim(); }
+    NCA_HD inline const ssize_t* shape() const { return final_shape.data; }
+    NCA_HD inline ssize_t size() const { return final_size; }
+    NCA_HD inline ssize_t ndim() const { return final_shape.ndim; }
     NCA_HD inline DType dtype() const { return dtype_traits<ArrT>::value; }
   };
 
@@ -887,6 +892,7 @@ namespace ncarray {
           case OpCode::SUB:
           case OpCode::MUL:
           case OpCode::DIV:
+          case OpCode::MOD:
           // Comparisons
           case OpCode::EQ:
           case OpCode::NE:

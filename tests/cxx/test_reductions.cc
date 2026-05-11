@@ -19,6 +19,7 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #include <cstdint>
+#include <variant>
 #include <vector>
 
 TEST(NCArrayReductionsTest, FullReductions) {

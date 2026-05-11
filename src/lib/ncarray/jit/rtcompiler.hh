@@ -87,6 +87,8 @@ namespace ncarray {
                                DType work_t,
                                int n_views,
                                int n_scalars,
+                               ssize_t ndim,
+                               const ssize_t* final_shape,
                                const std::vector<Instruction>& instrs,
                                bool expr_is_soarr = false);
 
@@ -117,6 +119,8 @@ namespace ncarray {
                                           DType work_t,
                                           int n_views,
                                           int n_scalars,
+                                          ssize_t ndim,
+                                          const ssize_t* final_shape,
                                           const std::vector<Instruction>& instrs,
                                           bool expr_is_soarr = false);
 

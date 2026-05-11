@@ -213,7 +213,7 @@ TEST(NCArrayBinaryOperationsTest, SlicedBinaryOps) {
   }
 }
 
-TEST(NCArrayUnaryOperationsTest, Modulo) {
+TEST(NCArrayBinaryOperationsTest, Modulo) {
   std::vector<ssize_t> shape { 5 };
   ncarray::NCArray arr1(shape, ncarray::DType::uint32);
   ncarray::NCArray arr2(shape, ncarray::DType::uint32);

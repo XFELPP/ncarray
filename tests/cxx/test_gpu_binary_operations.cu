@@ -25,7 +25,7 @@ typedef SSIZE_T ssize_t;
 #include <variant>
 
 #ifdef NCA_HAS_CUDA
-TEST(NCArrayOperationsTest, GPUBinaryOps) {
+TEST(NCDevArrayBinaryOperationsTest, Addition) {
   std::vector<ssize_t> shape { 4, 4, 4 };
 
   ncarray::NCDevArray dev_arr1(shape, ncarray::DType::float32);
@@ -47,6 +47,16 @@ TEST(NCArrayOperationsTest, GPUBinaryOps) {
       }
     }
   }
+}
+
+TEST(NCDevArrayBinaryOperationsTest, Division) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+
+  ncarray::NCDevArray dev_arr1(shape, ncarray::DType::float32);
+  ncarray::NCDevArray dev_arr2(shape, ncarray::DType::float32);
+
+  dev_arr1.fill(2.0f);
+  dev_arr2.fill(4.0f);
 
   // --- Binary Division (2.0 / 4.0 = 0.5) --- //
   ncarray::NCDevArray dev_div = dev_arr1 / dev_arr2; // Will be a double!
@@ -63,7 +73,7 @@ TEST(NCArrayOperationsTest, GPUBinaryOps) {
   }
 }
 
-TEST(NCArrayOperationsTest, GPUInplaceBinaryOps) {
+TEST(NCDevArrayBinaryOperationsTest, InplaceAddition) {
   std::vector<ssize_t> shape { 4, 4, 4 };
 
   ncarray::NCDevArray dev_arr1(shape, ncarray::DType::float32);
@@ -85,6 +95,16 @@ TEST(NCArrayOperationsTest, GPUInplaceBinaryOps) {
       }
     }
   }
+}
+
+TEST(NCDevArrayBinaryOperationsTest, InplaceDivision) {
+  std::vector<ssize_t> shape { 4, 4, 4 };
+
+  ncarray::NCDevArray dev_arr1(shape, ncarray::DType::float32);
+  ncarray::NCDevArray dev_arr2(shape, ncarray::DType::float32);
+
+  dev_arr1.fill(6.0f);
+  dev_arr2.fill(4.0f);
 
   // --- Binary Division (6.0 / 4.0 = 1.5) --- //
   dev_arr1 /= dev_arr2; // Will remain a float!
@@ -101,107 +121,7 @@ TEST(NCArrayOperationsTest, GPUInplaceBinaryOps) {
   }
 }
 
-
-#ifdef __CUDACC__
-template <typename T, ncarray::ViewArrayLike OutT>
-__global__ void iota_kernel(OutT out) {
-  ssize_t idx { static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x) };
-  if (idx < out.size()) {
-    out[idx] = static_cast<T>(idx);
-  }
-}
-#endif
-
-TEST(NCArrayOperationsTest, GPUReductions) {
-  std::vector<ssize_t> shape { 256 };
-
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
-#ifdef __CUDACC__
-  iota_kernel<float><<<1, 256, 0, ncarray::alloc_stream()>>>(dev_arr.view());
-#endif
-  cudaDeviceSynchronize();
-  // Scalars are stored in a small pool of memory accessible on host and device
-  auto dev_sum = dev_arr.sum();
-  auto dev_max = dev_arr.max();
-  auto dev_min = dev_arr.min();
-
-  EXPECT_EQ(std::get<float>(dev_sum), 32640.0f);
-  EXPECT_EQ(std::get<float>(dev_max), 255.0f);
-  EXPECT_EQ(std::get<float>(dev_min), 0.0f);
-}
-
-TEST(NCArrayOperationsTest, GPUSlicedReduction) {
-  std::vector<ssize_t> shape { 4, 4 };
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
-  dev_arr.fill(1.0f);
-
-  // Slice the middle 2x2 section and fill with 10.0f
-  // NOTE: Sadly, GPU code (nvcc) is limited to C++20, so this nice syntax won't work
-  // That can be used in CPU only code when using multi-dim operator[]
-  // dev_arr[ncarray::Slice(1, 3), ncarray::Slice(1, 3)].fill(10.0f);
-  // We can use multi-dim operator() on GPU/C++20.
-
-  using sl = ncarray::Slice;
-
-  auto view = dev_arr(sl(1,3), sl(1,3)); // Pass number of indices
-  view.fill(10.0f);
-
-  auto total_sum = dev_arr.sum();
-  // Entire array: (12 * 1.0) + (4 * 10.0) = 52.0
-  EXPECT_EQ(std::get<float>(total_sum), 52.0f);
-}
-
-TEST(NCArrayOperationsTest, GPUToHostCopy) {
-  std::vector<ssize_t> shape { 10 };
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
-  dev_arr.fill(5.7f);
-
-  // Copy float array into integer host array with casts
-  std::vector<std::int32_t> host_buffer(10);
-  dev_arr.copy_into_astype<std::int32_t>(host_buffer.data());
-
-  for (int i = 0; i < 10; ++i) {
-    EXPECT_EQ(host_buffer[i], 5);
-  }
-}
-
-TEST(NCArrayOperationsTest, HostToGPUCopyCast) {
-  std::vector<ssize_t> shape { 10 };
-  ncarray::NCArray host_arr(shape, ncarray::DType::float32);
-  host_arr.fill(5.7f);
-
-  // Copy float array into the device array with casts
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::uint32);
-  dev_arr.assign(host_arr);
-
-  // Now copy back to see if it survived the round trip
-  std::vector<std::uint32_t> result_buffer(10);
-  dev_arr.copy_into(result_buffer.data());
-
-  for (int i = 0; i < 10; ++i) {
-    EXPECT_EQ(result_buffer[i], 5);
-  }
-}
-
-TEST(NCArrayOperationsTest, HostToGPUCopyNoCast) {
-  std::vector<ssize_t> shape { 10 };
-  ncarray::NCArray host_arr(shape, ncarray::DType::float32);
-  host_arr.fill(5.7f);
-
-  // Copy float array into the device array without casts
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
-  dev_arr.assign(host_arr);
-
-  // Now copy back to see if it survived the round trip
-  std::vector<float> result_buffer(10);
-  dev_arr.copy_into(result_buffer.data());
-
-  for (int i = 0; i < 10; ++i) {
-    EXPECT_FLOAT_EQ(result_buffer[i], 5.7f);
-  }
-}
-
-TEST(NCArrayOperationsTest, GPUScalarArithmetic) {
+TEST(NCDevArrayBinaryOperationsTest, ScalarArithmetic) {
   std::vector<ssize_t> shape { 100 };
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
   dev_arr.fill(10.0f);
@@ -218,7 +138,7 @@ TEST(NCArrayOperationsTest, GPUScalarArithmetic) {
   }
 }
 
-TEST(NCArrayOperationsTest, GPUInplaceScalarArithmetic) {
+TEST(NCDevArrayBinaryOperationsTest, InplaceScalarArithmetic) {
   std::vector<ssize_t> shape { 100 };
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
   dev_arr.fill(10.0f);
@@ -235,7 +155,38 @@ TEST(NCArrayOperationsTest, GPUInplaceScalarArithmetic) {
   }
 }
 
-TEST(NCArrayOperationsTest, GPUComparison) {
+TEST(NCDevArrayBinaryOperationsTest, Modulo) {
+  std::vector<ssize_t> shape { 5 };
+  ncarray::NCArray h_arr1(shape, ncarray::DType::uint32);
+  ncarray::NCDevArray d_arr1(shape, ncarray::DType::uint32);
+  ncarray::NCDevArray d_arr2(shape, ncarray::DType::uint32);
+
+  for (unsigned i = 0; i < 5; ++i) {
+    h_arr1[{i}] = 10 + i; // 10, 11, 12, 13, 14
+  }
+
+  d_arr1.assign(h_arr1);
+  d_arr2.fill(3);
+
+  ncarray::NCDevArray dev_mod_res = d_arr1 % d_arr2;
+  ncarray::NCArray host_res(shape, ncarray::DType::uint32);
+  dev_mod_res.copy_into(host_res.data());
+
+  EXPECT_EQ(static_cast<unsigned>(host_res[{0}]), 1); // 10 % 3
+  EXPECT_EQ(static_cast<unsigned>(host_res[{1}]), 2); // 11 % 3
+  EXPECT_EQ(static_cast<unsigned>(host_res[{2}]), 0); // 12 % 3
+}
+
+#ifdef __CUDACC__
+template <typename T, ncarray::ViewArrayLike OutT> __global__ void iota_kernel(OutT out) {
+  ssize_t idx{static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x)};
+  if (idx < out.size()) {
+    out[idx] = static_cast<T>(idx);
+  }
+}
+#endif
+
+TEST(NCDevArrayBinaryOperationsTest, Comparisons) {
   std::vector<ssize_t> shape { 10 };
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
   dev_arr.fill(10.0f);

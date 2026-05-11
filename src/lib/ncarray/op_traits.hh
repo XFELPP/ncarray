@@ -55,6 +55,7 @@ using cuda::std::decay_t;
 #include <complex>
 #include <cstdint>
 #include <limits>
+#include <type_traits>
 
 using std::isfinite;
 
@@ -180,42 +181,48 @@ namespace ncarray {
     }
 
     NCA_HD static bool isfinite(const T& v) {
-      if constexpr (Vector4DType<T>) {
+      using U = decay_t<T>;
+      if constexpr (Vector4DType<U>) {
         return ::isfinite(v.x) && ::isfinite(v.y) && ::isfinite(v.z) && ::isfinite(v.w);
-      } else if constexpr (Vector3DType<T>) {
+      } else if constexpr (Vector3DType<U>) {
         return ::isfinite(v.x) && ::isfinite(v.y) && ::isfinite(v.z);
-      } else if constexpr (Vector2DType<T>) {
+      } else if constexpr (Vector2DType<U>) {
         return ::isfinite(v.x) && ::isfinite(v.y);
+      } else if constexpr (is_integral_v<U>) {
+        return true;
       } else {
         return ::isfinite(v);
       }
     }
 
     NCA_HD static T mod(const T& a, const T& b) {
-      if constexpr (Vector2DType<T>) {
-        using U = decay_t<decltype(a.x)>;
-        if constexpr (is_integral_v<U>) {
-          U x = a.x % b.x;
-          U y = a.y % b.y;
+      using U = decay_t<T>;
+      if constexpr (Vector2DType<U>) {
+        using V = decay_t<decltype(a.x)>;
+        if constexpr (is_integral_v<V>) {
+          V x = a.x % b.x;
+          V y = a.y % b.y;
 
-          if constexpr (Vector3DType<T>) {
-            U z = a.z % b.z;
-            if constexpr (Vector4DType<T>) {
-              return { x, y, z, a.w % b.w };
+          if constexpr (Vector3DType<U>) {
+            V z = a.z % b.z;
+            if constexpr (Vector4DType<U>) {
+              V w = a.w % b.w;
+              return { x, y, z, w };
             } else {
               return { x, y, z };
             }
           } else {
             return { x, y };
           }
-        } else if constexpr (is_floating_point_v<U>) {
-          U x = fmod(a.x, b.x);
-          U y = fmod(a.y, b.y);
+        } else if constexpr (is_floating_point_v<V>) {
+          V x = fmod(a.x, b.x);
+          V y = fmod(a.y, b.y);
 
-          if constexpr (Vector3DType<T>) {
-            U z = fmod(a.x, b.z);
-            if constexpr (Vector4DType<T>) {
-              return { x, y, z, fmod(a.w, b.w) };
+          if constexpr (Vector3DType<U>) {
+            V z = fmod(a.z, b.z);
+            if constexpr (Vector4DType<U>) {
+              V w = fmod(a.w, b.w);
+              return { x, y, z, w };
             } else {
               return { x, y, z };
             }
@@ -223,9 +230,9 @@ namespace ncarray {
             return { x, y };
           }
         }
-      } else if constexpr (is_integral_v<T>) {
+      } else if constexpr (is_integral_v<U>) {
         return a % b;
-      } else if constexpr (is_floating_point_v<T>) {
+      } else if constexpr (is_floating_point_v<U>) {
         return fmod(a, b);
       } else {
         return a;

@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.4.0',
+    version: '0.5.0',
     default_options: [
         'cpp_std=c++23',
         'cuda_std=c++20',
@@ -487,7 +487,27 @@ test_float_vecs = executable(
 test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
 
 if nca_has_cuda
-    test_gpu_ops = executable(
+    test_gpu_copies = executable(
+        'test_gpu_copies',
+        [
+            'tests/cxx/test_gpu_copies.cu',
+        ],
+        dependencies: deps_for_tests,
+        install: false,
+        include_directories: ncarray_headers,
+        cuda_args: nca_cuda_args,
+    )
+    test(
+        'Testing GPU array copies.',
+        test_gpu_copies,
+        env: [
+            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+        ],
+        verbose: true
+    )
+
+    test_gpu_binary_ops = executable(
         'test_gpu_array_binary_operations',
         [
             'tests/cxx/test_gpu_binary_operations.cu',
@@ -499,7 +519,47 @@ if nca_has_cuda
     )
     test(
         'Testing GPU array binary operations.',
-        test_gpu_ops,
+        test_gpu_binary_ops,
+        env: [
+            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+        ],
+        verbose: true
+    )
+
+    test_gpu_unary_ops = executable(
+        'test_gpu_array_unary_operations',
+        [
+            'tests/cxx/test_gpu_unary_operations.cu',
+        ],
+        dependencies: deps_for_tests,
+        install: false,
+        include_directories: ncarray_headers,
+        cuda_args: nca_cuda_args,
+    )
+    test(
+        'Testing GPU array unary operations.',
+        test_gpu_unary_ops,
+        env: [
+            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+        ],
+        verbose: true
+    )
+
+    test_gpu_reductions = executable(
+        'test_gpu_array_reductions',
+        [
+            'tests/cxx/test_gpu_reductions.cu',
+        ],
+        dependencies: deps_for_tests,
+        install: false,
+        include_directories: ncarray_headers,
+        cuda_args: nca_cuda_args,
+    )
+    test(
+        'Testing GPU array reductions.',
+        test_gpu_reductions,
         env: [
             'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
             'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',

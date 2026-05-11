@@ -12,7 +12,6 @@
 #include "ncarray/dtype.hh"
 #include "ncarray/jit/path_utils.hh"
 #include "ncarray/op_code.hh"
-#include "rtcompiler.hh"
 
 #include <cuda.h>
 #include <nvrtc.h>
@@ -21,6 +20,7 @@
 #include <filesystem>
 #include <functional>
 #include <iomanip>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -76,6 +76,8 @@ namespace ncarray {
                                               DType work_t,
                                               int n_views,
                                               int n_scalars,
+                                              ssize_t ndim,
+                                              const ssize_t* final_shape,
                                               const std::vector<Instruction>& instrs,
                                               bool expr_is_soarr) {
     std::string arch_opt = get_arch_opt();
@@ -84,6 +86,8 @@ namespace ncarray {
                                                        work_t,
                                                        n_views,
                                                        n_scalars,
+                                                       ndim,
+                                                       final_shape,
                                                        instrs,
                                                        expr_is_soarr);
     std::string k_id = hash_to_hex(kernel_str + arch_opt);
@@ -209,6 +213,8 @@ namespace ncarray {
                                                          DType work_t, // Intermediate evals and Scalars
                                                          int n_views,
                                                          int n_scalars,
+                                                         ssize_t ndim,
+                                                         const ssize_t* final_shape,
                                                          const std::vector<Instruction>& instrs,
                                                          bool expr_is_soarr) {
     auto get_dtype_name = [&] <typename T> () {
@@ -259,7 +265,7 @@ namespace ncarray {
       } else if (op == OpCode::IDX) {
         // Negative values are sentinals for IDX "virtual loads"
         packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = -1;\n";
-        n_indices++; // We encode the indices now into hte template var as a "View"
+        n_indices++; // We encode the indices now into the template var as a "View"
       } else if (op == OpCode::LOAD_CONST) {
         packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(n_views + idx) + ";\n";
       } else {
@@ -267,6 +273,13 @@ namespace ncarray {
         packing_logic += "  mvnode.ops[" + std::to_string(op_ptr++) + "] = " + "static_cast<ncarray::OpCode>(" + opi_str + ");\n";
       }
     }
+
+    for (ssize_t dim = 0; dim < ndim; ++dim) {
+      packing_logic += "  mvnode.final_shape[" + std::to_string(dim) + "] = " + std::to_string(final_shape[dim]) + ";\n";
+    }
+    ssize_t final_size =
+      std::accumulate(final_shape, final_shape + ndim, 1, std::multiplies<ssize_t>{});
+    packing_logic += "  mvnode.final_size = " + std::to_string(final_size) + ";\n";
 
     std::string jit_expression_k_sig =
       "extern \"C\" __global__ void jit_expression_kernel(" + d_params + ", " + result_type + " result) {\n";
