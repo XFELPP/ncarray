@@ -47,4 +47,28 @@ TEST(NCArrayUnaryOperationsTest, Iota) {
       EXPECT_EQ(static_cast<int>(iota_res[{i, j}]), i * 3 + j);
     }
   }
+
+  // Test immediate evaluation
+  ncarray::NCArray iota_res2 = ncarray::NCArray::iota(shape); // int64 by default
+  for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned j = 0; j < 3; ++j) {
+      EXPECT_EQ(static_cast<std::int64_t>(iota_res2[{i, j}]), i * 3 + j);
+    }
+  }
+
+  // Test immediate evaluation with cast
+  ncarray::NCArray iota_res3 = ncarray::NCArray::iota(shape, ncarray::DType::float32);
+  for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned j = 0; j < 3; ++j) {
+      EXPECT_FLOAT_EQ(static_cast<float>(iota_res3[{i, j}]), static_cast<float>(i * 3 + j));
+    }
+  }
+
+  // Test iota as part of larger expression
+  ncarray::NCArray iota_res4 = arr.iota() * 2 + 1;
+  for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned j = 0; j < 3; ++j) {
+      EXPECT_EQ(static_cast<int>(iota_res4[{i, j}]), (i * 3 + j) * 2 + 1);
+    }
+  }
 }

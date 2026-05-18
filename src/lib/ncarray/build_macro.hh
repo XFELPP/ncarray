@@ -7,7 +7,6 @@
 #include "ncarray/engines.hh"
 #include "ncarray/expression.hh"
 #include "ncarray/layout.hh"
-#include "ncarray/vmexpression.hh"
 
 #ifdef _WIN32
 #include <BaseTsd.h>

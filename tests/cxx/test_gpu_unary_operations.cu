@@ -59,5 +59,37 @@ TEST(NCDevArrayUnaryOperationsTest, Iota) {
       EXPECT_EQ(static_cast<int>(host_iota_res[{i, j}]), i * 3 + j);
     }
   }
+
+  // Test immediate evaluation
+  ncarray::NCDevArray dev_iota_res2 = ncarray::NCDevArray::iota(shape); // int64 by default
+  ncarray::NCArray host_iota_res2(shape, ncarray::DType::int64);
+  dev_iota_res2.copy_into(host_iota_res2.data());
+  for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned j = 0; j < 3; ++j) {
+      EXPECT_EQ(static_cast<std::int64_t>(host_iota_res2[{i, j}]), i * 3 + j);
+    }
+  }
+
+  // Test immediate evaluation with cast
+  ncarray::NCDevArray dev_iota_res3 = ncarray::NCDevArray::iota(shape, ncarray::DType::float32);
+  ncarray::NCArray host_iota_res3(shape, ncarray::DType::float32);
+  dev_iota_res3.copy_into(host_iota_res3.data());
+  for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned j = 0; j < 3; ++j) {
+      EXPECT_FLOAT_EQ(static_cast<float>(host_iota_res3[{i, j}]), static_cast<float>(i * 3 + j));
+    }
+  }
+
+  // Test iota as part of larger expression
+  ncarray::NCDevArray dev_iota_res4 = dev_arr.iota() * 2 + 1;
+  ncarray::NCArray host_iota_res4(shape, ncarray::DType::int32);
+  dev_iota_res4.copy_into(host_iota_res4.data());
+  for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned j = 0; j < 3; ++j) {
+      EXPECT_EQ(static_cast<std::int32_t>(host_iota_res4[{i, j}]), (i * 3 + j) * 2 + 1);
+    }
+  }
+
 }
+
 #endif

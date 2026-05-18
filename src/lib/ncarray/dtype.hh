@@ -361,9 +361,20 @@ namespace ncarray {
   using keyval_types = typename wrap_list<IndexedKVP, base_types>::type;
 
   /**
+   * Provide supporting types for the ArrayElementProxy restricted conversion operators.
+   *
+   * Due to differences in definitions of fixed-width ints on host and device (std,
+   * vs cuda::std), the ArrayElementProxy concept on the operator T& may delete needed
+   * operators inside kernels. This type_list adds back the requisite types.
+   */
+  using device_int_compat_types =
+    type_list<long, unsigned long, long long, unsigned long long>;
+
+  /**
    * The set of all types in ncarray, including accumulators and the base dtypes.
    */
-  using all_supported_types = concat_t<base_types, accumulator_types, keyval_types>;
+  using all_supported_types =
+    concat_t<base_types, accumulator_types, keyval_types, device_int_compat_types>;
 
   /**
    * A dispatch engine for matching a DType to the underlying type and running a function.

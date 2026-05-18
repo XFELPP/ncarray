@@ -545,6 +545,8 @@ namespace ncarray {
 
       int operand_ptr { 0 };
       int op_ptr { 0 };
+      // Start virtual arrays (for IDX/IOTA) after real ones
+      int idx_counter { static_cast<int>(node.layouts.size()) };
       for (const auto& instr : node.instrs) {
         int idx = get_index(instr);
         OpCode op = get_op(instr);
@@ -553,9 +555,7 @@ namespace ncarray {
           op_map[operand_ptr++] = idx;
         } else if (op == OpCode::IDX) {
           // The IDX/IOTA (APL style index generator) is treated as a virtual load
-          // It occupies a "array" slot and increments the operand_ptr.
-          // Care must be taken to make sure NViews has accounted for this.
-          op_map[operand_ptr++] = -1; // Use a negative value as a sentinal
+          op_map[operand_ptr++] = idx_counter++;
         } else if (op == OpCode::LOAD_CONST) {
           op_map[operand_ptr++] = NViews + idx;
         } else {
@@ -573,8 +573,8 @@ namespace ncarray {
       for (int i = 0; i < NViews; ++i) {
         short map_val = op_map[i];
 
-        if (map_val < 0) {
-          // Negative values are sentinals for IDX generator
+        if (data[i] == nullptr) {
+          // Null data is considered a virtual load, e.g. for IDX/IOTA
           values[i] = this->md_to_lin<ScalarT>(coords);
         } else {
           auto& layout = layouts[i];

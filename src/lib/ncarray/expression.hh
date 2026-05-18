@@ -92,7 +92,7 @@ namespace ncarray {
    */
   template <typename T>
   concept AnyExpression =
-    Expression<T> || ArrayLike<T> || Numeric<T> || Complex<T> ||Vector2DType<T>;
+    Expression<T> || ArrayLike<T> || Numeric<T> || Complex<T> || Vector2DType<T>;
 
 #ifndef __CUDACC_RTC__
   template <class L, class R, OpCode O>
@@ -236,7 +236,6 @@ namespace ncarray {
     }
 
     template <typename DestT>
-    //NCA_HD inline DestT eval(ssize_t (&coords)[NCARRAY_MAX_NDIM]) const {
     NCA_HD inline DestT eval(ssize_t* coords) const {
       int src_idx { static_cast<int>(array.dtype()) };
       auto proxy = array[coords];
@@ -304,7 +303,6 @@ namespace ncarray {
     }
 
     template <typename DestT>
-    //NCA_HD inline DestT eval(ssize_t (&coords)[NCARRAY_MAX_NDIM]) const {
     NCA_HD inline DestT eval(ssize_t* coords) const {
       T& item = array[coords];
       return op_traits<T>::template cast<DestT>(item);
@@ -353,7 +351,6 @@ namespace ncarray {
     }
 
     template <typename DestT>
-    //NCA_HD inline DestT eval(ssize_t (&coords)[NCARRAY_MAX_NDIM]) const {
     NCA_HD inline DestT eval(ssize_t* coords) const {
       return op_traits<T>::template cast<DestT>(val);
     }
@@ -457,8 +454,6 @@ namespace ncarray {
       return DestT{};
     }
 
-    //template <typename DestT>
-    //NCA_HD inline DestT eval(ssize_t (&coords)[NCARRAY_MAX_NDIM]) const {
     template <typename DestT, typename Coords>
     NCA_HD inline DestT eval(const Coords& coords) const {
       if constexpr (Op == OpCode::ADD) {
@@ -623,16 +618,12 @@ namespace ncarray {
                        int& op_idx) {
 
     if constexpr (is_binary_node_v<Expr>) {
-      // Traverse Left
       collect_mv_data(expr.left, data_out, dtype_out, ops_out, leaf_idx, op_idx);
 
-      // Store the Operation that merges this branch
       ops_out[op_idx++] = op_code_of<Expr>::value;
 
-      // Traverse Right
       collect_mv_data(expr.right, data_out, dtype_out, ops_out, leaf_idx, op_idx);
     } else {
-      // Leaf: store the pointers
       if constexpr (requires { expr.arr_views; }) {
         data_out[leaf_idx] = expr.arr_views[leaf_idx].data();
         dtype_out[leaf_idx] = expr.dtype();
@@ -656,9 +647,7 @@ namespace ncarray {
     } else {
       if constexpr (requires { expr.arr_views; }) {
         return false;
-        //return expr.arr_views[0].layout_matches(ref_layout);
       } else {
-        //return expr.array.layout_matches(ref_layout);
         bool match = expr.array.layout_matches(ref_layout);
         if (!match) {
         }
@@ -666,33 +655,6 @@ namespace ncarray {
       }
     }
   }
-
-  /**
-   * Optimization for the Expression Tree
-   * 1. Object Recognition
-   * 2. View Packing
-   * 3. Topological Deduplication (CSE - common subexpression elimination)
-   *     - (a + b) * (a + b) uses (a + b) twice
-   * 4. Algebraic pruning (identity removals)
-   * 5. Stride pruning (broadcast optimizations)
-   *     - E.g. zero strides convert to scalars
-   * 6. DType narrowing where needed.
-   */
-
-  /**
-
-template <typename Expr>
-const auto& get_ref_layout(const Expr& expr) {
-  if constexpr (is_binary_node_v<Expr>) return get_ref_layout(expr.left);
-  else return expr.array; // Returns the first ArrayImpl found
-}
-// In your Engine:
-auto& ref = get_ref_layout(expr);
-if (check_layouts(expr, ref)) {
-    // We can safely collapse into a single Layout object!
-    // Now collect pointers, dtypes, and ops...
-}
-   */
 
   /**
    * The ExprMVArrayNode is a specialized tree node to optimize (portions)
@@ -720,40 +682,22 @@ if (check_layouts(expr, ref)) {
                            const OpCode (&ops_)[NViews - 1])
       : layout(layout_)
     {
-      //const std::uint8_t* base { static_cast<const std::uint8_t*>(data) };
       for (int i = 0; i < NViews; ++i) {
         dtypes[i] = dtypes_[i];
         data[i] = data_[i];
-        /*
-        if (i > 0) {
-          offsets[i - 1] = static_cast<const std::uint8_t*>(data_[i]) - base;
-        }
-        */
+
         if (i < NViews - 1) {
           ops[i] = ops_[i];
         }
       }
     }
 
-    //template <typename DestT>
-    //NCA_HD inline DestT eval(ssize_t (&coords)[NCARRAY_MAX_NDIM]) const {
     template <typename DestT, typename Coords>
     NCA_HD inline DestT eval(const Coords& coords) const {
       DestT res { 0 };
 
       #pragma unroll NViews
       for (int i = 0; i < NViews; ++i) {
-        /*
-        const void* ptr;
-        if (i == 0) {
-          ptr = data;
-          //ptr = n_data;
-        } else {
-          ptr = data + offsets[i - 1];
-          //ptr = n_data + offsets[i - 1];
-        }
-        const void* leaf_ptr = layout.advance(ptr, coords);
-        */
         const void* leaf_ptr = layout.advance(data[i], coords);
         int src_idx { static_cast<int>(dtypes[i]) };
 
@@ -774,39 +718,8 @@ if (check_layouts(expr, ref)) {
           res = this->template apply_op<DestT>(res, leaf_res, ops[i - 1]); // For N views, have N - 1 Ops
         }
       }
+
       return res;
-
-      /*
-      DestT vals[NViews];
-      #pragma unroll NViews
-      for (int i = 0; i < NViews; ++i) {
-        const void* ptr;
-        if (i == 0) {
-          ptr = data;
-        } else {
-          ptr = data + offsets[i - 1];
-        }
-        const void* leaf_ptr = layout.advance(ptr, coords);
-        int src_idx { static_cast<int>(dtypes[i]) };
-        if constexpr (std::is_same_v<MemType, HostTag>) {
-#ifndef __CUDA_ARCH__
-          vals[i] = host::vm_cast_table<DestT>[src_idx](leaf_ptr);
-#endif
-        } else {
-#ifdef __CUDACC__
-          vals[i] = device::device_cast<DestT>(src_idx, leaf_ptr);
-#endif
-        }
-      }
-
-      DestT res { vals[0] };
-
-      #pragma unroll NViews
-      for (int i = 1; i < NViews; ++i) {
-        res = this->template apply_op<DestT>(res, vals[i], ops[i - 1]);
-      }
-      return res;
-      */
     }
 
     template <typename DestT>
@@ -841,31 +754,8 @@ if (check_layouts(expr, ref)) {
         return res / leaf;
         // Comparisons
       }
-      /*
-      } else if  (op == OpCode::EQ) {
-        return res == leaf;
-      } else if  (op == OpCode::NE) {
-        return res != leaf;
-      } else if  (op == OpCode::LT) {
-        return op_traits<DestT>::less(res, leaf);
-      } else if  (op == OpCode::LE) {
-        return op_traits<DestT>::le(res, leaf);
-      } else if  (op == OpCode::GT) {
-        return op_traits<DestT>::greater(res, leaf);
-      } else if  (op == OpCode::GE) {
-        return op_traits<DestT>::ge(res, leaf);
-      }
-      */
+
       return DestT{};
-      /*
-        // Logical
-      } else if  (op == OpCode::LAND) {
-        return res && leaf;
-      } else if  (op == OpCode::LOR) {
-        return res || leaf;
-      }
-      return DestT{};
-      */
     }
 
 
@@ -932,25 +822,6 @@ if (check_layouts(expr, ref)) {
       }
 
       return res;
-      /*
-      DestT res { 0 };
-
-      #pragma unroll NViews
-      for (int i = 0; i < NViews; ++i) {
-        const void* leaf_ptr = layout.advance(data[i], coords);
-
-        T item = *reinterpret_cast<const T*>(leaf_ptr);
-        DestT leaf_res = op_traits<T>::template cast<DestT>(item);
-        if (i == 0) {
-          res = leaf_res;
-        } else {
-          // NOTE: For N views, we currently assume N - 1 Ops
-          // This ignores unary ops on the first view.
-          res = this->template apply_op<DestT>(res, leaf_res, ops[i - 1]);
-        }
-      }
-      return res;
-      */
     }
 
     template <typename DestT>
@@ -1035,7 +906,7 @@ if (check_layouts(expr, ref)) {
     using type = ExprArrayNode<typename Arr::ViewType>;
     static NCA_HD auto get(const Arr& val) { return type(val.view()); }
   };
-#endif // ifndef __CUDACC_RTC__ (nvrtc guard)
+#endif
 } // namespace ncarray
 
 #endif // NCARRAY_EXPRESSION_HH

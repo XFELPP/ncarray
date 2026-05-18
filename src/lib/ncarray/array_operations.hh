@@ -16,7 +16,6 @@
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
 #include "ncarray/mvnode.hh"
-#include "ncarray/vmexpression.hh"
 
 #ifdef _WIN32
 #include <BaseTsd.h>
