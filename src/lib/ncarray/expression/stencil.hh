@@ -16,7 +16,7 @@
 #include "ncarray/jit/rtcompiler.hh"
 
 #include <cstdint>
-#include <iostream>
+#include <optional>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -76,7 +76,7 @@ namespace ncarray {
                                 Func&& op_func,
                                 bool is_soarr = false) {
       Stencil s;
-      int num_views { offsets_in.size() };
+      int num_views { static_cast<int>(offsets_in.size()) };
       s.m_offsets = offsets_in;
 
       ssize_t unit[NDIM];
@@ -154,16 +154,27 @@ namespace ncarray {
      *
      * Run the pre-constructed kernel on an input array and a pre-created output array.
      * The input must match the input used for creation of the kernel in the number
-     * and location of pointer axes as well as the dimensionality.
+     * and location of pointer axes as well as the dimensionality. A CUDA stream may be
+     * provided to run the execution on, if desired.
+     *
+     * NOTE: If a stream is provided for running the kernel on, this function will NOT
+     * synchronize. This constrasts with other APIs which always do before returning
+     * control the host caller. This is because if a stream is passed in order to record
+     * the kernel as part of a graph, synchronization is NOT permitted in the capture.
+     * Since it is not possible to know whether the stream is provided in order to
+     * construct a graph, or not, all synchronization is the caller's responsibility
+     * when providing a stream.
      *
      * @tparam Src The input array type.
      * @tparam Dest The output array type.
      * @param src The input array.
      * @param dest The output array.
+     * @param stream Optionally, provide a stream to launch the kernel on.
      */
     template <ViewArrayLike Src, OwningArrayLike Dest>
-    void apply(const Src& src, Dest& dest) {
-
+    void apply(const Src& src,
+               Dest& dest,
+               std::optional<cudaStream_t> stream = std::nullopt) {
       constexpr int TPB { 256 };
       int blocks { static_cast<int>(dest.size() + TPB - 1) / TPB };
 
@@ -190,12 +201,12 @@ namespace ncarray {
         auto offset { m_constants_offsets[i] };
         args[4 + i] = &m_constants_buf[offset];
       }
-      CUresult launch_res = cuLaunchKernel(m_kernel,     // Kernel
-                                           blocks, 1, 1, // Grid dims (x, y, z)
-                                           TPB, 1, 1,    // Block dims (x, y, z)
-                                           0,            // Shmem in bytes
-                                           0,            // Stream
-                                           args.data(),  // Kernel args
+      CUresult launch_res = cuLaunchKernel(m_kernel,                         // Kernel
+                                           blocks, 1, 1,                     // Grid dims (x, y, z)
+                                           TPB, 1, 1,                        // Block dims (x, y, z)
+                                           0,                                // Shmem in bytes
+                                           stream.has_value() ? *stream : 0, // Stream
+                                           args.data(),                      // Kernel args
                                            NULL);
 
       if (launch_res != CUDA_SUCCESS) {
@@ -205,8 +216,13 @@ namespace ncarray {
         throw std::runtime_error("Stencil kernel launch failed!");
       }
 
-      cuCtxSynchronize();
-      cudaDeviceSynchronize();
+      if (!stream.has_value()) {
+        // When creating graphs, synchronization is expressly prohibited.
+        // When passing a stream, the user is therefore responsible for synchronizing
+        // the graph launches.
+        cuCtxSynchronize();
+        cudaDeviceSynchronize();
+      }
     }
 
   private:
