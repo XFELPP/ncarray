@@ -42,6 +42,13 @@ endif
 
 deps_for_ncarray = []
 if nca_has_cuda
+    # Add libdl as needed for JIT if not merged directly into the cstdlib
+    cpp = meson.get_compiler('cpp')
+    dl_dep = cpp.find_library('dl', required: false)
+    if dl_dep.found()
+        deps_for_ncarray += dl_dep
+    endif
+
     # CUDA driver and nvrtc are both for JIT
     cuda_dep = dependency('cuda', modules: ['cuda', 'cudart', 'nvrtc'])
     deps_for_ncarray += cuda_dep
@@ -201,8 +208,17 @@ py3.install_sources(
 )
 
 if nca_has_cuda
+    stencil_headers = [
+        'src/lib/ncarray/expression/stencil.hh',
+    ]
+    py3.install_sources(
+        stencil_headers,
+        pure: false,
+        subdir: 'ncarray/include/expression',
+    )
     jit_headers = [
         'src/lib/ncarray/jit/path_utils.hh',
+        'src/lib/ncarray/jit/jit_utils.hh',
         'src/lib/ncarray/jit/rtcompiler.hh',
     ]
 
@@ -210,6 +226,7 @@ if nca_has_cuda
         'ncdevarrayjit',
         [
             'src/lib/ncarray/jit/path_utils.cc',
+            'src/lib/ncarray/jit/jit_utils.cc',
             'src/lib/ncarray/jit/rtcompiler.cc',
         ],
         cuda_args: nca_cuda_args,

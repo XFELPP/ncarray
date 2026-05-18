@@ -10,6 +10,7 @@
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
+#include "ncarray/jit/jit_utils.hh"
 #include "ncarray/jit/path_utils.hh"
 #include "ncarray/op_code.hh"
 
@@ -19,7 +20,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
-#include <iomanip>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -33,32 +33,7 @@
 #endif
 #endif
 
-    namespace fs = std::filesystem;
-
-namespace {
-  std::string hash_to_hex(const std::string& input) {
-    std::hash<std::string> hasher;
-    size_t hash = hasher(input);
-    std::stringstream ss;
-    ss << std::hex << std::setw(16) << std::setfill('0') << hash;
-    return ss.str();
-  }
-
-  std::string get_arch_opt() {
-    int major_v;
-    int minor_v;
-    CUdevice dev;
-    cuDeviceGet(&dev, 0);
-    cuDeviceGetAttribute(&major_v, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev);
-    cuDeviceGetAttribute(&minor_v, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev);
-
-    std::string arch_opt {
-      "-arch=compute_" + std::to_string(major_v) + std::to_string(minor_v)
-    };
-
-    return arch_opt;
-  }
-}
+namespace fs = std::filesystem;
 
 namespace ncarray {
 
@@ -199,13 +174,13 @@ namespace ncarray {
 
   CUfunction RuntimeCompiler::ptx_to_sass(std::string ptx, const char* func_name) {
     CUmodule cu_mod;
-    CUjit_option ptx_jit_opts[] = { CU_JIT_OPTIMIZATION_LEVEL };
-    void* ptx_jit_vals[] = { reinterpret_cast<void*>(3) };
-    CUDA_SAFE_CALL(cuModuleLoadDataEx(&cu_mod, ptx.data(), 1, ptx_jit_opts, ptx_jit_vals));
+    // Optimization level is from 0-4. By default it applies 4, most optimized.
+    // Could override with CU_JIT_OPTIMIZATION_LEVEL and using cuModuleLoadDataEx
+    CUDA_SAFE_CALL(cuModuleLoadData(&cu_mod, ptx.data()));
     CUfunction k_func;
     CUDA_SAFE_CALL(cuModuleGetFunction(&k_func, cu_mod, func_name));
 
-    return k_func;
+    return k_func; // Kernel is cached in memory by the RuntimeCompiler
   }
 
   std::string RuntimeCompiler::get_expression_kernel_str(DType dest_t,
@@ -265,6 +240,7 @@ namespace ncarray {
     int operand_ptr { 0 };
     int op_ptr { 0 };
     int n_indices { 0 };
+    int idx_counter { n_views };
     for (const auto& instr : instrs) {
       int idx = get_index(instr);
       OpCode op = get_op(instr);
@@ -272,11 +248,18 @@ namespace ncarray {
       if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
         packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(idx) + ";\n";
       } else if (op == OpCode::IDX) {
-        // Negative values are sentinals for IDX "virtual loads"
-        packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = -1;\n";
-        n_indices++; // We encode the indices now into the template var as a "View"
+        // Make data a nullptr for the "virtual array" defined by IDX
+        packing_logic +=
+          "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(idx_counter) + ";\n";
+        // Make sure idx_counter increments here, but not in the op_map. Or wherever. Just once
+        packing_logic +=
+          "  mvnode.data[" + std::to_string(idx_counter++) + "] = nullptr;\n";
+        n_indices++; // Total indices get added to number of real arrays for the template var as views
       } else if (op == OpCode::LOAD_CONST) {
-        packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(n_views + idx) + ";\n";
+        // ViewsAndVirt will have virtual loads encoded. We'll define at the top of the
+        // kernel. The constants need to know the total amount of both.
+        packing_logic +=
+          "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = ViewsAndVirt + " + std::to_string(idx) + ";\n";
       } else {
         auto opi_str = std::to_string(static_cast<int>(op));
         packing_logic += "  mvnode.ops[" + std::to_string(op_ptr++) + "] = " + "static_cast<ncarray::OpCode>(" + opi_str + ");\n";
@@ -292,6 +275,9 @@ namespace ncarray {
       std::accumulate(final_shape, final_shape + ndim, 1, std::multiplies<ssize_t>{});
     packing_logic += "  mvnode.final_size = " + std::to_string(final_size) + ";\n";
 
+    // Make sure to put the total view (virtual and real) at the top now that its known
+    packing_logic =
+      "  constexpr int ViewsAndVirt = " + std::to_string(n_views + n_indices) + ";\n" + packing_logic;
     std::string jit_expression_k_sig;
     if (n_views > 0 || n_scalars > 0) {
       // Include d_params only if we have arrays and/or scalars
