@@ -187,15 +187,23 @@ namespace ncarray {
           unsigned mask = __match_any_sync(__activemask(),
                                            static_cast<unsigned long long>(j));
 
-          int leader = __ffs(mask) - 1;
-          int lane = threadIdx.x % 32;
+          int leader { __ffs(mask) - 1 };
+          int lane { threadIdx.x % 32 };
 
-          for (unsigned offset = 16; offset > 0; offset /= 2) {
+          unsigned current_mask { mask };
+          current_mask &= ~(1U << leader); // The leader already has its value
+          while (current_mask) {
+            int src_lane { __ffs(current_mask) - 1 };
+
+            unsigned offset = (src_lane > lane) ? (src_lane - lane) : 0;
+
             AccumT other = nca_shfl_down(mask, val, offset);
 
-            if ((mask >> (lane + offset)) & 1) {
-              val += other;
+            if (lane == leader) {
+              val = reducer.reduce(val, other);
             }
+
+            current_mask &= ~(1U << src_lane);
           }
 
           if (lane == leader) {

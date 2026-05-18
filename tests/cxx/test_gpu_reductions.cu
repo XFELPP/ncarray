@@ -36,7 +36,7 @@ __global__ void iota_kernel(OutT out) {
 }
 #endif
 
-TEST(NCDevArrayOperationsTest, FullReductions) {
+TEST(NCDevArrayReductionsTest, FullReductions) {
   std::vector<ssize_t> shape { 256 };
 
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
@@ -54,7 +54,73 @@ TEST(NCDevArrayOperationsTest, FullReductions) {
   EXPECT_EQ(std::get<float>(dev_min), 0.0f);
 }
 
-TEST(NCArrayOperationsTest, SlicedFullReductions) {
+TEST(NCDevArrayReductionsTest, AxisAwareReductions) {
+  std::vector<ssize_t> shape { 2, 3 };
+  ncarray::NCDevArray arr(shape, ncarray::dtype_traits<std::int32_t>::value);
+  // Initialize with [1, 2, 3]
+  //                 [4, 5, 6]
+  arr = arr.iota() + 1;
+
+  // --- Reduce axis 0 ---
+
+  // Expected sum: [5, 7, 9]
+  ncarray::NCDevArray sum_ax0 = arr.sum({0});
+  EXPECT_EQ(sum_ax0.shape()[0], 3);
+
+  cudaDeviceSynchronize();
+  std::vector<ssize_t> ax0_shape { 3 };
+  ncarray::NCArray host_res_ax0(ax0_shape, ncarray::DType::int32);
+  sum_ax0.copy_into(host_res_ax0.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{0}]), 5);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{1}]), 7);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{2}]), 9);
+
+  // Expected max: [4, 5, 6]
+
+  ncarray::NCDevArray max_ax0 = arr.max({0});
+  cudaDeviceSynchronize();
+
+  max_ax0.copy_into(host_res_ax0.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{0}]), 4);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{1}]), 5);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{2}]), 6);
+
+  // Expected min: [1, 2, 3]
+  ncarray::NCDevArray min_ax0 = arr.min({0});
+
+  min_ax0.copy_into(host_res_ax0.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{0}]), 1);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{1}]), 2);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{2}]), 3);
+
+  // --- Reduce axis 1 ---
+
+  // Expected sum: [6, 15]
+  ncarray::NCDevArray sum_ax1 = arr.sum({1});
+  EXPECT_EQ(sum_ax1.shape()[0], 2);
+
+  cudaDeviceSynchronize();
+  std::vector<ssize_t> ax1_shape { 2 };
+  ncarray::NCArray host_res_ax1(ax1_shape, ncarray::DType::int32);
+  sum_ax1.copy_into(host_res_ax1.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{0}]), 6);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{1}]), 15);
+
+  // Expected max: [3, 6]
+  ncarray::NCDevArray max_ax1 = arr.max({1});
+
+  max_ax1.copy_into(host_res_ax1.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{0}]), 3);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{1}]), 6);
+
+  // Expected min: [1, 4]
+  ncarray::NCDevArray min_ax1 = arr.min({1});
+  min_ax1.copy_into(host_res_ax1.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{0}]), 1);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{1}]), 4);
+}
+
+TEST(NCDevArrayReductionsTest, SlicedFullReductions) {
   std::vector<ssize_t> shape { 4, 4 };
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
   dev_arr.fill(1.0f);
