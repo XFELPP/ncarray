@@ -5,7 +5,8 @@
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
 #include "ncarray/engines.hh"
-#include "ncarray/expression.hh"
+#include "ncarray/expression/dynamicmvnode.hh"
+#include "ncarray/expression/interface.hh"
 #include "ncarray/layout.hh"
 
 #ifdef _WIN32

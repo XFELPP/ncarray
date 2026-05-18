@@ -20,11 +20,12 @@
 #include "ncarray/device/mem_pool.cuh"
 #include "ncarray/device/utilities.cuh"
 #include "ncarray/engines/hostengine.hh" // For fallback to host copy routines
-#include "ncarray/expression.hh"
+#include "ncarray/expression/dynamicmvnode.hh"
+#include "ncarray/expression/mvnode.hh"
+#include "ncarray/expression/staticmvnode.hh"
 #include "ncarray/indexing.hh"
 #include "ncarray/jit/rtcompiler.hh"
 #include "ncarray/layout.hh"
-#include "ncarray/mvnode.hh"
 #include "ncarray/op_traits.hh"
 #include "ncarray/reductions.hh"
 

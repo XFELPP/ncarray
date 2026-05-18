@@ -12,11 +12,11 @@
 #include "ncarray/array_element_proxy.hh"
 #include "ncarray/array_traits.hh"
 #include "ncarray/dtype.hh"
-#include "ncarray/expression.hh"
+#include "ncarray/expression/interface.hh"
+#include "ncarray/expression/mvnode.hh"
 #include "ncarray/indexing.hh"
 #include "ncarray/layout.hh"
 #include "ncarray/op_traits.hh"
-#include "ncarray/mvnode.hh"
 #include "ncarray/storage.hh"
 
 #ifdef __CUDACC_RTC__

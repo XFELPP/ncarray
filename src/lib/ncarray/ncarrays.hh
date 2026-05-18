@@ -52,19 +52,4 @@ namespace ncarray {
   EXTERN_HOST_VM_OPS(Double4, NCOffsetsPolicy)
 } // namespace ncarray
 
-/*
-#include "ncarray/array_impl.hh"
-#include "ncarray/array_operations.hh"
-#include "ncarray/expression.hh"
-
-namespace ncarray {
-  using NCArrayView = ArrayImpl<NCOffsetsPolicy, ViewPolicy>;
-  using NCArrayRef = ArrayImpl<NCOffsetsPolicy, RefPolicy>;
-  using NCArray = ArrayImpl<NCOffsetsPolicy, OwnerPolicy>;
-
-  extern template class ArrayImpl<NCOffsetsPolicy, ViewPolicy>;
-  extern template class ArrayImpl<NCOffsetsPolicy, RefPolicy>;
-  extern template class ArrayImpl<NCOffsetsPolicy, OwnerPolicy>;
-} // namespace ncarray
-*/
 #endif // NCARRAY_NCARRAYS_HH

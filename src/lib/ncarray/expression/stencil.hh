@@ -10,10 +10,10 @@
 #define NCARRAY_EXPRESSION_STENCIL_HH
 
 #include "ncarray/array_impl.hh"
-#include "ncarray/expression.hh"
+#include "ncarray/expression/interface.hh"
+#include "ncarray/expression/mvnode.hh"
 #include "ncarray/indexing.hh"
 #include "ncarray/jit/rtcompiler.hh"
-#include "ncarray/mvnode.hh"
 
 #include <cstdint>
 #include <iostream>

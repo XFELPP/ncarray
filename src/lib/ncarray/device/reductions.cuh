@@ -11,7 +11,7 @@
 
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
-#include "ncarray/expression.hh"
+#include "ncarray/expression/interface.hh"
 #include "ncarray/op_traits.hh"
 
 #include "cub/cub.cuh"

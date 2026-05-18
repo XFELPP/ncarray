@@ -423,7 +423,7 @@ namespace ncarray {
     std::string source =
       "#include \"ncarray/array_impl.hh\"\n"
       "#include \"ncarray/device/kernels.cuh\"\n"
-      "#include \"ncarray/mvnode.hh\"\n\n" +
+      "#include \"ncarray/expression/staticmvnode.hh\"\n\n" +
       kernel_str;
     nvrtcProgram prog;
     NVRTC_SAFE_CALL(nvrtcCreateProgram(&prog, source.c_str(), "kernels.cu", 0, NULL, NULL));

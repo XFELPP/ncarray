@@ -11,11 +11,11 @@
 
 #include "ncarray/array_impl.hh"
 #include "ncarray/engines.hh"
-#include "ncarray/expression.hh"
+#include "ncarray/expression/interface.hh"
+#include "ncarray/expression/mvnode.hh"
 #include "ncarray/host/casts.hh"
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
-#include "ncarray/mvnode.hh"
 
 #ifdef _WIN32
 #include <BaseTsd.h>

@@ -165,9 +165,7 @@ installed_headers = [
     'src/lib/ncarray/custom_types.hh',
     'src/lib/ncarray/dtype.hh',
     'src/lib/ncarray/engines.hh',
-    'src/lib/ncarray/expression.hh',
     'src/lib/ncarray/indexing.hh',
-    'src/lib/ncarray/mvnode.hh',
     'src/lib/ncarray/layout.hh',
     'src/lib/ncarray/ncarrays.hh',
     'src/lib/ncarray/op_code.hh',
@@ -191,7 +189,7 @@ installed_host_headers = [
 ]
 
 py3.install_sources(
-    installed_headers,
+    installed_host_headers,
     pure: false,
     subdir: 'ncarray/include/ncarray/host',
 )
@@ -202,19 +200,32 @@ installed_engines_headers = [
 ]
 
 py3.install_sources(
-    installed_headers,
+    installed_engines_headers,
     pure: false,
     subdir: 'ncarray/include/ncarray/engines',
 )
 
+installed_expression_headers = [
+    'src/lib/ncarray/expression/dynamicmvnode.hh',
+    'src/lib/ncarray/expression/interface.hh',
+    'src/lib/ncarray/expression/mvnode.hh',
+    'src/lib/ncarray/expression/staticmvnode.hh',
+]
+py3.install_sources(
+    installed_expression_headers,
+    pure: false,
+    subdir: 'ncarray/include/ncarray/expression',
+)
+
 if nca_has_cuda
-    stencil_headers = [
+    # Currently, Stencil support is for GPU only
+    installed_expression_stencil_headers = [
         'src/lib/ncarray/expression/stencil.hh',
     ]
     py3.install_sources(
-        stencil_headers,
+        installed_expression_stencil_headers,
         pure: false,
-        subdir: 'ncarray/include/expression',
+        subdir: 'ncarray/include/ncarray/expression',
     )
     jit_headers = [
         'src/lib/ncarray/jit/path_utils.hh',

@@ -26,7 +26,7 @@
 #include "ncarray/jit/jit_utils.hh"
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
-#include "ncarray/mvnode.hh"
+#include "ncarray/expression/mvnode.hh"
 
 #include <cuda.h>
 #include <nvrtc.h>

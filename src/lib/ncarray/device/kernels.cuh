@@ -12,7 +12,7 @@
 #include "ncarray/array_element_proxy.hh"
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
-#include "ncarray/expression.hh"
+#include "ncarray/expression/interface.hh"
 #ifndef __CUDACC_RTC__
 #include "ncarray/device/atomic.cuh"
 #include "ncarray/device/elementwise.cuh"
