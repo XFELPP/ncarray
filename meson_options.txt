@@ -1,2 +1,18 @@
-option('build_core', type: 'boolean', value: true, description: 'Build the C++ shared libraries.')
-option('build_python', type: 'boolean', value: true, description: 'Build the Python extension modules.')
+option(
+    'build_core',
+    type: 'boolean',
+    value: true,
+    description: 'Build the C++ shared libraries.'
+)
+option(
+    'build_python',
+    type: 'boolean',
+    value: true,
+    description: 'Build the Python extension modules.'
+)
+option(
+    'nca_as_wheel',
+    type: 'boolean',
+    value: true,
+    description: 'Install C++ libraries inside wheel structure modifying RPATH appropriately.'
+)

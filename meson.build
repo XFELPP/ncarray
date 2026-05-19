@@ -74,25 +74,38 @@ endif
 
 pybind11_dep = dependency('pybind11', required: true)
 
+#### Fetch Build Options ####
+#############################
+build_core_opt = get_option('build_core')
+build_python_opt = get_option('build_python')
+nca_as_wheel_opt = get_option('nca_as_wheel')
+
 #### Path Setup ####
 ####################
 
 py_install_dir = py3.get_install_dir()
 
-ncarray_lib_install_dir = py3.get_install_dir() / 'ncarray/lib'
+if nca_as_wheel_opt
+    # Install C++ libraries inside the wheel structure
+    # Package and library setup will be:
+    # site-packages/
+    #    | - ncarray
+    #           | - lib
+    #           |    | - libncarray.so
+    #           |
+    #           | - core
+    #           |    | - _pyncarray.so
+    #           |
+    #           | - __init__.py (utility functions and expose core lib)
 
-# Package and library setup will be:
-# site-packages/
-#    | - ncarray
-#           | - lib
-#           |    | - libncarray.so
-#           |
-#           | - core
-#           |    | - _pyncarray.so
-#           |
-#           | - __init__.py (utility functions and expose core lib)
+    libncarray_install_dir = py_install_dir / 'ncarray/lib'
+    header_install_dir = py3.get_install_dir() / 'ncarray/include'
+else
+    # Normal install path
+    libncarray_install_dir = get_option('libdir')
+    header_install_dir = get_option('includedir')
+endif
 
-libncarray_install_dir = py_install_dir / 'ncarray/lib'
 pyncarray_install_dir = py_install_dir / 'ncarray/core'
 py_to_lib_path = '../lib'
 
@@ -175,10 +188,9 @@ installed_headers = [
     'src/lib/ncarray/storage.hh',
 ]
 
-py3.install_sources(
+install_headers(
     installed_headers,
-    pure: false,
-    subdir: 'ncarray/include/ncarray',
+    install_dir: header_install_dir / 'ncarray',
 )
 
 installed_host_headers = [
@@ -188,21 +200,18 @@ installed_host_headers = [
     'src/lib/ncarray/host/reductions.hh',
 ]
 
-py3.install_sources(
+install_headers(
     installed_host_headers,
-    pure: false,
-    subdir: 'ncarray/include/ncarray/host',
+    install_dir: header_install_dir / 'ncarray/host',
 )
 
-installed_engines_headers = [
-    'src/lib/ncarray/engines/gpuengine.hh',
+installed_host_engine_headers = [
     'src/lib/ncarray/engines/hostengine.hh',
 ]
 
-py3.install_sources(
-    installed_engines_headers,
-    pure: false,
-    subdir: 'ncarray/include/ncarray/engines',
+install_headers(
+    installed_host_engine_headers,
+    install_dir: header_install_dir / 'ncarray/engines',
 )
 
 installed_expression_headers = [
@@ -211,27 +220,31 @@ installed_expression_headers = [
     'src/lib/ncarray/expression/mvnode.hh',
     'src/lib/ncarray/expression/staticmvnode.hh',
 ]
-py3.install_sources(
+
+install_headers(
     installed_expression_headers,
-    pure: false,
-    subdir: 'ncarray/include/ncarray/expression',
+    install_dir: header_install_dir / 'ncarray/expression',
 )
 
 if nca_has_cuda
+    installed_gpu_engine_headers = [
+        'src/lib/ncarray/engines/gpuengine.hh',
+    ]
+
+    install_headers(
+        installed_gpu_engine_headers,
+        install_dir: header_install_dir / 'ncarray/engines',
+    )
+
     # Currently, Stencil support is for GPU only
     installed_expression_stencil_headers = [
         'src/lib/ncarray/expression/stencil.hh',
     ]
-    py3.install_sources(
+
+    install_headers(
         installed_expression_stencil_headers,
-        pure: false,
-        subdir: 'ncarray/include/ncarray/expression',
+        install_dir: header_install_dir / 'ncarray/expression',
     )
-    jit_headers = [
-        'src/lib/ncarray/jit/path_utils.hh',
-        'src/lib/ncarray/jit/jit_utils.hh',
-        'src/lib/ncarray/jit/rtcompiler.hh',
-    ]
 
     libncdevarrayjit = shared_library(
         'ncdevarrayjit',
@@ -258,19 +271,36 @@ if nca_has_cuda
         include_directories: ncarray_headers,
     )
 
-    py3.install_sources(
-        jit_headers,
-        pure: false,
-        subdir: 'ncarray/include/ncarray/jit',
+    installed_jit_headers = [
+        'src/lib/ncarray/jit/path_utils.hh',
+        'src/lib/ncarray/jit/jit_utils.hh',
+        'src/lib/ncarray/jit/rtcompiler.hh',
+    ]
+
+    install_headers(
+        installed_jit_headers,
+        install_dir: header_install_dir / 'ncarray/jit',
     )
 
+
+    #### Install CCCL Headers for JIT ####
+    # Will run a little Python script to copy the current CUDA toolkit CCCL headers
+    # Afterwards, these will be installed into the wheel for use by the JIT compiler
+    jit_headers_build_dir = meson.current_build_dir() / 'jit_tmp_headers'
+
+    run_command(
+        py3, 'utilities/copy_cccl_headers.py', jit_headers_build_dir,
+        check: true,
+    )
+
+    # Install CCCL headers into the wheel
     install_subdir(
-        'src/lib/ncarray/jit/include/cuda',
-        install_dir: py3.get_install_dir() / 'ncarray/include/jit',
+        jit_headers_build_dir / 'cuda',
+        install_dir: header_install_dir / 'ncarray/jit',
     )
     install_subdir(
-        'src/lib/ncarray/jit/include/nv',
-        install_dir: py3.get_install_dir() / 'ncarray/include/jit',
+        jit_headers_build_dir / 'nv',
+        install_dir: header_install_dir / 'ncarray/jit',
     )
 
     dev_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/device'
@@ -318,10 +348,9 @@ if nca_has_cuda
         'src/lib/ncarray/sodevarrays.cuh',
     ]
 
-    py3.install_sources(
+    install_headers(
         installed_device_compat_headers,
-        pure: false,
-        subdir: 'ncarray/include/ncarray',
+        install_dir: header_install_dir / 'ncarray',
     )
 
     # The following headers are device only as well as host-called kernels
@@ -336,82 +365,64 @@ if nca_has_cuda
         'src/lib/ncarray/device/warp.cuh',
     ]
 
-    py3.install_sources(
+    install_headers(
         installed_device_headers,
-        pure: false,
-        subdir: 'ncarray/include/ncarray/device',
+        install_dir: header_install_dir / 'ncarray/device',
     )
 
 endif # end nca_has_cuda
 
-# Figure out dependencies
-deps_for_py_mod = [ncarray_dep, pybind11_dep]
+if build_python_opt
+    # Figure out dependencies
+    deps_for_py_mod = [ncarray_dep, pybind11_dep]
 
-if nca_has_cuda
-    deps_for_py_mod += cuda_dep
-    deps_for_py_mod += ncdevarray_dep
-endif
+    if nca_has_cuda
+        deps_for_py_mod += cuda_dep
+        deps_for_py_mod += ncdevarray_dep
+    endif
 
-py_bindings_headers = [
-    'src/lib/python/binding_builder.hh',
-    'src/lib/python/utilities.hh',
-]
-py3.install_sources(
-    py_bindings_headers,
-    pure: false,
-    subdir: 'ncarray/include/python',
-)
+    py_bindings_headers = [
+        'src/lib/python/binding_builder.hh',
+        'src/lib/python/utilities.hh',
+    ]
 
-libeagereval = shared_library(
-    'eagereval',
-    [
-        'src/lib/python/eager.cc',
-    ],
-    install: true,
-    install_dir: pyncarray_install_dir,
-    include_directories: ncarray_headers,
-    dependencies : deps_for_py_mod,
-    install_rpath: py_to_lib_install_rpath,
-    build_rpath: py_to_lib_install_rpath,
-    version: '1',
-    soversion: '1',
-)
+    if nca_as_wheel_opt
+        # NOTE: Only installing the bindings specific headers if in a wheel.
+        # The include path would be confusing in a global install directory.
+        install_headers(
+            py_bindings_headers,
+            install_dir: header_install_dir / 'python',
+        )
+    endif
 
-eager_dep = declare_dependency(
-    link_with: [
-        libeagereval,
-    ],
-    dependencies: deps_for_py_mod,
-    include_directories: ncarray_headers,
-)
-
-
-py_mod = py3.extension_module(
-    '_pyncarray',
-    [
-        'src/lib/python/ncarray.cc',
-    ],
-    install: true,
-    install_dir: pyncarray_install_dir,
-    include_directories: ncarray_headers,
-    dependencies : deps_for_py_mod + eager_dep,
-    install_rpath: py_to_lib_install_rpath,
-    build_rpath: py_to_lib_install_rpath,
-)
-
-if nca_has_cuda
-    # NOTE: For faster/more efficient compilation, each GPU specialization is
-    # split off into its own translation unit.
-    py_dev_mod = py3.extension_module(
-        '_pyncdevarray',
+    libeagereval = shared_library(
+        'eagereval',
         [
-            'src/lib/python/ncdevarray.cu',
-            'src/lib/python/ncdevarray_view.cu',
-            'src/lib/python/ncdevarray_ref.cu',
-            'src/lib/python/ncdevarray_owner.cu',
-            'src/lib/python/sodevarray_view.cu',
-            'src/lib/python/sodevarray_ref.cu',
-            'src/lib/python/sodevarray_owner.cu',
+            'src/lib/python/eager.cc',
+        ],
+        install: true,
+        install_dir: pyncarray_install_dir,
+        include_directories: ncarray_headers,
+        dependencies : deps_for_py_mod,
+        install_rpath: py_to_lib_install_rpath,
+        build_rpath: py_to_lib_install_rpath,
+        version: '1',
+        soversion: '1',
+    )
+
+    eager_dep = declare_dependency(
+        link_with: [
+            libeagereval,
+        ],
+        dependencies: deps_for_py_mod,
+        include_directories: ncarray_headers,
+    )
+
+
+    py_mod = py3.extension_module(
+        '_pyncarray',
+        [
+            'src/lib/python/ncarray.cc',
         ],
         install: true,
         install_dir: pyncarray_install_dir,
@@ -419,29 +430,52 @@ if nca_has_cuda
         dependencies : deps_for_py_mod + eager_dep,
         install_rpath: py_to_lib_install_rpath,
         build_rpath: py_to_lib_install_rpath,
-        cuda_args: nca_cuda_args,
     )
-endif
 
-py_sources = [
-    'src/ncarray/__init__.py',
-]
+    if nca_has_cuda
+        # NOTE: For faster/more efficient compilation, each GPU specialization is
+        # split off into its own translation unit.
+        py_dev_mod = py3.extension_module(
+            '_pyncdevarray',
+            [
+                'src/lib/python/ncdevarray.cu',
+                'src/lib/python/ncdevarray_view.cu',
+                'src/lib/python/ncdevarray_ref.cu',
+                'src/lib/python/ncdevarray_owner.cu',
+                'src/lib/python/sodevarray_view.cu',
+                'src/lib/python/sodevarray_ref.cu',
+                'src/lib/python/sodevarray_owner.cu',
+            ],
+            install: true,
+            install_dir: pyncarray_install_dir,
+            include_directories: ncarray_headers,
+            dependencies : deps_for_py_mod + eager_dep,
+            install_rpath: py_to_lib_install_rpath,
+            build_rpath: py_to_lib_install_rpath,
+            cuda_args: nca_cuda_args,
+        )
+    endif
 
-py3.install_sources(
-    py_sources,
-    pure: false,
-    subdir: 'ncarray',
-)
+    py_sources = [
+        'src/ncarray/__init__.py',
+    ]
 
-placeholders = [
-    'src/ncarray/core/__init__.py',
-]
+    py3.install_sources(
+        py_sources,
+        pure: false,
+        subdir: 'ncarray',
+    )
 
-py3.install_sources(
-    placeholders,
-    pure: false,
-    subdir: 'ncarray/core',
-)
+    placeholders = [
+        'src/ncarray/core/__init__.py',
+    ]
+
+    py3.install_sources(
+        placeholders,
+        pure: false,
+        subdir: 'ncarray/core',
+    )
+endif # build_python_opt
 
 #### Testing ####
 #################
@@ -530,7 +564,7 @@ if nca_has_cuda
         test_gpu_copies,
         env: [
             'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
         ],
         verbose: true
     )
@@ -550,7 +584,7 @@ if nca_has_cuda
         test_gpu_binary_ops,
         env: [
             'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
         ],
         verbose: true
     )
@@ -570,7 +604,7 @@ if nca_has_cuda
         test_gpu_unary_ops,
         env: [
             'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
         ],
         verbose: true
     )
@@ -590,7 +624,7 @@ if nca_has_cuda
         test_gpu_reductions,
         env: [
             'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR='+meson.project_source_root() / 'src/lib/ncarray/jit/include',
+            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
         ],
         verbose: true
     )

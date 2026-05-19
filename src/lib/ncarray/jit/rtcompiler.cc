@@ -407,7 +407,7 @@ namespace ncarray {
     if (const char* env_inc = std::getenv("NCARRAY_JIT_INCLUDE_DIR")) {
       jit_inc_dir = std::string(env_inc);
     } else {
-      jit_inc_dir = (fs::path(nca_inc_dir) / "jit").string();
+      jit_inc_dir = (fs::path(nca_inc_dir) / "ncarray/jit").string();
     }
 
     std::string nca_opt { "-I" + nca_inc_dir };
