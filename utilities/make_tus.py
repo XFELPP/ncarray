@@ -6,6 +6,8 @@
 
 """Make the translation units separated by supported data types."""
 
+import argparse
+import os
 from typing import Tuple
 
 header: str = """
@@ -202,34 +204,47 @@ reduction_names: Tuple[str, ...] = (
 
 layout_names: Tuple[str, str] = ("ncarr", "soarr")
 
-for idx, typename in enumerate(cpp_dtypes):
-    h_filename: str = f"vm_{type_aliases[idx]}.cc"
-    h_path: str = f"src/lib/ncarray/tus/host/{h_filename}"
-    print(typename)
-    with open(h_path, "w") as f:
-        new_str: str = host_funcs.format(typename=typename)
-        print(new_str)
-        f.write(new_str)
+if __name__ == "__main__":
+    parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=str, help="Output directory")
 
+    args: argparse.Namespace = parser.parse_args()
 
-    d_filename: str = f"vm_{type_aliases[idx]}_binops.cu"
-    d_path: str = f"src/lib/ncarray/tus/device/{d_filename}"
-    with open(d_path, "w") as f:
-        new_str: str = dev_funcs.format(typename=typename)
-        print(new_str)
-        f.write(new_str)
+    base_dir: str = args.output
+    write_host_files: bool = True
+    if "tus/device" in base_dir:
+        write_host_files = False
 
-    h_red_filename: str = f"vm_{type_aliases[idx]}_reductions.cc"
-    h_red_path: str = f"src/lib/ncarray/tus/host/{h_red_filename}"
-    print(typename)
-    with open(h_red_path, "w") as f:
-        new_str: str = host_red_funcs.format(typename=typename)
-        print(new_str)
-        f.write(new_str)
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir, exist_ok=True)
 
-    d_red_filename: str = f"vm_{type_aliases[idx]}_reductions.cu"
-    d_red_path: str = f"src/lib/ncarray/tus/device/{d_red_filename}"
-    with open(d_red_path, "w") as f:
-        new_str: str = dev_red_funcs.format(typename=typename)
-        print(new_str)
-        f.write(new_str)
+    for idx, typename in enumerate(cpp_dtypes):
+        if write_host_files:
+            h_filename: str = f"vm_{type_aliases[idx]}.cc"
+            h_path: str = f"{base_dir}/{h_filename}"
+            print(typename)
+            with open(h_path, "w") as f:
+                new_str: str = host_funcs.format(typename=typename)
+                print(new_str)
+                f.write(new_str)
+            h_red_filename: str = f"vm_{type_aliases[idx]}_reductions.cc"
+            h_red_path: str = f"{base_dir}/{h_red_filename}"
+            print(typename)
+            with open(h_red_path, "w") as f:
+                new_str: str = host_red_funcs.format(typename=typename)
+                print(new_str)
+                f.write(new_str)
+        else:
+            d_filename: str = f"vm_{type_aliases[idx]}_binops.cu"
+            d_path: str = f"{base_dir}/{d_filename}"
+            with open(d_path, "w") as f:
+                new_str: str = dev_funcs.format(typename=typename)
+                print(new_str)
+                f.write(new_str)
+
+            d_red_filename: str = f"vm_{type_aliases[idx]}_reductions.cu"
+            d_red_path: str = f"{base_dir}/{d_red_filename}"
+            with open(d_red_path, "w") as f:
+                new_str: str = dev_red_funcs.format(typename=typename)
+                print(new_str)
+                f.write(new_str)

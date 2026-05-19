@@ -165,7 +165,10 @@ if build_core_opt
         )
     endif
 
-    host_cc = run_command('find', host_src_dir, '-name', '*.cc', check: true).stdout().strip().split('\n')
+    host_cc = run_command(
+        py3, '-c', 'import glob; print("\\n".join(glob.glob("' + host_src_dir + '/*.cc")))',
+        check: true
+    ).stdout().strip().split('\n')
 
     libncarray = shared_library(
         'ncarray',
@@ -334,7 +337,7 @@ if build_core_opt
         # Create the translation units if they don't already exist.
         # If running manually and need to regenerate them, run the script by hand
         check_device_tus = run_command(
-            py3, '-c', 'import glob, sys; sys.exit(0 if glob.glob("' + dev_src_dir + '/*.cc") else 1)',
+            py3, '-c', 'import glob, sys; sys.exit(0 if glob.glob("' + dev_src_dir + '/*.cu") else 1)',
             check: false,
         )
         if check_device_tus.returncode() != 0
@@ -344,7 +347,11 @@ if build_core_opt
             )
         endif
 
-        dev_cu = run_command('find', dev_src_dir, '-name', '*.cu', check: true).stdout().strip().split('\n')
+        dev_cu = run_command(
+            py3, '-c', 'import glob; print("\\n".join(glob.glob("' + dev_src_dir + '/*.cu")))',
+            check: true
+        ).stdout().strip().split('\n')
+
         # We also only build this lib at all if CUDA is available
         # We make a fat binary for Turing, Ampere, Ada and Hoper
         libncdevarray = shared_library(
