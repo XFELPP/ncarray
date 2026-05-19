@@ -34,6 +34,15 @@ nca_cuda_args = [
     #'-gencode', 'arch=compute_90,code=[sm_90,compute_90]',
 ]
 
+#### Fetch Build Options ####
+#############################
+build_core_opt = get_option('build_core')
+build_python_opt = get_option('build_python')
+nca_as_wheel_opt = get_option('nca_as_wheel')
+
+#### Core Dependencies ####
+###########################
+
 openmp_dep = dependency('openmp', required: false)
 nca_has_openmp = openmp_dep.found()
 if nca_has_openmp
@@ -59,6 +68,10 @@ if nca_has_openmp
     deps_for_ncarray += openmp_dep
 endif
 
+if build_python_opt
+    pybind11_dep = dependency('pybind11', required: true)
+endif
+
 #### Main Python Setup ####
 ###########################
 
@@ -72,14 +85,6 @@ py_ver = py3.language_version()
 if py_ver.version_compare(f'<@min_python_ver@')
     error(f'Minimum supported Python version is @min_python_ver@, found @py_ver@')
 endif
-
-pybind11_dep = dependency('pybind11', required: true)
-
-#### Fetch Build Options ####
-#############################
-build_core_opt = get_option('build_core')
-build_python_opt = get_option('build_python')
-nca_as_wheel_opt = get_option('nca_as_wheel')
 
 #### Path Setup ####
 ####################
