@@ -161,7 +161,10 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
                      "Whether expressions are currently being eagerily evaluated.");
 
   // --- Namesake NCArray* array classes --- //
-  auto ncview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView");
+  auto ncview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")
+    // These constructors, plus the implicitly_convertible below allow view interconversion
+    .def(py::init<const ncarray::NCArrayRef&>())
+    .def(py::init<const ncarray::NCArray&>());
   register_common_array_methods(ncview_cls);
 
   auto ncref_cls = py::classh<ncarray::NCArrayRef>(ncarray_module, "NCArrayRef")
@@ -186,7 +189,10 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
   register_common_array_methods(ncowner_cls);
 
   // --- Suboffsets support --- //
-  auto soview_cls = py::classh<ncarray::SOArrayView>(ncarray_module, "SOArrayView");
+  auto soview_cls = py::classh<ncarray::SOArrayView>(ncarray_module, "SOArrayView")
+    // These constructors, plus the implicitly_convertible below allow view interconversion
+    .def(py::init<const ncarray::SOArrayRef&>())
+    .def(py::init<const ncarray::SOArray&>());
   register_common_array_methods(soview_cls);
 
   auto soref_cls = py::classh<ncarray::SOArrayRef>(ncarray_module, "SOArrayRef")
@@ -209,4 +215,11 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
   register_common_array_methods(soowner_cls);
+
+  // Make the non-view classes implicitly convertible to views
+  py::implicitly_convertible<ncarray::NCArrayRef, ncarray::NCArrayView>();
+  py::implicitly_convertible<ncarray::NCArray, ncarray::NCArrayView>();
+
+  py::implicitly_convertible<ncarray::SOArrayRef, ncarray::SOArrayView>();
+  py::implicitly_convertible<ncarray::SOArray, ncarray::SOArrayView>();
 } // ncarray_module

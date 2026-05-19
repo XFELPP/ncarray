@@ -146,43 +146,43 @@ namespace pyncarray {
    * @todo We currently need to convert arrays to view, because the C++ lib cannot
    *       take the array directly.
    */
-#define REGISTER_OPERATION(PYMETHOD, OP)                                            \
-    .def("__" PYMETHOD "__",                                                        \
-         [](const ArrayT& self,                                                     \
-            const ncarray::ArrayImpl<typename ArrayT::LayoutPolicy,                 \
-                                     typename ncarray::StoragePolicyTraits<         \
-                                     typename ArrayT::MemType>::View>& other) {     \
-      auto expr = self.view() OP other;                                             \
-      if (is_eager()) {                                                             \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
-      }                                                                             \
-      return py::cast(expr);                                                        \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
-      auto expr = self.view() OP pyarray_to_view<typename ArrayT::ViewType>(other); \
-      if (is_eager()) {                                                             \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
-      }                                                                             \
-      return py::cast(expr);                                                        \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
-      auto view = pyarray_to_view<typename ArrayT::ViewType>(other);                \
-      auto expr = view OP self.view();                                              \
-      if (is_eager()) {                                                             \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
-      }                                                                             \
-      return py::cast(expr);                                                        \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) { \
-      auto expr = self.view() OP other;                                             \
-      if (is_eager()) {                                                             \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));       \
-      }                                                                             \
-      return py::cast(expr);                                                        \
-    },                                                                              \
+#define REGISTER_OPERATION(PYMETHOD, OP)                                                         \
+    .def("__" PYMETHOD "__",                                                                     \
+         [](const ArrayT& self,                                                                  \
+            const ncarray::ArrayImpl<typename ArrayT::LayoutPolicy,                              \
+                                     typename ncarray::StoragePolicyTraits<                      \
+                                     typename ArrayT::MemType>::View>& other) {                  \
+      auto expr = self.view() OP other;                                                          \
+      if (is_eager()) {                                                                          \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+      }                                                                                          \
+      return py::cast(expr);                                                                     \
+    },                                                                                           \
+      py::is_operator())                                                                         \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {                    \
+      auto expr = self.view() OP pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim()); \
+      if (is_eager()) {                                                                          \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+      }                                                                                          \
+      return py::cast(expr);                                                                     \
+    },                                                                                           \
+      py::is_operator())                                                                         \
+    .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {                   \
+      auto view = pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim());                \
+      auto expr = view OP self.view();                                                           \
+      if (is_eager()) {                                                                          \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+      }                                                                                          \
+      return py::cast(expr);                                                                     \
+    },                                                                                           \
+      py::is_operator())                                                                         \
+    .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) {              \
+      auto expr = self.view() OP other;                                                          \
+      if (is_eager()) {                                                                          \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+      }                                                                                          \
+      return py::cast(expr);                                                                     \
+    },                                                                                           \
       py::is_operator())
 
   /**
@@ -200,7 +200,7 @@ namespace pyncarray {
     },                                                                              \
       py::is_operator())                                                            \
     .def("__" PYMETHOD "__", [](ArrayT& self, const py::array& other) {             \
-      auto view = pyarray_to_view<typename ArrayT::ViewType>(other);                \
+      auto view = pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim());   \
       self OP view;                                                                 \
       return self;                                                                  \
     },                                                                              \
@@ -211,31 +211,6 @@ namespace pyncarray {
     },                                                                              \
       py::is_operator())
 
-  /**
-   * @def REGISTER_REDUCTION_OPERATION(PYMETHOD, TRAITS)
-   * @brief A helper to attach a dunder to a class binding for inplace operator overloads.
-   *        This will reuse the VMExpr machinery of the binary operators and assign
-   *        the result directly in place instead of creating new overloads.
-   * @example REGISTER_INPLACE_OPERATION("iadd", ADD) setups an expression for addition,
-   *        that is then evaluated into the array immediately. The method is bound to
-   *        __iadd__
-   * @todo We currently need to convert arrays to view, because the C++ lib cannot
-   *       take the array directly.
-   */
-/*
-#define REGISTER_REDUCTION_OPERATION(METHOD, TRAITS)                                \
-  .def(#METHOD, [](const ArrayT& self, const std::vector<ssize_t>& axes) {          \
-    using MemType = std::decay_t<ArrayT>::MemType;                                  \
-    VMBuilder<MemType> builder;                                                     \
-    builder.array_to_mv_node(py::cast(self));                                       \
-    builder.template eval_reduction_expr<TRAITS>(axes,                              \
-                                                 self.ndim(),                       \
-                                                 self.shape(),                      \
-                                                 self.strides(),                    \
-                                                 self.itemsize());                  \
-    return self;                                                                    \
-  })
-*/
   /**
    * Helper function to attach common methods to a Python binding for an array
    * specialization.
@@ -597,7 +572,6 @@ namespace pyncarray {
     },
       py::arg("axis"))
 
-      //REGISTER_REDUCTION_OPERATION("sum", ncarray::SumTraits)
     // --- Binary Arithmetic Methods --- //
     REGISTER_OPERATION("add", +)
     REGISTER_OPERATION("sub", -)

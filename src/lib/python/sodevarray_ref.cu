@@ -51,5 +51,7 @@ void register_sodevarray_ref(py::module_& m) {
       py::arg("data"),
       py::arg("read_only") = py::cast(false));
   register_common_array_methods(sodevref_cls);
+
+  py::implicitly_convertible<ncarray::SODevArrayRef, ncarray::SODevArrayView>();
 #endif
 }

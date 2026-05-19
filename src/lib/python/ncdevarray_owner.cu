@@ -44,5 +44,7 @@ void register_ncdevarray_owner(py::module_& m) {
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
   register_common_array_methods(ncdevowner_cls);
+
+  py::implicitly_convertible<ncarray::NCDevArray, ncarray::NCDevArrayView>();
 #endif
 }

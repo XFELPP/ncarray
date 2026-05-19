@@ -44,5 +44,7 @@ void register_sodevarray_owner(py::module_& m) {
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
   register_common_array_methods(sodevowner_cls);
+
+  py::implicitly_convertible<ncarray::SODevArray, ncarray::SODevArrayView>();
 #endif
 }

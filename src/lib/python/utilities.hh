@@ -167,20 +167,45 @@ namespace pyncarray {
    *
    * @tparam ViewType The kind of view to construct. E.g. NCArrayView, SOArrayView.
    * @param[in] arr An input NumPy array to convert.
+   * @param[in] target_ndim The target dimensionality of the output with padding.
+   *            TODO: This mostly serves as a hack until broadcasting is suppported.
+   *            Because of the implicit dimensionality mismatch between NCArrays* and NumPy....
    * @returns A view of ViewType over the data from the NumPy array.
    */
   template <class ViewType>
-  inline auto pyarray_to_view(const py::array& arr) {
+  inline auto pyarray_to_view(const py::array& arr, ssize_t target_ndim = -1) {
     py::buffer_info info = arr.request();
     auto buf_ptr = info.ptr;
     bool read_only = !arr.writeable();
     // This is temporary!! Careful how you use it!
     ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
-    // When you have no pointer axis, just pass the raw pointer
+
+    ssize_t ndim { arr.ndim() };
+    if (target_ndim > ndim) {
+      ndim = target_ndim;
+    }
+
+    // NOTE: Because of the implicit extra dimension when constructing NCArrays
+    //       there is a mismatch vs NumPy. True broadcasting is not supported yet,
+    //       but this padding up front makes NumPy match the NCArray for performing ops.
+    // TODO: Revisit and fix this kludge when true broadcasting is added!
+    ssize_t padded_shape[NCARRAY_MAX_NDIM];
+    ssize_t padded_strides[NCARRAY_MAX_NDIM];
+
+    ssize_t offset { ndim - arr.ndim() };
+    for (ssize_t i = 0; i < ndim; ++i) {
+      if (i < offset) {
+        padded_shape[i] = 1;
+        padded_strides[i] = 0;
+      } else {
+        padded_shape[i] = arr.shape()[i - offset];
+        padded_strides[i] = arr.strides()[i - offset];
+      }
+    }
     return ViewType(buf_ptr,
-                    arr.ndim(),
-                    arr.shape(),
-                    arr.strides(),
+                    ndim,
+                    padded_shape,
+                    padded_strides,
                     pydtype_to_dtype(arr.dtype()),
                     ptr_axis,
                     read_only);
