@@ -206,13 +206,14 @@ layout_names: Tuple[str, str] = ("ncarr", "soarr")
 
 if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument("--device", action="store_true", help="Create device TUs.")
     parser.add_argument("--output", type=str, help="Output directory")
 
     args: argparse.Namespace = parser.parse_args()
 
     base_dir: str = args.output
     write_host_files: bool = True
-    if "tus/device" in base_dir:
+    if args.device:
         write_host_files = False
 
     if not os.path.exists(base_dir):
