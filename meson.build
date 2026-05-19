@@ -151,10 +151,19 @@ ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 
 if build_core_opt
     host_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/host'
-    #run_command(
-    #    py3, 'utilities/make_tus.py', '--output', host_src_dir,
-    #    check: true,
-    #)
+
+    # Create the translation units if they don't already exist.
+    # If running manually and need to regenerate them, run the script by hand
+    check_host_tus = run_command(
+        py3, '-c', 'import glob, sys; sys.exit(0 if glob.glob("' + host_src_dir + '/*.cc") else 1)',
+        check: false,
+    )
+    if check_host_tus.returncode() != 0
+        run_command(
+            py3, 'utilities/make_tus.py', '--output', host_src_dir,
+            check: true,
+        )
+    endif
 
     host_cc = run_command('find', host_src_dir, '-name', '*.cc', check: true).stdout().strip().split('\n')
 
@@ -321,10 +330,19 @@ if build_core_opt
         )
 
         dev_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/device'
-        #run_command(
-        #    py3, 'utilities/make_tus.py', '--output', dev_src_dir, '--device',
-        #    check: true,
-        #)
+
+        # Create the translation units if they don't already exist.
+        # If running manually and need to regenerate them, run the script by hand
+        check_device_tus = run_command(
+            py3, '-c', 'import glob, sys; sys.exit(0 if glob.glob("' + dev_src_dir + '/*.cc") else 1)',
+            check: false,
+        )
+        if check_device_tus.returncode() != 0
+            run_command(
+                py3, 'utilities/make_tus.py', '--output', dev_src_dir, '--device',
+                check: true,
+            )
+        endif
 
         dev_cu = run_command('find', dev_src_dir, '-name', '*.cu', check: true).stdout().strip().split('\n')
         # We also only build this lib at all if CUDA is available
