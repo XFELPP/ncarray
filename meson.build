@@ -40,10 +40,11 @@ if nca_has_openmp
     add_project_arguments('-DNCA_HAS_OPENMP', language: ['cpp', 'cuda'])
 endif
 
+cpp = meson.get_compiler('cpp')
+
 deps_for_ncarray = []
 if nca_has_cuda
     # Add libdl as needed for JIT if not merged directly into the cstdlib
-    cpp = meson.get_compiler('cpp')
     dl_dep = cpp.find_library('dl', required: false)
     if dl_dep.found()
         deps_for_ncarray += dl_dep
@@ -84,6 +85,7 @@ nca_as_wheel_opt = get_option('nca_as_wheel')
 ####################
 
 py_install_dir = py3.get_install_dir()
+pyncarray_install_dir = py_install_dir / 'ncarray/core'
 
 if nca_as_wheel_opt
     # Install C++ libraries inside the wheel structure
@@ -100,23 +102,32 @@ if nca_as_wheel_opt
 
     libncarray_install_dir = py_install_dir / 'ncarray/lib'
     header_install_dir = py3.get_install_dir() / 'ncarray/include'
+
+    # Relative path from 'ncarray/core' to 'ncarray/lib'
+    py_to_lib_path = '../lib'
+
+    exe_prefix = py_install_dir
+    lib_prefix = pyncarray_install_dir
 else
     # Normal install path
     libncarray_install_dir = get_option('libdir')
     header_install_dir = get_option('includedir')
+
+    # Relative path from '$PREFIX/lib/pythonMAJ.MIN/site-packages/ncarray/core' to '$PREFIX/lib'
+    py_to_lib_path = '../../../../'
+
+    exe_prefix = get_option('prefix') / 'bin'
+    lib_prefix = pyncarray_install_dir
 endif
 
-pyncarray_install_dir = py_install_dir / 'ncarray/core'
-py_to_lib_path = '../lib'
-
-# Executables get installed in $prefix/bin while the libs are in $prefix/lib/...
-# So the relative path is:
+# For both the wheel and non-wheel case, executables relative path, for
+# $PREFIX/bin to $PREFIX/lib is
 exe_to_libncarray = '..' / libncarray_install_dir
 
 lib_install_rpath = '$ORIGIN'
 
-abs_exe_rpath = py_install_dir / exe_to_libncarray
-abs_lib_rpath = py_install_dir / py_to_lib_path
+abs_exe_rpath = exe_prefix / exe_to_libncarray
+abs_lib_rpath = lib_prefix / py_to_lib_path
 
 # Setup RPATH for various platforms, for any executables that may need it
 if host_machine.system() == 'darwin'
@@ -133,199 +144,28 @@ endif
 
 ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 
-host_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/host'
-#run_command(
-#    py3, 'utilities/make_tus.py', '--output', host_src_dir,
-#    check: true,
-#)
-
-host_cc = run_command('find', host_src_dir, '-name', '*.cc', check: true).stdout().strip().split('\n')
-
-libncarray = shared_library(
-    'ncarray',
-    [
-        'src/lib/ncarray/host/casts.cc',
-        'src/lib/ncarray/ncarrays.cc',
-        'src/lib/ncarray/ncarrayrefs.cc',
-        'src/lib/ncarray/ncarrayviews.cc',
-        'src/lib/ncarray/soarrays.cc',
-        'src/lib/ncarray/soarrayrefs.cc',
-        'src/lib/ncarray/soarrayviews.cc',
-    ] + host_cc,
-    dependencies: deps_for_ncarray,
-    include_directories: ncarray_headers,
-    install: true,
-    install_dir: libncarray_install_dir,
-    install_rpath: lib_install_rpath,
-    version: '1',
-    soversion: '1',
-)
-
-ncarray_dep = declare_dependency(
-    link_with: [
-        libncarray,
-    ],
-    include_directories: ncarray_headers,
-)
-
-# Install headers into the package for easy bundling
-installed_headers = [
-    'src/lib/ncarray/array_element_proxy.hh',
-    'src/lib/ncarray/array_impl.hh',
-    'src/lib/ncarray/array_operations.hh',
-    'src/lib/ncarray/array_traits.hh',
-    'src/lib/ncarray/build_macro.hh',
-    'src/lib/ncarray/custom_types.hh',
-    'src/lib/ncarray/dtype.hh',
-    'src/lib/ncarray/engines.hh',
-    'src/lib/ncarray/indexing.hh',
-    'src/lib/ncarray/layout.hh',
-    'src/lib/ncarray/ncarrays.hh',
-    'src/lib/ncarray/op_code.hh',
-    'src/lib/ncarray/op_traits.hh',
-    'src/lib/ncarray/reductions.hh',
-    'src/lib/ncarray/soarrays.hh',
-    'src/lib/ncarray/storage.hh',
-]
-
-install_headers(
-    installed_headers,
-    install_dir: header_install_dir / 'ncarray',
-)
-
-installed_host_headers = [
-    'src/lib/ncarray/host/allocator.hh',
-    'src/lib/ncarray/host/casts.hh',
-    'src/lib/ncarray/host/elementwise.hh',
-    'src/lib/ncarray/host/reductions.hh',
-]
-
-install_headers(
-    installed_host_headers,
-    install_dir: header_install_dir / 'ncarray/host',
-)
-
-installed_host_engine_headers = [
-    'src/lib/ncarray/engines/hostengine.hh',
-]
-
-install_headers(
-    installed_host_engine_headers,
-    install_dir: header_install_dir / 'ncarray/engines',
-)
-
-installed_expression_headers = [
-    'src/lib/ncarray/expression/dynamicmvnode.hh',
-    'src/lib/ncarray/expression/interface.hh',
-    'src/lib/ncarray/expression/mvnode.hh',
-    'src/lib/ncarray/expression/staticmvnode.hh',
-]
-
-install_headers(
-    installed_expression_headers,
-    install_dir: header_install_dir / 'ncarray/expression',
-)
-
-if nca_has_cuda
-    installed_gpu_engine_headers = [
-        'src/lib/ncarray/engines/gpuengine.hh',
-    ]
-
-    install_headers(
-        installed_gpu_engine_headers,
-        install_dir: header_install_dir / 'ncarray/engines',
-    )
-
-    # Currently, Stencil support is for GPU only
-    installed_expression_stencil_headers = [
-        'src/lib/ncarray/expression/stencil.hh',
-    ]
-
-    install_headers(
-        installed_expression_stencil_headers,
-        install_dir: header_install_dir / 'ncarray/expression',
-    )
-
-    libncdevarrayjit = shared_library(
-        'ncdevarrayjit',
-        [
-            'src/lib/ncarray/jit/path_utils.cc',
-            'src/lib/ncarray/jit/jit_utils.cc',
-            'src/lib/ncarray/jit/rtcompiler.cc',
-        ],
-        cuda_args: nca_cuda_args,
-        dependencies: cuda_dep,
-        include_directories: ncarray_headers,
-        install: true,
-        install_dir: libncarray_install_dir,
-        install_rpath: lib_install_rpath,
-        version: '1',
-        soversion: '1',
-    )
-
-    ncdevarrayjit_dep = declare_dependency(
-        link_with: [
-            libncdevarrayjit,
-        ],
-        dependencies: cuda_dep,
-        include_directories: ncarray_headers,
-    )
-
-    installed_jit_headers = [
-        'src/lib/ncarray/jit/path_utils.hh',
-        'src/lib/ncarray/jit/jit_utils.hh',
-        'src/lib/ncarray/jit/rtcompiler.hh',
-    ]
-
-    install_headers(
-        installed_jit_headers,
-        install_dir: header_install_dir / 'ncarray/jit',
-    )
-
-
-    #### Install CCCL Headers for JIT ####
-    # Will run a little Python script to copy the current CUDA toolkit CCCL headers
-    # Afterwards, these will be installed into the wheel for use by the JIT compiler
-    jit_headers_build_dir = meson.current_build_dir() / 'jit_tmp_headers'
-
-    run_command(
-        py3, 'utilities/copy_cccl_headers.py', jit_headers_build_dir,
-        check: true,
-    )
-
-    # Install CCCL headers into the wheel
-    install_subdir(
-        jit_headers_build_dir / 'cuda',
-        install_dir: header_install_dir / 'ncarray/jit',
-    )
-    install_subdir(
-        jit_headers_build_dir / 'nv',
-        install_dir: header_install_dir / 'ncarray/jit',
-    )
-
-    dev_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/device'
+if build_core_opt
+    host_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/host'
     #run_command(
-    #    py3, 'utilities/make_tus.py', '--output', dev_src_dir, '--device',
+    #    py3, 'utilities/make_tus.py', '--output', host_src_dir,
     #    check: true,
     #)
 
-    dev_cu = run_command('find', dev_src_dir, '-name', '*.cu', check: true).stdout().strip().split('\n')
-    # We also only build this lib at all if CUDA is available
-    # We make a fat binary for Turing, Ampere, Ada and Hoper
-    libncdevarray = shared_library(
-        'ncdevarray',
+    host_cc = run_command('find', host_src_dir, '-name', '*.cc', check: true).stdout().strip().split('\n')
+
+    libncarray = shared_library(
+        'ncarray',
         [
             'src/lib/ncarray/host/casts.cc',
-            'src/lib/ncarray/ncdevarrayviews.cu',
-            'src/lib/ncarray/ncdevarrayrefs.cu',
-            'src/lib/ncarray/ncdevarrays.cu',
-            'src/lib/ncarray/sodevarrayviews.cu',
-            'src/lib/ncarray/sodevarrayrefs.cu',
-            'src/lib/ncarray/sodevarrays.cu',
-        ] + dev_cu,
-        cuda_args: nca_cuda_args,
+            'src/lib/ncarray/ncarrays.cc',
+            'src/lib/ncarray/ncarrayrefs.cc',
+            'src/lib/ncarray/ncarrayviews.cc',
+            'src/lib/ncarray/soarrays.cc',
+            'src/lib/ncarray/soarrayrefs.cc',
+            'src/lib/ncarray/soarrayviews.cc',
+        ] + host_cc,
+        dependencies: deps_for_ncarray,
         include_directories: ncarray_headers,
-        dependencies: [ncdevarrayjit_dep, ncarray_dep],
         install: true,
         install_dir: libncarray_install_dir,
         install_rpath: lib_install_rpath,
@@ -333,44 +173,238 @@ if nca_has_cuda
         soversion: '1',
     )
 
-    ncdevarray_dep = declare_dependency(
+    ncarray_dep = declare_dependency(
         link_with: [
-            libncdevarray,
-            libncdevarrayjit,
+            libncarray,
         ],
-        dependencies: cuda_dep,
         include_directories: ncarray_headers,
     )
 
-    # The following headers are for integration with device code on host side
-    installed_device_compat_headers = [
-        'src/lib/ncarray/ncdevarrays.cuh',
-        'src/lib/ncarray/sodevarrays.cuh',
+    # Install headers into the package for easy bundling
+    installed_headers = [
+        'src/lib/ncarray/array_element_proxy.hh',
+        'src/lib/ncarray/array_impl.hh',
+        'src/lib/ncarray/array_operations.hh',
+        'src/lib/ncarray/array_traits.hh',
+        'src/lib/ncarray/build_macro.hh',
+        'src/lib/ncarray/custom_types.hh',
+        'src/lib/ncarray/dtype.hh',
+        'src/lib/ncarray/engines.hh',
+        'src/lib/ncarray/indexing.hh',
+        'src/lib/ncarray/layout.hh',
+        'src/lib/ncarray/ncarrays.hh',
+        'src/lib/ncarray/op_code.hh',
+        'src/lib/ncarray/op_traits.hh',
+        'src/lib/ncarray/reductions.hh',
+        'src/lib/ncarray/soarrays.hh',
+        'src/lib/ncarray/storage.hh',
     ]
 
     install_headers(
-        installed_device_compat_headers,
+        installed_headers,
         install_dir: header_install_dir / 'ncarray',
     )
 
-    # The following headers are device only as well as host-called kernels
-    installed_device_headers = [
-        'src/lib/ncarray/device/atomic.cuh',
-        'src/lib/ncarray/device/casts.cuh',
-        'src/lib/ncarray/device/elementwise.cuh',
-        'src/lib/ncarray/device/kernels.cuh',
-        'src/lib/ncarray/device/mem_pool.cuh',
-        'src/lib/ncarray/device/reductions.cuh',
-        'src/lib/ncarray/device/utilities.cuh',
-        'src/lib/ncarray/device/warp.cuh',
+    installed_host_headers = [
+        'src/lib/ncarray/host/allocator.hh',
+        'src/lib/ncarray/host/casts.hh',
+        'src/lib/ncarray/host/elementwise.hh',
+        'src/lib/ncarray/host/reductions.hh',
     ]
 
     install_headers(
-        installed_device_headers,
-        install_dir: header_install_dir / 'ncarray/device',
+        installed_host_headers,
+        install_dir: header_install_dir / 'ncarray/host',
     )
 
-endif # end nca_has_cuda
+    installed_host_engine_headers = [
+        'src/lib/ncarray/engines/hostengine.hh',
+    ]
+
+    install_headers(
+        installed_host_engine_headers,
+        install_dir: header_install_dir / 'ncarray/engines',
+    )
+
+    installed_expression_headers = [
+        'src/lib/ncarray/expression/dynamicmvnode.hh',
+        'src/lib/ncarray/expression/interface.hh',
+        'src/lib/ncarray/expression/mvnode.hh',
+        'src/lib/ncarray/expression/staticmvnode.hh',
+    ]
+
+    install_headers(
+        installed_expression_headers,
+        install_dir: header_install_dir / 'ncarray/expression',
+    )
+
+    if nca_has_cuda
+        installed_gpu_engine_headers = [
+            'src/lib/ncarray/engines/gpuengine.hh',
+        ]
+
+        install_headers(
+            installed_gpu_engine_headers,
+            install_dir: header_install_dir / 'ncarray/engines',
+        )
+
+        # Currently, Stencil support is for GPU only
+        installed_expression_stencil_headers = [
+            'src/lib/ncarray/expression/stencil.hh',
+        ]
+
+        install_headers(
+            installed_expression_stencil_headers,
+            install_dir: header_install_dir / 'ncarray/expression',
+        )
+
+        libncdevarrayjit = shared_library(
+            'ncdevarrayjit',
+            [
+                'src/lib/ncarray/jit/path_utils.cc',
+                'src/lib/ncarray/jit/jit_utils.cc',
+                'src/lib/ncarray/jit/rtcompiler.cc',
+            ],
+            cuda_args: nca_cuda_args,
+            dependencies: cuda_dep,
+            include_directories: ncarray_headers,
+            install: true,
+            install_dir: libncarray_install_dir,
+            install_rpath: lib_install_rpath,
+            version: '1',
+            soversion: '1',
+        )
+
+        ncdevarrayjit_dep = declare_dependency(
+            link_with: [
+                libncdevarrayjit,
+            ],
+            dependencies: cuda_dep,
+            include_directories: ncarray_headers,
+        )
+
+        installed_jit_headers = [
+            'src/lib/ncarray/jit/path_utils.hh',
+            'src/lib/ncarray/jit/jit_utils.hh',
+            'src/lib/ncarray/jit/rtcompiler.hh',
+        ]
+
+        install_headers(
+            installed_jit_headers,
+            install_dir: header_install_dir / 'ncarray/jit',
+        )
+
+
+        #### Install CCCL Headers for JIT ####
+        # Will run a little Python script to copy the current CUDA toolkit CCCL headers
+        # Afterwards, these will be installed into the wheel for use by the JIT compiler
+        jit_headers_build_dir = meson.current_build_dir() / 'jit_tmp_headers'
+
+        run_command(
+            py3, 'utilities/copy_cccl_headers.py', jit_headers_build_dir,
+            check: true,
+        )
+
+        # Install CCCL headers into the wheel
+        install_subdir(
+            jit_headers_build_dir / 'cuda',
+            install_dir: header_install_dir / 'ncarray/jit',
+        )
+        install_subdir(
+            jit_headers_build_dir / 'nv',
+            install_dir: header_install_dir / 'ncarray/jit',
+        )
+
+        dev_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/device'
+        #run_command(
+        #    py3, 'utilities/make_tus.py', '--output', dev_src_dir, '--device',
+        #    check: true,
+        #)
+
+        dev_cu = run_command('find', dev_src_dir, '-name', '*.cu', check: true).stdout().strip().split('\n')
+        # We also only build this lib at all if CUDA is available
+        # We make a fat binary for Turing, Ampere, Ada and Hoper
+        libncdevarray = shared_library(
+            'ncdevarray',
+            [
+                'src/lib/ncarray/host/casts.cc',
+                'src/lib/ncarray/ncdevarrayviews.cu',
+                'src/lib/ncarray/ncdevarrayrefs.cu',
+                'src/lib/ncarray/ncdevarrays.cu',
+                'src/lib/ncarray/sodevarrayviews.cu',
+                'src/lib/ncarray/sodevarrayrefs.cu',
+                'src/lib/ncarray/sodevarrays.cu',
+            ] + dev_cu,
+            cuda_args: nca_cuda_args,
+            include_directories: ncarray_headers,
+            dependencies: [ncdevarrayjit_dep, ncarray_dep],
+            install: true,
+            install_dir: libncarray_install_dir,
+            install_rpath: lib_install_rpath,
+            version: '1',
+            soversion: '1',
+        )
+
+        ncdevarray_dep = declare_dependency(
+            link_with: [
+                libncdevarray,
+                libncdevarrayjit,
+            ],
+            dependencies: cuda_dep,
+            include_directories: ncarray_headers,
+        )
+
+        # The following headers are for integration with device code on host side
+        installed_device_compat_headers = [
+            'src/lib/ncarray/ncdevarrays.cuh',
+            'src/lib/ncarray/sodevarrays.cuh',
+        ]
+
+        install_headers(
+            installed_device_compat_headers,
+            install_dir: header_install_dir / 'ncarray',
+        )
+
+        # The following headers are device only as well as host-called kernels
+        installed_device_headers = [
+            'src/lib/ncarray/device/atomic.cuh',
+            'src/lib/ncarray/device/casts.cuh',
+            'src/lib/ncarray/device/elementwise.cuh',
+            'src/lib/ncarray/device/kernels.cuh',
+            'src/lib/ncarray/device/mem_pool.cuh',
+            'src/lib/ncarray/device/reductions.cuh',
+            'src/lib/ncarray/device/utilities.cuh',
+            'src/lib/ncarray/device/warp.cuh',
+        ]
+
+        install_headers(
+            installed_device_headers,
+            install_dir: header_install_dir / 'ncarray/device',
+        )
+
+    endif # end nca_has_cuda
+else
+    libncarray = cpp.find_library('ncarray', required: true)
+    ncarray_dep = declare_dependency(
+        link_with: [
+            libncarray,
+        ],
+        include_directories: ncarray_headers,
+    )
+
+    if nca_has_cuda
+        libncdevarray = cpp.find_library('ncdevarray', required: true)
+        libncdevarrayjit = cpp.find_library('ncdevarrayjit', required: true)
+        ncdevarray_dep = declare_dependency(
+            link_with: [
+                libncdevarray,
+                libncdevarrayjit,
+            ],
+            dependencies: cuda_dep,
+            include_directories: ncarray_headers,
+        )
+    endif
+endif # end build_core_opt
 
 if build_python_opt
     # Figure out dependencies
