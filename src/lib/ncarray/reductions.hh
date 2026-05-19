@@ -90,7 +90,7 @@ namespace ncarray {
     { Traits::template fill<T>() };
     { Traits::template transform<T>(idx, val) };
     { Traits::template reduce<T>(a, b) };
-    { Traits::template store<T>(res) };
+    { Traits::template store<T>(res, 0.0) };
     { Traits::template atomic<T>(dest, aval) };
   };
 
@@ -100,7 +100,7 @@ namespace ncarray {
     requires(typename Traits::template AccumT<T>* scratch,
              typename Traits::template AccumT<T> val,
              typename Traits::template OutT<T>* res) {
-    { Traits::template dual_atomic<T>(scratch, val, res) };
+    { Traits::template dual_atomic<T>(scratch, val, res, 0.0) };
   };
 
   /**
@@ -128,7 +128,7 @@ namespace ncarray {
     static NCA_HD inline AccumT<T> reduce(AccumT<T> a, AccumT<T> b) { return a + b; }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) { return res; }
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) { return res; }
 
     template <typename T>
     static NCA_D inline void atomic(AccumT<T>* dest, AccumT<T> val) {
@@ -168,7 +168,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res;
     }
 
@@ -212,7 +212,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res.key;
     }
 
@@ -226,7 +226,8 @@ namespace ncarray {
     template <typename OutT, typename SrcT>
     static NCA_D inline void dual_atomic(AccumT<SrcT>* scratch,
                                          AccumT<SrcT> val,
-                                         OutT* res) {
+                                         OutT* res,
+                                         double ddof = 0.0) {
 #ifdef __CUDACC__
       device::impl::nca_dual_atomic_apply(scratch,
                                           val,
@@ -269,7 +270,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res;
     }
 
@@ -313,7 +314,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res.key;
     }
 
@@ -327,7 +328,8 @@ namespace ncarray {
     template <typename OutT, typename SrcT>
     static NCA_D inline void dual_atomic(AccumT<SrcT>* scratch,
                                          AccumT<SrcT> val,
-                                         OutT* res) {
+                                         OutT* res,
+                                         double ddof = 0.0) {
 #ifdef __CUDACC__
       device::impl::nca_dual_atomic_apply(scratch,
                                           val,
@@ -335,44 +337,6 @@ namespace ncarray {
                                           ArgminTraits::template reduce<SrcT>,
                                           ArgminTraits::template store<SrcT>);
 #endif
-    }
-  };
-
-  template <typename T, typename Traits>
-  struct Reducer {
-    using AccumT = typename Traits::template AccumT<T>;
-    using OutT = typename Traits::template OutT<T>;
-
-    NCA_HD inline AccumT identity() const {
-      return Traits::template identity<T>();
-    }
-
-    NCA_HD inline AccumT transform(ssize_t idx, T val) const {
-      return Traits::template transform<T>(idx, val);
-    }
-
-    NCA_HD inline AccumT reduce(AccumT a, AccumT b) const {
-      return Traits::template reduce<T>(a, b);
-    }
-
-    NCA_HD inline auto store(AccumT val) const {
-      return Traits::template store<T>(val);
-    }
-
-    NCA_HD inline void atomic(AccumT* dest, AccumT val) {
-#ifdef __CUDACC__
-      return Traits::template atomic<T>(dest, val);
-#endif
-    }
-
-    NCA_HD inline void dual_atomic(AccumT* scratch,
-                                   AccumT val,
-                                   OutT* res) {
-      if constexpr (DualAtomicReduction<Traits, T>) {
-#ifdef __CUDACC__
-        return Traits::template dual_atomic<T>(scratch, val, res);
-#endif
-      }
     }
   };
 
@@ -404,7 +368,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res;
     }
 
@@ -448,11 +412,10 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       using ResultT = op_traits<T>::truediv_type;
       double n { res.count };
-      double DDOF = 0.0;
-      ResultT var = res.m2 / (n - static_cast<ResultT>(DDOF));
+      ResultT var = res.m2 / (n - static_cast<ResultT>(ddof));
       return var;
     }
 
@@ -468,13 +431,17 @@ namespace ncarray {
     template <typename OutT, typename SrcT>
     static NCA_D inline void dual_atomic(AccumT<SrcT>* scratch,
                                          AccumT<SrcT> val,
-                                         OutT* res) {
+                                         OutT* res,
+                                         double ddof = 0.0) {
 #ifdef __CUDACC__
+      auto ddof_var = [ddof] __device__ (auto v) {
+        return VarTraits::template store<SrcT>(v, ddof);
+      };
       device::impl::nca_dual_atomic_apply(scratch,
                                           val,
                                           res,
                                           VarTraits::template reduce<SrcT>,
-                                          VarTraits::template store<SrcT>);
+                                          ddof_var);
 #endif
     }
   };
@@ -512,11 +479,10 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       using ResultT = op_traits<T>::truediv_type;
       double n { res.count };
-      double DDOF = 0.0;
-      ResultT var = res.m2 / (n - static_cast<ResultT>(DDOF));
+      ResultT var = res.m2 / (n - static_cast<ResultT>(ddof));
       return nca_sqrt(var);
     }
 
@@ -532,13 +498,17 @@ namespace ncarray {
     template <typename OutT, typename SrcT>
     static NCA_D inline void dual_atomic(AccumT<SrcT>* scratch,
                                          AccumT<SrcT> val,
-                                         OutT* res) {
+                                         OutT* res,
+                                         double ddof = 0.0) {
 #ifdef __CUDACC__
+      auto ddof_std = [ddof] __device__ (auto v) {
+        return StdTraits::template store<SrcT>(v, ddof);
+      };
       device::impl::nca_dual_atomic_apply(scratch,
                                           val,
                                           res,
                                           StdTraits::template reduce<SrcT>,
-                                          StdTraits::template store<SrcT>);
+                                          ddof_std);
 #endif
     }
   };
@@ -572,7 +542,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res;
     }
 
@@ -611,7 +581,7 @@ namespace ncarray {
     }
 
     template <typename T>
-    static NCA_HD inline auto store(AccumT<T> res) {
+    static NCA_HD inline auto store(AccumT<T> res, double ddof = 0.0) {
       return res;
     }
 
@@ -623,6 +593,52 @@ namespace ncarray {
     }
   };
 
+  /**
+   * @brief A wrapping class for reduction traits.
+   *
+   * The Reducer templates on the various reduction traits binding the static
+   * functions into an instantiable struct. In some cases, it may be preferable
+   * to pass an object to perform the reductions, where passing the static
+   * functions, or lambdas wrapping them, may be less ideal, or impossible.
+   */
+  template <typename T, typename Traits>
+  struct Reducer {
+    using AccumT = typename Traits::template AccumT<T>;
+    using OutT = typename Traits::template OutT<T>;
+
+    NCA_HD inline AccumT identity() const {
+      return Traits::template identity<T>();
+    }
+
+    NCA_HD inline AccumT transform(ssize_t idx, T val) const {
+      return Traits::template transform<T>(idx, val);
+    }
+
+    NCA_HD inline AccumT reduce(AccumT a, AccumT b) const {
+      return Traits::template reduce<T>(a, b);
+    }
+
+    NCA_HD inline auto store(AccumT val, double ddof = 0.0) const {
+      return Traits::template store<T>(val, ddof);
+    }
+
+    NCA_HD inline void atomic(AccumT* dest, AccumT val) {
+#ifdef __CUDACC__
+      return Traits::template atomic<T>(dest, val);
+#endif
+    }
+
+    NCA_HD inline void dual_atomic(AccumT* scratch,
+                                   AccumT val,
+                                   OutT* res,
+                                   double ddof = 0.0) {
+      if constexpr (DualAtomicReduction<Traits, T>) {
+#ifdef __CUDACC__
+        return Traits::template dual_atomic<T>(scratch, val, res, ddof);
+#endif
+      }
+    }
+  };
 } // namespace ncarray
 
 #endif // NCARRAY_REDUCTIONS_HH

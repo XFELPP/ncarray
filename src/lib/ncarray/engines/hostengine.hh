@@ -159,13 +159,12 @@ namespace ncarray {
           T& arr_item = static_index(src, i);
           src_item = arr_item;
         }
-        //T& arr_item = arr[i];
-        //AccumT& res_item = res[j];
+
         auto res_proxy = static_index(res, j);
         AccumT& res_item = res_proxy;
         AccumT accum_res = Traits::template reduce<T>(res_item,
                                                       Traits::template transform<T>(i, src_item));
-        res_proxy = Traits::template store<T>(accum_res);
+        res_proxy = Traits::template store<T>(accum_res, params.ddof);
       }
     }
 

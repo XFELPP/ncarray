@@ -756,7 +756,8 @@ namespace ncarray {
                                                     this->strides(),
                                                     new_shape,
                                                     new_ndim,
-                                                    this->itemsize());
+                                                    this->itemsize(),
+                                                    ddof);
     auto dtype_op = []<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
       return dtype_traits<ResultT>::value;
@@ -796,7 +797,8 @@ namespace ncarray {
                                                     this->strides(),
                                                     new_shape,
                                                     new_ndim,
-                                                    this->itemsize());
+                                                    this->itemsize(),
+                                                    ddof);
     auto dtype_op = []<typename T>() {
       using ResultT = typename op_traits<T>::truediv_type;
       return dtype_traits<ResultT>::value;
@@ -1021,7 +1023,7 @@ namespace ncarray {
     auto var_operation = [&] <typename SrcT> () -> Scalar {
       if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        return GPUEngine::execute_full_reduce<SrcT, VarTraits>(arr_view);
+        return GPUEngine::execute_full_reduce<SrcT, VarTraits>(arr_view, ddof);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif
@@ -1039,7 +1041,7 @@ namespace ncarray {
     auto std_operation = [&] <typename SrcT> () -> Scalar {
       if constexpr (std::is_same_v<typename ArrayImpl<L, S>::MemType, DevTag>) {
 #ifdef __CUDACC__
-        return GPUEngine::execute_full_reduce<SrcT, StdTraits>(arr_view);
+        return GPUEngine::execute_full_reduce<SrcT, StdTraits>(arr_view, ddof);
 #else
         throw std::runtime_error("Fatal: tried to compile a CUDA kernel as C++");
 #endif

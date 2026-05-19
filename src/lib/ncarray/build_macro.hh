@@ -464,7 +464,7 @@ typedef SSIZE_T ssize_t;
   template ncarray::Scalar ncarray::GPUEngine::execute_full_reduce<T,                              \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
-          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&, double);
 
 #define EXTERN_DEV_VM_FULL_REDUCE(T, L, Trait)                                                     \
   extern template __global__ void reduce_kernel<256, T,                                            \
@@ -476,7 +476,7 @@ typedef SSIZE_T ssize_t;
   extern template ncarray::Scalar ncarray::GPUEngine::execute_full_reduce<T,                       \
       ncarray::Trait,                                                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
-          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&, double);
 
 #define INSTANTIATE_DEV_VM_OPS(T, L)                                                               \
   template __global__ void execute_expression_kernel<T,                                            \

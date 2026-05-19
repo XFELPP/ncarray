@@ -181,7 +181,7 @@ namespace ncarray {
         if (new_val != old_val) {
           *addr = new_val;
           // Also update the dual buffer while holding the lock
-          *result = store(new_val); // Store may transform the new_val
+          *result = store(new_val, 0.0); // Store may transform the new_val
         }
 
         atomicExch(&lock, 0); // Release the lock

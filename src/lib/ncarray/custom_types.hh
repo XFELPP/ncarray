@@ -100,6 +100,7 @@ namespace ncarray {
     int shifts[NCARRAY_MAX_NDIM];
     ssize_t masks[NCARRAY_MAX_NDIM];
     ssize_t ndim;
+    double ddof { 0.0 }; // Degrees of freedom, used only for variance and stdev
   };
 
 #ifndef __CUDACC_RTC__
@@ -120,8 +121,10 @@ namespace ncarray {
                                                 const ssize_t* in_strides,
                                                 ssize_t (&new_shape)[NCARRAY_MAX_NDIM],
                                                 ssize_t& new_ndim,
-                                                ssize_t itemsize) {
+                                                ssize_t itemsize,
+                                                double ddof = 0.0) {
     ReductionParams params;
+    params.ddof = ddof;
     params.ndim = arr_ndim;
 
     // Setup a table of axes to reduce (fast in kernel)

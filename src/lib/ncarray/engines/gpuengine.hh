@@ -277,13 +277,14 @@ namespace ncarray {
      * @tparam Traits The holder struct for the type of reduction.
      * @tparam Array The array type.
      * @param arr Array to be reduced.
+     * @param ddof Degrees of freedom. Used only for variance and stdev.
      */
     template <
       typename SrcT,
       ReductionTraits<SrcT> Traits,
       class Array
     >
-    static Scalar execute_full_reduce(const Array& arr) {
+    static Scalar execute_full_reduce(const Array& arr, double ddof = 0.0) {
       using AccumT = typename Traits::AccumT<SrcT>;
 
       using OutT = typename Traits::OutT<SrcT>;
@@ -307,7 +308,7 @@ namespace ncarray {
                                                                               ptrs.d_ptr);
       cudaDeviceSynchronize();
 
-      OutT final_res { reducer.store(*ptrs.h_ptr) };
+      OutT final_res { reducer.store(*ptrs.h_ptr, ddof) };
 
       return Scalar { final_res };
     }

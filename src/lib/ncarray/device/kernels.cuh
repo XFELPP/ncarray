@@ -188,7 +188,7 @@ namespace ncarray {
                                            static_cast<unsigned long long>(j));
 
           int leader { __ffs(mask) - 1 };
-          int lane { threadIdx.x % 32 };
+          int lane { static_cast<int>(threadIdx.x % 32) };
 
           unsigned current_mask { mask };
           current_mask &= ~(1U << leader); // The leader already has its value
@@ -212,7 +212,7 @@ namespace ncarray {
             if constexpr (std::is_same_v<OutDType, AccumT>) {
               reducer.atomic(&out_item, val);
             } else {
-              reducer.dual_atomic(&scratch_ptr[j], val, &out_item);
+              reducer.dual_atomic(&scratch_ptr[j], val, &out_item, params.ddof);
             }
           }
         } else {
@@ -220,7 +220,7 @@ namespace ncarray {
           if constexpr (std::is_same_v<OutDType, AccumT>) {
             reducer.atomic(&out_item, val);
           } else {
-            reducer.dual_atomic(&scratch_ptr[j], val, &out_item);
+            reducer.dual_atomic(&scratch_ptr[j], val, &out_item, params.ddof);
           }
         }
       };
@@ -303,7 +303,7 @@ namespace ncarray {
     bin_sum = reducer.reduce(bin_sum, reducer.transform(global_idx, item)); \
   }                                                                         \
                                                                             \
-  auto res = reducer.store(bin_sum);                                        \
+  auto res = reducer.store(bin_sum, params.ddof);                           \
   using OutDType = decltype(res);                                           \
   OutDType& out_item = static_index(out, j);                                \
   out_item = res;
@@ -457,7 +457,7 @@ namespace ncarray {
                                                               identity);        \
                                                                                 \
   if ((threadIdx.x % 32) == 0) {                                                \
-    auto res = reducer.store(warp_res);                                         \
+    auto res = reducer.store(warp_res, params.ddof);                            \
     using OutDType = decltype(res);                                             \
     OutDType& out_item = static_index(out, j);                                  \
     out_item = res;                                                             \
