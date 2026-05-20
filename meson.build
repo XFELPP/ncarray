@@ -23,7 +23,9 @@ nca_cuda_args = [
     # silence warning: long double treated as double
     '-Xcudafe', '--diag_suppress=20208',
     # silence warning about static global template stub
-    '-Xcudafe', '--diag_suppress=20278',
+    #'-Xcudafe', '--diag_suppress=20278',
+    '-static-global-template-stub=false',
+    '-device-entity-has-hidden-visibility=false',
     # We make a fat binary for Turing, Ampere, Ada and Hopper
     #'-gencode', 'arch=compute_75,code=sm_75',
     #'-gencode', 'arch=compute_86,code=sm_86',
