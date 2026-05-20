@@ -426,7 +426,7 @@ if build_core_opt
 else
     libncarray = cpp.find_library('ncarray', required: true)
     ncarray_dep = declare_dependency(
-        link_with: [
+        dependencies: deps_for_ncarray + [
             libncarray,
         ],
         include_directories: ncarray_headers,
@@ -435,12 +435,18 @@ else
     if nca_has_cuda
         libncdevarray = cpp.find_library('ncdevarray', required: true)
         libncdevarrayjit = cpp.find_library('ncdevarrayjit', required: true)
-        ncdevarray_dep = declare_dependency(
-            link_with: [
-                libncdevarray,
+        ncdevarrayjit_dep = declare_dependency(
+            dependencies: deps_for_ncarray + [
                 libncdevarrayjit,
             ],
-            dependencies: cuda_dep,
+            include_directories: ncarray_headers,
+        )
+        ncdevarray_dep = declare_dependency(
+            dependencies: deps_for_ncarray + [
+                ncarray_dep,
+                ncdevarrayjit_dep,
+                libncdevarray,
+            ],
             include_directories: ncarray_headers,
         )
     endif
@@ -554,185 +560,188 @@ if build_python_opt
     )
 endif # build_python_opt
 
-#### Testing ####
-#################
-gtest_dep = dependency('gtest', main: true, static: true, required: false)
+if build_core_opt
+    #### Testing ####
+    #################
 
-if not gtest_dep.found()
-    gtest_proj = subproject('gtest', default_options: ['default_library=static'])
-    gtest_dep = gtest_proj.get_variable('gtest_main_dep')
-endif
+    gtest_dep = dependency('gtest', main: true, static: true, required: false)
 
-deps_for_tests = [gtest_dep, ncarray_dep]
-if nca_has_cuda
-    deps_for_tests += cuda_dep
-    deps_for_tests += ncdevarray_dep
-    deps_for_tests += ncdevarrayjit_dep
-endif
+    if not gtest_dep.found()
+        gtest_proj = subproject('gtest', default_options: ['default_library=static'])
+        gtest_dep = gtest_proj.get_variable('gtest_main_dep')
+    endif
 
-test_index = executable(
-    'test_array_indexing',
-    [
-        'tests/cxx/test_indexing.cc',
-    ],
-    dependencies: deps_for_tests,
-    install: false,
-    include_directories: ncarray_headers,
-)
-test('Testing array indexing.', test_index, verbose: true)
+    deps_for_tests = [gtest_dep, ncarray_dep]
+    if nca_has_cuda
+        deps_for_tests += cuda_dep
+        deps_for_tests += ncdevarray_dep
+        deps_for_tests += ncdevarrayjit_dep
+    endif
 
-test_binary_ops = executable(
-    'test_array_binary_operations',
-    [
-        'tests/cxx/test_binary_operations.cc',
-    ],
-    dependencies: deps_for_tests,
-    install: false,
-    include_directories: ncarray_headers,
-)
-test('Testing array binary operations.', test_binary_ops, verbose: true)
-
-test_unary_ops = executable(
-    'test_array_unary_operations',
-    [
-        'tests/cxx/test_unary_operations.cc',
-    ],
-    dependencies: deps_for_tests,
-    install: false,
-    include_directories: ncarray_headers,
-)
-test('Testing array unary operations.', test_unary_ops, verbose: true)
-
-test_reduction_ops = executable(
-    'test_array_reductions',
-    [
-        'tests/cxx/test_reductions.cc',
-    ],
-    dependencies: deps_for_tests,
-    install: false,
-    include_directories: ncarray_headers,
-)
-test('Testing array reductions.', test_reduction_ops, verbose: true)
-
-test_float_vecs = executable(
-    'test_float_vecs',
-    [
-        'tests/cxx/test_float_vecs.cc',
-    ],
-    dependencies: deps_for_tests,
-    install: false,
-    include_directories: ncarray_headers,
-)
-test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
-
-if nca_has_cuda
-    test_gpu_copies = executable(
-        'test_gpu_copies',
+    test_index = executable(
+        'test_array_indexing',
         [
-            'tests/cxx/test_gpu_copies.cu',
+            'tests/cxx/test_indexing.cc',
         ],
         dependencies: deps_for_tests,
         install: false,
         include_directories: ncarray_headers,
-        cuda_args: nca_cuda_args,
-
-        # Force C++ compiler linkage (no RDC so fine)
-        link_language: 'cpp',
     )
-    test(
-        'Testing GPU array copies.',
-        test_gpu_copies,
-        env: [
-            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
-        ],
-        verbose: true
-    )
+    test('Testing array indexing.', test_index, verbose: true)
 
-    test_gpu_binary_ops = executable(
-        'test_gpu_array_binary_operations',
+    test_binary_ops = executable(
+        'test_array_binary_operations',
         [
-            'tests/cxx/test_gpu_binary_operations.cu',
+            'tests/cxx/test_binary_operations.cc',
         ],
         dependencies: deps_for_tests,
         install: false,
         include_directories: ncarray_headers,
-        cuda_args: nca_cuda_args,
-
-        # Force C++ compiler linkage (no RDC so fine)
-        link_language: 'cpp',
     )
-    test(
-        'Testing GPU array binary operations.',
-        test_gpu_binary_ops,
-        env: [
-            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
-        ],
-        verbose: true
-    )
+    test('Testing array binary operations.', test_binary_ops, verbose: true)
 
-    test_gpu_unary_ops = executable(
-        'test_gpu_array_unary_operations',
+    test_unary_ops = executable(
+        'test_array_unary_operations',
         [
-            'tests/cxx/test_gpu_unary_operations.cu',
+            'tests/cxx/test_unary_operations.cc',
         ],
         dependencies: deps_for_tests,
         install: false,
         include_directories: ncarray_headers,
-        cuda_args: nca_cuda_args,
-
-        # Force C++ compiler linkage (no RDC so fine)
-        link_language: 'cpp',
     )
-    test(
-        'Testing GPU array unary operations.',
-        test_gpu_unary_ops,
-        env: [
-            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
-        ],
-        verbose: true
-    )
+    test('Testing array unary operations.', test_unary_ops, verbose: true)
 
-    test_gpu_reductions = executable(
-        'test_gpu_array_reductions',
+    test_reduction_ops = executable(
+        'test_array_reductions',
         [
-            'tests/cxx/test_gpu_reductions.cu',
+            'tests/cxx/test_reductions.cc',
         ],
         dependencies: deps_for_tests,
         install: false,
         include_directories: ncarray_headers,
-        cuda_args: nca_cuda_args,
-
-        # Force C++ compiler linkage (no RDC so fine)
-        link_language: 'cpp',
     )
-    test(
-        'Testing GPU array reductions.',
-        test_gpu_reductions,
-        env: [
-            'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
-            'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
-        ],
-        verbose: true
-    )
-endif
+    test('Testing array reductions.', test_reduction_ops, verbose: true)
 
-#### Example Programs ####
-##########################
-if nca_has_cuda
-    pixel_binning = executable(
-        'benchmark_pixel_binning',
+    test_float_vecs = executable(
+        'test_float_vecs',
         [
-            'examples/benchmark_binning.cu',
+            'tests/cxx/test_float_vecs.cc',
         ],
         dependencies: deps_for_tests,
-        install: true,
+        install: false,
         include_directories: ncarray_headers,
-        cuda_args: nca_cuda_args,
-
-        # Force C++ compiler linkage (no RDC so fine)
-        link_language: 'cpp',
     )
-endif
+    test('Testing custom float/double vectors.', test_float_vecs, verbose: true)
+
+    if nca_has_cuda
+        test_gpu_copies = executable(
+            'test_gpu_copies',
+            [
+                'tests/cxx/test_gpu_copies.cu',
+            ],
+            dependencies: deps_for_tests,
+            install: false,
+            include_directories: ncarray_headers,
+            cuda_args: nca_cuda_args,
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
+        )
+        test(
+            'Testing GPU array copies.',
+            test_gpu_copies,
+            env: [
+                'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+                'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
+            ],
+            verbose: true
+        )
+
+        test_gpu_binary_ops = executable(
+            'test_gpu_array_binary_operations',
+            [
+                'tests/cxx/test_gpu_binary_operations.cu',
+            ],
+            dependencies: deps_for_tests,
+            install: false,
+            include_directories: ncarray_headers,
+            cuda_args: nca_cuda_args,
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
+        )
+        test(
+            'Testing GPU array binary operations.',
+            test_gpu_binary_ops,
+            env: [
+                'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+                'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
+            ],
+            verbose: true
+        )
+
+        test_gpu_unary_ops = executable(
+            'test_gpu_array_unary_operations',
+            [
+                'tests/cxx/test_gpu_unary_operations.cu',
+            ],
+            dependencies: deps_for_tests,
+            install: false,
+            include_directories: ncarray_headers,
+            cuda_args: nca_cuda_args,
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
+        )
+        test(
+            'Testing GPU array unary operations.',
+            test_gpu_unary_ops,
+            env: [
+                'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+                'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
+            ],
+            verbose: true
+        )
+
+        test_gpu_reductions = executable(
+            'test_gpu_array_reductions',
+            [
+                'tests/cxx/test_gpu_reductions.cu',
+            ],
+            dependencies: deps_for_tests,
+            install: false,
+            include_directories: ncarray_headers,
+            cuda_args: nca_cuda_args,
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
+        )
+        test(
+            'Testing GPU array reductions.',
+            test_gpu_reductions,
+            env: [
+                'NCARRAY_INCLUDE_DIR='+meson.project_source_root() / 'src/lib',
+                'NCARRAY_JIT_INCLUDE_DIR=' + jit_headers_build_dir,
+            ],
+            verbose: true
+        )
+    endif
+
+    #### Example Programs ####
+    ##########################
+    if nca_has_cuda
+        pixel_binning = executable(
+            'benchmark_pixel_binning',
+            [
+                'examples/benchmark_binning.cu',
+            ],
+            dependencies: deps_for_tests,
+            install: true,
+            include_directories: ncarray_headers,
+            cuda_args: nca_cuda_args,
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
+        )
+    endif
+endif # build_core_opt
