@@ -13,7 +13,23 @@ nca_has_cuda = add_languages('cuda', required: false)
 if nca_has_cuda
     # Source code guards CUDA specific features behind NCA_HAS_CUDA
     add_project_arguments('-DNCA_HAS_CUDA', language: ['cpp', 'cuda'])
+
+    # Setup visibility of symbols within the library but allow the rest of the
+    # CUDA symbols to be dead-stripped to try and reduce size but still link
+    libncdevarray_link_args = [
+        '-Wl,--version-script,' + (meson.project_source_root() / 'src/lib/ncarray/libncdevarray.map'),
+    ]
 endif
+
+#### Fetch Build Options ####
+#############################
+build_core_opt = get_option('build_core')
+build_python_opt = get_option('build_python')
+nca_cuda_archs_opt = get_option('nca_cuda_archs')
+nca_as_wheel_opt = get_option('nca_as_wheel')
+
+#### Parse CUDA architectures and set CUDA args ####
+####################################################
 
 nca_cuda_args = [
     '--extended-lambda',
@@ -23,26 +39,50 @@ nca_cuda_args = [
     # silence warning: long double treated as double
     '-Xcudafe', '--diag_suppress=20208',
     # silence warning about static global template stub
-    #'-Xcudafe', '--diag_suppress=20278',
+    '-Xcudafe', '--diag_suppress=20278',
     '-static-global-template-stub=false',
     '-device-entity-has-hidden-visibility=false',
-    # We make a fat binary for Turing, Ampere, Ada and Hopper
-    #'-gencode', 'arch=compute_75,code=sm_75',
-    #'-gencode', 'arch=compute_86,code=sm_86',
-    #'-gencode', 'arch=compute_80,code=sm_80',
-    #'-gencode', 'arch=compute_89,code=sm_89',
-    #'-gencode', 'arch=compute_90,code=sm_90',
-    '-Xfatbin', '-compress-all',
-    #'-gencode', 'arch=compute_75,code=sm_75',
-    '-gencode', 'arch=compute_80,code=[sm_80,compute_80]',
-    #'-gencode', 'arch=compute_90,code=[sm_90,compute_90]',
 ]
 
-#### Fetch Build Options ####
-#############################
-build_core_opt = get_option('build_core')
-build_python_opt = get_option('build_python')
-nca_as_wheel_opt = get_option('nca_as_wheel')
+if nca_cuda_archs_opt == 'all'
+    # Setup a fat binary for Turing, Ampere, Ada and Hopper
+    nca_cuda_args += [
+        '-Xfatbin', '-compress-all',
+        '-gencode', 'arch=compute_75,code=sm_75',
+        '-gencode', 'arch=compute_80,code=sm_80',
+        '-gencode', 'arch=compute_86,code=sm_86',
+        '-gencode', 'arch=compute_89,code=sm_89',
+        '-gencode', 'arch=compute_90,code=[sm_90,compute_90]',
+    ]
+else
+    # Parse comma-separated architectures ('80', or '75,90')
+    # Last value will generate [sm_ARCH,compute_ARCH]
+    selected_cuda_archs = nca_cuda_archs_opt.split(',')
+
+    num_archs = selected_cuda_archs.length()
+    if num_archs > 1
+        nca_cuda_args += [
+            '-Xfatbin', '-compress-all',
+        ]
+    endif
+
+    last_arch = selected_cuda_archs[num_archs - 1].strip()
+    foreach arch : selected_cuda_archs
+        arch = arch.strip()
+        if arch != ''
+            if arch == last_arch
+                # Generate PTX in this case, for forward-compatibility
+                nca_cuda_args += [
+                    '-gencode', 'arch=compute_' + arch + ',code=[sm_' + arch + ',compute_' + arch + ']'
+                ]
+            else
+                nca_cuda_args += [
+                    '-gencode', 'arch=compute_' + arch + ',code=sm_' + arch
+                ]
+            endif
+        endif
+    endforeach
+endif
 
 #### Core Dependencies ####
 ###########################
@@ -297,6 +337,8 @@ if build_core_opt
 
             # Force C++ compiler linkage (no RDC so fine)
             link_language: 'cpp',
+            # Symbol visibility mappings
+            link_args: libncdevarray_link_args,
         )
 
         ncdevarrayjit_dep = declare_dependency(
@@ -383,6 +425,8 @@ if build_core_opt
 
             # Force C++ compiler linkage (no RDC so fine)
             link_language: 'cpp',
+            # Symbol visibility mappings
+            link_args: libncdevarray_link_args,
         )
 
         ncdevarray_dep = declare_dependency(

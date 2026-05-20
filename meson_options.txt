@@ -11,6 +11,12 @@ option(
     description: 'Build the Python extension modules.'
 )
 option(
+    'nca_cuda_archs',
+    type: 'string',
+    value: '80',
+    description: 'Target CUDA architectures as comma-separated string (e..g 75,80,90), or "all".',
+)
+option(
     'nca_as_wheel',
     type: 'boolean',
     value: true,
