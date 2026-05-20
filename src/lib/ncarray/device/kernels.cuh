@@ -18,6 +18,7 @@
 #include "ncarray/device/elementwise.cuh"
 #include "ncarray/device/reductions.cuh"
 #include "ncarray/device/utilities.cuh"
+#include "ncarray/device/warp.cuh"
 #endif
 #include "ncarray/layout.hh"
 #include "ncarray/op_traits.hh"

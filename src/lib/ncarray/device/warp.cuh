@@ -9,6 +9,8 @@
 #ifndef NCARRAY_DEVICE_WARP_CUH
 #define NCARRAY_DEVICE_WARP_CUH
 
+#include <type_traits>
+
 namespace ncarray {
   template <typename T>
   concept SupportsWarpShfl =
