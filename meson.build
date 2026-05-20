@@ -292,6 +292,9 @@ if build_core_opt
             install_rpath: lib_install_rpath,
             version: '1',
             soversion: '1',
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
         )
 
         ncdevarrayjit_dep = declare_dependency(
@@ -375,6 +378,9 @@ if build_core_opt
             install_rpath: lib_install_rpath,
             version: '1',
             soversion: '1',
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
         )
 
         ncdevarray_dep = declare_dependency(
@@ -519,6 +525,9 @@ if build_python_opt
             install_rpath: py_to_lib_install_rpath,
             build_rpath: py_to_lib_install_rpath,
             cuda_args: nca_cuda_args,
+
+            # Force C++ compiler linkage (no RDC so fine)
+            link_language: 'cpp',
         )
     endif
 
@@ -624,6 +633,9 @@ if nca_has_cuda
         install: false,
         include_directories: ncarray_headers,
         cuda_args: nca_cuda_args,
+
+        # Force C++ compiler linkage (no RDC so fine)
+        link_language: 'cpp',
     )
     test(
         'Testing GPU array copies.',
@@ -644,6 +656,9 @@ if nca_has_cuda
         install: false,
         include_directories: ncarray_headers,
         cuda_args: nca_cuda_args,
+
+        # Force C++ compiler linkage (no RDC so fine)
+        link_language: 'cpp',
     )
     test(
         'Testing GPU array binary operations.',
@@ -664,6 +679,9 @@ if nca_has_cuda
         install: false,
         include_directories: ncarray_headers,
         cuda_args: nca_cuda_args,
+
+        # Force C++ compiler linkage (no RDC so fine)
+        link_language: 'cpp',
     )
     test(
         'Testing GPU array unary operations.',
@@ -684,6 +702,9 @@ if nca_has_cuda
         install: false,
         include_directories: ncarray_headers,
         cuda_args: nca_cuda_args,
+
+        # Force C++ compiler linkage (no RDC so fine)
+        link_language: 'cpp',
     )
     test(
         'Testing GPU array reductions.',
@@ -708,5 +729,8 @@ if nca_has_cuda
         install: true,
         include_directories: ncarray_headers,
         cuda_args: nca_cuda_args,
+
+        # Force C++ compiler linkage (no RDC so fine)
+        link_language: 'cpp',
     )
 endif
