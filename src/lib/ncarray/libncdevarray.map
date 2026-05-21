@@ -1,7 +1,0 @@
-{
-    extern "C++" {
-        global:
-            ncarray::*;
-    };
-    local: *;
-};
