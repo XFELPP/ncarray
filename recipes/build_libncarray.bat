@@ -12,7 +12,16 @@ meson setup builddir         ^
       -Ddebug=false
 if errorlevel 1 exit 1
 
-meson compile -j 6 -C builddir -l 10
+set "JOBS=%CPU_COUNT%"
+if not "%cuda_compiler_version%" == "None" (
+    set "JOBS=2"
+) else (
+    if %JOBS% GTR 4 (
+        set "JOBS=4"
+    )
+)
+
+meson compile -j %JOBS% -C builddir
 if errorlevel 1 exit 1
 
 meson install -C builddir
