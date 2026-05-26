@@ -17,10 +17,14 @@ endif
 
 #### Fetch Build Options ####
 #############################
+# Core options
 build_core_opt = get_option('build_core')
 build_python_opt = get_option('build_python')
 nca_cuda_archs_opt = get_option('nca_cuda_archs')
 nca_as_wheel_opt = get_option('nca_as_wheel')
+
+# Add-ons and development
+build_examples_opt = get_option('build_examples')
 
 #### Parse CUDA architectures and set CUDA args ####
 ####################################################
@@ -755,19 +759,21 @@ if build_core_opt
 
     #### Example Programs ####
     ##########################
-    if nca_has_cuda
-        pixel_binning = executable(
-            'benchmark_pixel_binning',
-            [
-                'examples/benchmark_binning.cu',
-            ],
-            dependencies: deps_for_tests,
-            install: true,
-            include_directories: ncarray_headers,
-            cuda_args: nca_cuda_args,
+    if build_examples_opt
+        if nca_has_cuda
+            pixel_binning = executable(
+                'benchmark_pixel_binning',
+                [
+                    'examples/benchmark_binning.cu',
+                ],
+                dependencies: deps_for_tests,
+                install: true,
+                include_directories: ncarray_headers,
+                cuda_args: nca_cuda_args,
 
-            # Force C++ compiler linkage (no RDC so fine)
-            link_language: 'cpp',
-        )
-    endif
+                # Force C++ compiler linkage (no RDC so fine)
+                link_language: 'cpp',
+            )
+        endif # Has CUDA
+    endif # build_examples_opt
 endif # build_core_opt

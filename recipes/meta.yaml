@@ -8,34 +8,38 @@ package:
   version: {{ version }}
 
 source:
-  # url: https://github.com/XFELPP/ncarray/archive/refs/tags/v{{ version }}.tar.gz
-  # url: file:///...
-  # sha256: abcd12345
-  path: ..
+  git_url: https://github.com/XFELPP/ncarray.git
+  git_rev: v{{ version }}
 
 build:
   number: 0
+  dynamic_linking:
+    missing_dso_allowlist:
+      - "*/nvcuda.dll"                                                           # [win]
 
 requirements:
   build:
-    - {{ compiler('cxx') }}
+    - {{ compiler('cxx') }} >=13,<14                                             # [linux]
+    - {{ compiler('cxx') }} >=19.30                                              # [win]
+    - {{ compiler('cxx') }} >=16                                                 # [osx]
     - cuda-nvcc                                                                  # [cuda_compiler_version != "None"]
     - meson >=1.10.1
     - ninja
   host:
-    - python
+    - python >=3.8,<3.15.0a0
     - pip
     - setuptools
     - meson-python
     - pybind11
     - cuda-version {{ cuda_compiler_version }}.*                                 # [cuda_compiler_version != "None"]
   run:
-    - python
+    - python >=3.8,<3.15.0a0
     - cuda-version {{ cuda_compiler_version }}.*                                 # [cuda_compiler_version != "None"]
 outputs:
   # C++ Library
   - name: libncarray
-    script: build_libncarray.sh
+    script: build_libncarray.sh                                                  # [linux or osx]
+    script: build_libncarray.bat                                                 # [win]
     build:
       # Generate variant strings for CUDA and non-CUDA variants:
       # ncarray-MAJ.MIN.MIC-cudaMAJMIN
@@ -44,7 +48,9 @@ outputs:
       string: cpu                                                                # [cuda_compiler_version == "None"]
     requirements:
       build:
-        - {{ compiler('cxx') }}
+        - {{ compiler('cxx') }} >=13,<14                                         # [linux]
+        - {{ compiler('cxx') }} >=19.30                                          # [win]
+        - {{ compiler('cxx') }} >=16                                             # [osx]
         - cuda-nvcc                                                              # [cuda_compiler_version != "None"]
         - meson >=1.10.1
         - ninja
@@ -55,7 +61,8 @@ outputs:
 
   # Python Bindings
   - name: ncarray
-    script: build_ncarray.sh
+    script: build_ncarray.sh                                                     # [linux or osx]
+    script: build_ncarray.bat                                                    # [win]
     build:
       # Generate variant strings for CUDA and non-CUDA variants:
       # ncarray-MAJ.MIN.MIC-pyMAJMIN_cudaMAJMIN
@@ -64,20 +71,22 @@ outputs:
       string: py{{ CONDA_PY }}_cpu                                               # [cuda_compiler_version == "None"]
     requirements:
       build:
-        - {{ compiler('cxx') }}
+        - {{ compiler('cxx') }} >=13,<14                                         # [linux]
+        - {{ compiler('cxx') }} >=19.30                                          # [win]
+        - {{ compiler('cxx') }} >=16                                             # [osx]
         - cuda-nvcc                                                              # [cuda_compiler_version != "None"]
         - meson >=1.10.1
         - ninja
         - python {{ python }}.*
       host:
-        - python
+        - python {{ python }}.*
         - pip
         - setuptools
         - meson-python
         - pybind11
         - {{ pin_subpackage('libncarray', exact=True) }}
       run:
-        - python
+        - python {{ python }}.*
         - {{ pin_subpackage('libncarray', exact=True) }}
         - cuda-version {{ cuda_compiler_version }}.*                             # [cuda_compiler_version != "None"]
 
@@ -96,3 +105,7 @@ about:
     A high-performance expression engine performs lazy evaluation of complex arithmetic operations on both host and
     device, with additional classes available for further reducing run-time cost where performance is most critical.
     Python bindings are provided via a thin wrapper with pybind11 for a NumPy compatible Python experience.
+
+extra:
+  recipe-maintainers:
+    - gadorlhiac
