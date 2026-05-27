@@ -86,10 +86,7 @@ jobs:
         id: cuda-toolkit
         with:
           cuda: '12.8.0'
-
-      - name: Expose CUDA for Linux
-        if: runner.os == 'Linux'
-        run: cp -rp /usr/local/cuda-12.8 ./cuda-toolkit
+          use-github-cache: 'false'
 
       - name: Enable Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
