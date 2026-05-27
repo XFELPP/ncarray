@@ -1,0 +1,37 @@
+cuda_compiler_version:
+  - "12.0"             # [linux or win]
+  - "12.8"             # [linux or win]
+  - "13.0"             # [linux or win]
+  - "None"             # [osx]
+
+python:
+  - "3.8"
+  - "3.9"
+  - "3.10"
+  - "3.11"
+  - "3.12"
+  - "3.13"
+  - "3.14"
+
+python_abi:
+  - 3.8 *_cp38
+  - 3.9 *_cp39
+  - 3.10 *_cp310
+  - 3.11 *_cp311
+  - 3.12 *_cp312
+  - 3.13 *_cp313
+  - 3.14 *_cp314
+
+zip_keys:
+  - - python
+    - python_abi
+
+pin_run_as_build:
+  python: {min_pin: x.x, max_pin: x.x}
+
+# For NVCC compatibility, use specific GCC or clang versions.
+gxx_linux_64:
+  - "13"
+
+clangxx_linux_64:
+  - "16"

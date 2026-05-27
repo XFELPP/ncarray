@@ -17,13 +17,39 @@ namespace ncarray {
   using SODevArrayRef = ArrayImpl<SOArrayPolicy, DevRefPolicy>;
   using SODevArray = ArrayImpl<SOArrayPolicy, DevOwnerPolicy>;
 
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevRefPolicy,   SOArrayPolicy, DevViewPolicy)
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevViewPolicy)
+  EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevRefPolicy)
+
   EXTERN_NC_BASE_OPS(SOArrayPolicy, DevViewPolicy)
   EXTERN_NC_BASE_OPS(SOArrayPolicy, DevRefPolicy)
   EXTERN_NC_BASE_OPS(SOArrayPolicy, DevOwnerPolicy)
 
-  EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevRefPolicy,   SOArrayPolicy, DevViewPolicy)
-  EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevViewPolicy)
-  EXTERN_NC_CROSS_OPS(SOArrayPolicy, DevOwnerPolicy, SOArrayPolicy, DevRefPolicy)
+  EXTERN_DEV_VM_OPS(char, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(bool, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::uint8_t, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::uint16_t, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::uint32_t, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::uint64_t, SOArrayPolicy)
+
+  EXTERN_DEV_VM_OPS(std::int8_t, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::int16_t, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::int32_t, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::int64_t, SOArrayPolicy)
+
+  EXTERN_DEV_VM_OPS(float, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(double, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(long double, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::complex<float>, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(std::complex<double>, SOArrayPolicy)
+
+  EXTERN_DEV_VM_OPS(Float2, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(Float3, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(Float4, SOArrayPolicy)
+
+  EXTERN_DEV_VM_OPS(Double2, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(Double3, SOArrayPolicy)
+  EXTERN_DEV_VM_OPS(Double4, SOArrayPolicy)
 }
 
 #endif // NCARRAY_SODEVARRAYS_HH

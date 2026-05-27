@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/utilities.hh"
+#include "python/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
@@ -51,5 +51,7 @@ void register_ncdevarray_ref(py::module_& m) {
       py::arg("data"),
       py::arg("read_only") = py::cast(false));
   register_common_array_methods(ncdevref_cls);
+
+  py::implicitly_convertible<ncarray::NCDevArrayRef, ncarray::NCDevArrayView>();
 #endif
 }

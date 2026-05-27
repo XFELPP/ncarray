@@ -76,6 +76,23 @@ namespace ncarray {
       return { &m_h_data[idx], &m_d_data[idx] };
     }
 
+    NCA_H MemEntry get_block(std::size_t items, std::size_t alignment = 16) {
+      std::size_t aligned_items = (items + (alignment - 1)) & ~(alignment - 1);
+      if (aligned_items > Capacity) {
+        return { nullptr, nullptr };
+      }
+
+      if (m_idx + aligned_items > Capacity) {
+        // Wrap back to 0
+        m_idx = 0;
+      }
+
+      std::size_t idx { m_idx };
+      m_idx = (m_idx + aligned_items) % Capacity;
+
+      return { &m_h_data[idx], &m_d_data[idx] };
+    }
+
   private:
     NCA_H CircularDevicePool() {
 #ifdef NCA_HAS_CUDA

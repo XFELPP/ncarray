@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/utilities.hh"
+#include "python/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
@@ -47,6 +47,7 @@ void register_sodevarray_owner(py::module_& m);
 PYBIND11_MODULE(_pyncdevarray, ncdevarray_module, py::mod_gil_not_used()) {
   ncdevarray_module.doc() = "Non-contiguous (NC) GPU Array Classes.";
 #ifdef NCA_HAS_CUDA
+  register_expr_class<ncarray::DevTag>(ncdevarray_module, "DevExpr");
   register_ncdevarray_view(ncdevarray_module);
   register_ncdevarray_ref(ncdevarray_module);
   register_ncdevarray_owner(ncdevarray_module);

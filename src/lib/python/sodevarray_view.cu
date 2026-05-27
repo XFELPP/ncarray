@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/utilities.hh"
+#include "python/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
@@ -37,7 +37,11 @@ using namespace pyncarray;
 
 void register_sodevarray_view(py::module_& m) {
 #ifdef NCA_HAS_CUDA
-  auto sodevview_cls = py::classh<ncarray::SODevArrayView>(m, "SODevArrayView");
+  auto sodevview_cls = py::classh<ncarray::SODevArrayView>(m, "SODevArrayView")
+    // These constructors, plus the implicitly_convertible on SODevArrayRef and
+    // SODevArray allow view interconversion
+    .def(py::init<const ncarray::SODevArrayRef&>())
+    .def(py::init<const ncarray::SODevArray&>());
   register_common_array_methods(sodevview_cls);
 #endif
 }

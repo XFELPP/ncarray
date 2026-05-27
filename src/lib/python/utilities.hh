@@ -33,7 +33,7 @@ typedef SSIZE_T ssize_t;
 
 #include <cstdint>
 #include <cstdlib>
-#include <iostream>
+#include <deque>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -87,6 +87,9 @@ namespace pyncarray {
     }
     case ncarray::DType::float64: {
       return visitor.template operator()<double>();
+    }
+    case ncarray::DType::float128: {
+      return visitor.template operator()<long double>();
     }
     case ncarray::DType::complex64: {
       return visitor.template operator()<std::complex<float>>();
@@ -145,10 +148,14 @@ namespace pyncarray {
       return ncarray::dtype_traits<std::int64_t>::value;
     } else if (dtype.is(py::dtype::of<bool>())) {
       return ncarray::dtype_traits<bool>::value;
+    } else if (dtype.is(py::dtype::of<char>())) {
+      return ncarray::dtype_traits<char>::value;
     } else if (dtype.is(py::dtype::of<float>())) {
       return ncarray::dtype_traits<float>::value;
     } else if (dtype.is(py::dtype::of<double>())) {
       return ncarray::dtype_traits<double>::value;
+    } else if (dtype.is(py::dtype::of<long double>())) {
+      return ncarray::dtype_traits<long double>::value;
     }
     std::ostringstream oss;
     oss << "Unsupported type: " << dtype << "!";
@@ -160,20 +167,45 @@ namespace pyncarray {
    *
    * @tparam ViewType The kind of view to construct. E.g. NCArrayView, SOArrayView.
    * @param[in] arr An input NumPy array to convert.
+   * @param[in] target_ndim The target dimensionality of the output with padding.
+   *            TODO: This mostly serves as a hack until broadcasting is suppported.
+   *            Because of the implicit dimensionality mismatch between NCArrays* and NumPy....
    * @returns A view of ViewType over the data from the NumPy array.
    */
   template <class ViewType>
-  inline auto pyarray_to_view(const py::array& arr) {
+  inline auto pyarray_to_view(const py::array& arr, ssize_t target_ndim = -1) {
     py::buffer_info info = arr.request();
     auto buf_ptr = info.ptr;
     bool read_only = !arr.writeable();
     // This is temporary!! Careful how you use it!
     ssize_t ptr_axis { -1 }; // -1 means NO pointer axis
-    // When you have no pointer axis, just pass the raw pointer
+
+    ssize_t ndim { arr.ndim() };
+    if (target_ndim > ndim) {
+      ndim = target_ndim;
+    }
+
+    // NOTE: Because of the implicit extra dimension when constructing NCArrays
+    //       there is a mismatch vs NumPy. True broadcasting is not supported yet,
+    //       but this padding up front makes NumPy match the NCArray for performing ops.
+    // TODO: Revisit and fix this kludge when true broadcasting is added!
+    ssize_t padded_shape[NCARRAY_MAX_NDIM];
+    ssize_t padded_strides[NCARRAY_MAX_NDIM];
+
+    ssize_t offset { ndim - arr.ndim() };
+    for (ssize_t i = 0; i < ndim; ++i) {
+      if (i < offset) {
+        padded_shape[i] = 1;
+        padded_strides[i] = 0;
+      } else {
+        padded_shape[i] = arr.shape()[i - offset];
+        padded_strides[i] = arr.strides()[i - offset];
+      }
+    }
     return ViewType(buf_ptr,
-                    arr.ndim(),
-                    arr.shape(),
-                    arr.strides(),
+                    ndim,
+                    padded_shape,
+                    padded_strides,
                     pydtype_to_dtype(arr.dtype()),
                     ptr_axis,
                     read_only);
@@ -352,395 +384,6 @@ namespace pyncarray {
 
     return indices;
   }
-
-  /**
-   * @def REGISTER_OPERATION(PYMETHOD, OP)
-   * @brief A helper to attach a dunder to a class binding for operator overloads.
-   * @example REGISTER_OPERATION("add", +) binds operator+(...) to __add__
-   * @todo We currently need to convert arrays to view, because the C++ lib cannot
-   *       take the array directly.
-   */
-#define REGISTER_OPERATION(PYMETHOD, OP)                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const ArrayT& other) {          \
-      return py::cast(self OP other);                                               \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {       \
-      return py::cast(self OP pyarray_to_view<typename ArrayT::ViewType>(other));   \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__r" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {      \
-      return py::cast(pyarray_to_view<typename ArrayT::ViewType>(other) OP self);   \
-    },                                                                              \
-      py::is_operator())                                                            \
-    .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) { \
-      return py::cast(self OP other);                                               \
-    },                                                                              \
-      py::is_operator())
-
-  /**
-   * @def REGISTER_INPLACE_OPERATION(PYMETHOD, OP)
-   * @brief A helper to attach a dunder to a class binding for inplace operator overloads.
-   * @example REGISTER_INPLACE_OPERATION("iadd", +=) binds operator+=(...) to __iadd__
-   * @todo We currently need to convert arrays to view, because the C++ lib cannot
-   *       take the array directly.
-   */
-#define REGISTER_INPLACE_OPERATION(PYMETHOD, OP)                              \
-    .def("__" PYMETHOD "__", [](ArrayT& self, const ArrayT& other) {          \
-      self OP other;                                                          \
-      return self;                                                            \
-    },                                                                        \
-      py::is_operator())                                                      \
-    .def("__" PYMETHOD "__", [](ArrayT& self, const py::array& other) {       \
-      self OP pyarray_to_view<typename ArrayT::ViewType>(other);              \
-      return self;                                                            \
-    },                                                                        \
-      py::is_operator())                                                      \
-    .def("__" PYMETHOD "__", [](ArrayT& self, const ncarray::Scalar& other) { \
-      self OP other;                                                          \
-      return self;                                                            \
-    },                                                                        \
-      py::is_operator())
-
-  /**
-   * Helper function to attach common methods to a Python binding for an array
-   * specialization.
-   *
-   * All array specializations generally have the same functions in C++ and in
-   * their Python bindings (plus/minus some speciality features). This function
-   * just attaches those all.
-   *
-   * @tparam ArrayT The kind of array being used. This is a full array specifier,
-   *         including storage+layout specifier.
-   * @param[in] arr_cl The class of the Python binding.
-   */
-  template <typename ArrayT>
-  void register_common_array_methods(py::classh<ArrayT>& arr_cl) {
-    using LayoutPolicy = typename ArrayT::LayoutPolicy;
-    using HostViewType = ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>;
-    using ViewType = typename ArrayT::ViewType;
-
-    using ViewOrScalar = std::variant<ncarray::Scalar,ViewType>;
-
-    arr_cl.def("__repr__", &ArrayT::repr, py::is_operator())
-    .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
-      auto* shape = self.shape();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(shape[i]);
-      }
-      return l;
-    })
-    .def_property_readonly("strides", [](const ArrayT& self) -> py::tuple {
-      auto* strides = self.strides();
-      py::list l;
-      for (ssize_t i = 0; i < self.ndim(); ++i) {
-        l.append(strides[i]);
-      }
-      return l;
-    })
-    // --- Standard Container Methods --- //
-    .def("__len__", [](const ArrayT& self) {
-      if (self.ndim() > 0) {
-        return self.shape(0);
-      }
-      return ssize_t(0);
-    })
-    .def("__iter__", [](const ArrayT& self) {
-        return py::make_iterator(self.begin(), self.end());
-    })
-    // --- Array-Like Methods (indexing, size, shapedtype, etc) --- //
-    .def_property_readonly("size",
-                           &ArrayT::size,
-                           "The number of items in the array type.")
-    .def_property_readonly("ndim",
-                           &ArrayT::ndim,
-                           "The number of dimensions in the array type.")
-    .def_property_readonly("itemsize",
-                           &ArrayT::itemsize,
-                           "The size in bytes of a single item in the array type.")
-    .def_property_readonly("nbytes",
-                           &ArrayT::nbytes,
-                           "The total size in bytes of all items in the array type.")
-    .def_property_readonly("dtype",
-                           &ArrayT::dtype,
-                           "The data type of the underlying elements.")
-    .def_property_readonly("is_contiguous",
-                           &ArrayT::is_contiguous,
-                           "Check if the underlying data is contiguous")
-    .def("squeeze",
-         &ArrayT::squeeze,
-         "Collapse and remove all axes of length 1.")
-    .def("astype",
-         [](const ArrayT& self, ncarray::DType& dtype_out) {
-           return self.astype(dtype_out);
-         },
-         py::arg("dtype"),
-         "Convert an NCArray* to the specified data type.")
-    .def("view",
-         &ArrayT::view,
-         "Convert the array to a *View type for use in view-only APIs (like kernels).")
-    .def("__getitem__",
-         [](const ArrayT& self, py::object idx) -> ViewOrScalar {
-           // NOTE: The Python bindings diverge from the C++ library on scalars.
-           //       For simplicity, in Python, scalars are returned as scalars.
-           //       In C++, they remain as an object tied to the array class.
-           ssize_t num_indices { 0 };
-           std::vector<ncarray::IndexItem> indices;
-           if (py::isinstance<py::int_>(idx)) {
-             auto idx_val = idx.cast<ssize_t>();
-             if (idx_val < -self.shape(0) || idx_val >= self.shape(0)) {
-               throw py::index_error("Index out of bounds!");
-             }
-             indices.push_back(ncarray::IndexItem { idx_val });
-             num_indices++;
-           } else if (py::isinstance<py::slice>(idx)) {
-             auto slice = pyslice_to_slice(self.shape(0), idx.cast<py::slice>());
-             indices.push_back(ncarray::IndexItem { slice });
-             num_indices++;
-           } else if (py::isinstance<py::ellipsis>(idx)) {
-             indices.push_back(ncarray::IndexItem { ncarray::Ellipsis {} });
-             num_indices++;
-           } else if (py::isinstance<py::tuple>(idx)) {
-             py::tuple tup { idx.cast<py::tuple>() };
-             std::vector<ncarray::IndexItem> tup_indices = pytuple_to_indices(self,
-                                                                              tup);
-
-             indices.insert(indices.end(), tup_indices.begin(), tup_indices.end());
-             num_indices += tup.size();
-           } else {
-             throw py::type_error("Invalid indexing argument!");
-           }
-
-           ViewType view = self.view_from_indices(indices.data(), num_indices);
-           // For convenience convert scalars to... scalars (as opposed to 0-D array)
-           // But -- check if using GPU memory though
-           using MemType = typename std::decay_t<ArrayT>::MemType;
-           if constexpr (!std::is_same_v<MemType, ncarray::DevTag>) {
-             if (view.ndim() == 0) {
-               return view.get_scalar(view.data());
-             }
-           }
-           return view;
-         },
-         py::is_operator(),
-         py::return_value_policy::reference)
-    .def("__setitem__",
-         [](const ArrayT& self, py::object idx, py::object val) {
-           ssize_t num_indices { 0 };
-           std::vector<ncarray::IndexItem> indices;
-           if (py::isinstance<py::int_>(idx)) {
-             auto idx_val = idx.cast<ssize_t>();
-             if (idx_val < -self.shape(0) || idx_val >= self.shape(0)) {
-               throw py::index_error("Index out of bounds!");
-             }
-             indices.push_back(ncarray::IndexItem { idx_val });
-             num_indices++;
-           } else if (py::isinstance<py::slice>(idx)) {
-             auto slice = pyslice_to_slice(self.shape(0), idx.cast<py::slice>());
-             indices.push_back(ncarray::IndexItem { slice });
-             num_indices++;
-           } else if (py::isinstance<py::ellipsis>(idx)) {
-             indices.push_back(ncarray::IndexItem { ncarray::Ellipsis {} });
-             num_indices++;
-           } else if (py::isinstance<py::tuple>(idx)) {
-             py::tuple tup { idx.cast<py::tuple>() };
-             std::vector<ncarray::IndexItem> tup_indices = pytuple_to_indices(self, tup);
-
-             indices.insert(indices.end(), tup_indices.begin(), tup_indices.end());
-             num_indices += tup.size();
-           } else {
-             throw py::type_error("Invalid indexing argument!");
-           }
-
-           // We use this helper function instead of variadic operator[] -- tried
-           // doing it before with a cartesian product to create all the function
-           // overloads but it was prohibitively costly for compilation times
-           ViewType view = self.view_from_indices(indices.data(), num_indices);
-           if (py::isinstance<py::array>(val)) {
-             // Make sure that we always use a HOST view even with GPU support
-             auto rhs_view = pyarray_to_view<HostViewType>(val.cast<py::array>());
-             view.assign(rhs_view);
-           } else if (py::isinstance<ArrayT>(val)) {
-             view.assign(val.cast<ArrayT&>());
-           } else {
-             // See if its another nc/so array type
-             auto assign_op = [&] <typename LayoutP, typename STag> () {
-               using VP =
-                 typename ncarray::StoragePolicyTraits<STag>::View;
-               using RP =
-                 typename ncarray::StoragePolicyTraits<STag>::Ref;
-               using OP =
-                 typename ncarray::StoragePolicyTraits<STag>::Owner;
-               using ArrView = ncarray::ArrayImpl<LayoutP, VP>;
-               using ArrRef = ncarray::ArrayImpl<LayoutP, RP>;
-               using ArrOwner = ncarray::ArrayImpl<LayoutP, OP>;
-               if (py::isinstance<ArrView>(val) ||
-                   py::isinstance<ArrRef>(val)  ||
-                   py::isinstance<ArrOwner>(val)) {
-                 view.assign(val.cast<ArrView>());
-                 return true;
-               }
-               return false;
-             };
-#ifdef NCA_HAS_CUDA
-             // TODO: When cross-layouts are added to the shared libs add full matrix
-             // I.e. test NC to SOArray, SOArray to NC etc.
-             // For now, just use the single LayoutPolicy
-             if (assign_op.template operator()<LayoutPolicy, ncarray::DevTag>()) {
-               return;
-             }
-             /*
-             if (assign_op.template operator()<ncarray::NCOffsetsPolicy, ncarray::DevTag>()) {
-               return;
-             }
-             if (assign_op.template operator()<ncarray::SOArrayPolicy, ncarray::DevTag>()) {
-               return;
-             }
-             */
-#endif
-             if (assign_op.template operator()<LayoutPolicy, ncarray::HostTag>()) {
-               return;
-             }
-             /*
-             if (assign_op.template operator()<ncarray::NCOffsetsPolicy, ncarray::HostTag>()) {
-               return;
-             }
-             if (assign_op.template operator()<ncarray::SOArrayPolicy, ncarray::HostTag>()) {
-               return;
-             }
-             */
-             // Convertible to scalar
-             // Use the algorithm directly to avoid the variant gets
-             try {
-               view.fill(val.cast<ncarray::Scalar>());
-             } catch (...) {
-               throw py::type_error("Unrecognized type for assignment!");
-             }
-           }
-         },
-         py::is_operator())
-    // --- Array copy/assignment/fill methods --- //
-    .def("fill", &ArrayT::fill, "Broadcast a scalar value into an array.")
-    //.def("assign", &ArrayT::assign, "Assign (copy) another array into this one.")
-    .def("to_host", [](const ArrayT& self,
-                       std::optional<ncarray::DType> dtype) {
-#ifdef NCA_HAS_CUDA
-      ncarray::DType out_dtype = dtype.value_or(self.dtype());
-
-      using MemType = typename std::decay_t<ArrayT>::MemType;
-      if (std::is_same_v<MemType, ncarray::DevTag>) {
-        using LayoutType = typename ArrayT::LayoutPolicy;
-        ncarray::ArrayImpl<LayoutType, ncarray::OwnerPolicy> h_arr(self.ndim(),
-                                                                   self.shape(),
-                                                                   out_dtype);
-        auto copy_into = [&] <typename DestT> () {
-          self.template copy_into_astype<DestT>(reinterpret_cast<DestT*>(h_arr.data()));
-        };
-
-        host_dispatch(out_dtype, copy_into);
-
-        return h_arr;
-      }
-#endif
-      throw std::runtime_error("Array is already on host!");
-    },
-      py::arg("dtype") = py::none(),
-      "Transfer a device array to host. If already on the host, return the same array.")
-    .def("to_device", [](const ArrayT& self,
-                         std::optional<ncarray::DType> dtype) {
-#ifdef NCA_HAS_CUDA
-      ncarray::DType out_dtype = dtype.value_or(self.dtype());
-
-      using MemType = typename std::decay_t<ArrayT>::MemType;
-      if (std::is_same_v<MemType, ncarray::HostTag>) {
-        using LayoutType = typename ArrayT::LayoutPolicy;
-        ncarray::ArrayImpl<LayoutType, ncarray::DevOwnerPolicy> d_arr(self.ndim(),
-                                                                      self.shape(),
-                                                                      out_dtype);
-
-        // Host type arrays don't have device copy semantics -- we do the opposite
-        // to above. The destination (on device) pulls in the data from host.
-        // The device version of assigning is more general and can handle the transfer
-        d_arr.assign(self);
-
-        return d_arr;
-      } else {
-        throw std::runtime_error("Array is already on device!");
-      }
-#else
-      throw std::runtime_error("Device transfer not available on this platform!");
-#endif
-    },
-      py::arg("dtype") = py::none(),
-      "Transfer a host array to device. If already on device, return the same array.")
-    // --- Array Reduction Methods (Reduce to scalar) --- //
-    .def("sum", &ArrayT::sum)
-    .def("max", &ArrayT::max)
-    .def("min", &ArrayT::min)
-    .def("mean", &ArrayT::mean)
-    // --- Binary Arithmetic Methods --- //
-    REGISTER_OPERATION("add", +)
-    REGISTER_OPERATION("sub", -)
-    REGISTER_OPERATION("mul", *)
-    REGISTER_OPERATION("truediv", /)
-    // --- Inplace Binary Arithmetic Methods --- //
-    REGISTER_INPLACE_OPERATION("iadd", +=)
-    REGISTER_INPLACE_OPERATION("isub", -=)
-    REGISTER_INPLACE_OPERATION("imul", *=)
-    REGISTER_INPLACE_OPERATION("itruediv", /=)
-    // --- Binary Comparisons --- //
-    REGISTER_OPERATION("eq", ==)
-    REGISTER_OPERATION("ne", !=)
-    REGISTER_OPERATION("lt", <)
-    REGISTER_OPERATION("le", <=)
-    REGISTER_OPERATION("gt", >)
-    REGISTER_OPERATION("ge", >=)
-    // --- Logical Operations --- //
-    REGISTER_OPERATION("and", &&)
-    REGISTER_OPERATION("or", ||)
-    // --- Inplace Logical Operations (Boolean Arrays Only) --- //
-    REGISTER_INPLACE_OPERATION("iand", &=)
-    REGISTER_INPLACE_OPERATION("ior", |=)
-    // NumPy protocol compatibility
-    // __array__(self, dtype=None, copy=None)
-    .def("__array__", [](const ArrayT& self,
-                         const py::object& dtype,
-                         const py::object& copy) {
-      // If this is on GPU, the internal copy structures will figure it out
-      return ncarr_to_numpy(self);
-    },
-         py::arg("dtype") = py::none(),
-         py::arg("copy") = py::none())
-    // __array_priority__ attribute - set high so NCArray* funcs used, and is returned
-    .def_property_readonly_static("__array_priority__", [](const py::object&) {
-      return 100.0;
-    })
-    .def("__array_ufunc__", [](const ArrayT& self,
-                               py::handle ufunc,
-                               py::str method,
-                               py::args args,
-                               py::kwargs kwargs) {
-      if (method.cast<std::string>() != "__call__") {
-        return py::none().cast<py::object>();
-      }
-
-      // For now, just convert to NumPy
-      // TODO: Optimize this with NCArray* directly
-      py::list new_args;
-      for (const auto& arg : args) {
-        if (py::isinstance<ArrayT>(arg)) {
-          new_args.append(ncarr_to_numpy(arg.cast<ArrayT>()));
-        } else {
-          new_args.append(arg);
-        }
-      }
-      return ufunc(*new_args, **kwargs);
-    });
-#undef REGISTER_OPERATION
-#undef REGISTER_OPERATION_NOSCALAR
-#undef REGISTER_INPLACE_OPERATION
-  }
-} // namespace pyncarrray
+} // namespace pyncarray
 
 #endif // NCA_PYTHON_UTILITIES_HH

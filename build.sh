@@ -191,6 +191,11 @@ LINES=(
 
 print_banner "${LINES[@]}"
 
+# Setup ccache
+export CC="ccache gcc"
+export CXX="ccache g++"
+export CUDAHOSTCXX="ccache g++"
+
 # Run meson configure/setup if it hasn't be done yet or it has been requested
 # It generally only needs to rerun if install prefix has changed, or meson.build
 # files have been modified.
@@ -205,12 +210,12 @@ if [ ! -d "${BUILD_DIR}" ]; then
         NCA_RELTYPE=release
     fi
     print_banner "${LINES[@]}"
-    meson setup "${BUILD_DIR}" --prefix="${INSTALL_DIR}" -Dbuildtype=${NCA_RELTYPE}
+    meson setup "${BUILD_DIR}" -Dnca_cuda_archs="80" -Dbuild_examples=true --prefix="${INSTALL_DIR}" -Dbuildtype=${NCA_RELTYPE}
 elif [[ ${FIRST_BUILD} || ${NEED_RECONFIG} ]]; then
     LINES=("Running meson setup reconfiguration")
     print_banner "${LINES[@]}"
     # Reconfigure in case prefix or options changed, but keep cache
-    meson setup "${BUILD_DIR}" --reconfigure --prefix="${INSTALL_DIR}"
+    meson setup "${BUILD_DIR}" -Dnca_cuda_archs="80" -Dbuild_examples=true --reconfigure --prefix="${INSTALL_DIR}"
 else
     LINES=(
         "!!!!! Skipping meson setup reconfiguration !!!!!"
@@ -221,10 +226,9 @@ else
     print_banner "${LINES[@]}"
 fi
 
-# Build... This is mostly for XAlgosPP and C/C++ extensions
 LINES=("Compiling...")
 print_banner "${LINES[@]}"
-meson compile -C "${BUILD_DIR}"
+meson compile -j 4 -C "${BUILD_DIR}" -l 4
 
 # Test...
 if [[ ${RUN_TESTS} ]]; then

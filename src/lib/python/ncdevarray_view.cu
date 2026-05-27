@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/utilities.hh"
+#include "python/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
@@ -37,7 +37,11 @@ using namespace pyncarray;
 
 void register_ncdevarray_view(py::module_& m) {
 #ifdef NCA_HAS_CUDA
-  auto ncdevview_cls = py::classh<ncarray::NCDevArrayView>(m, "NCDevArrayView");
+  auto ncdevview_cls = py::classh<ncarray::NCDevArrayView>(m, "NCDevArrayView")
+    // These constructors, plus the implicitly_convertible on NCDevArrayRef and
+    // NCDevArray allow view interconversion
+    .def(py::init<const ncarray::NCDevArrayRef&>())
+    .def(py::init<const ncarray::NCDevArray&>());
   register_common_array_methods(ncdevview_cls);
 #endif
 }

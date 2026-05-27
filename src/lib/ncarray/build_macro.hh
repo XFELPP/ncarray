@@ -4,6 +4,9 @@
 #include "ncarray/array_traits.hh"
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"
+#include "ncarray/engines.hh"
+#include "ncarray/expression/dynamicmvnode.hh"
+#include "ncarray/expression/interface.hh"
 #include "ncarray/layout.hh"
 
 #ifdef _WIN32
@@ -17,14 +20,10 @@ typedef SSIZE_T ssize_t;
 #include <complex>
 #include <vector>
 
-namespace ncarray {
-  template <ArrayLike A> Scalar sum(const A& arr);
-  template <ArrayLike A> Scalar max(const A& arr);
-  template <ArrayLike A> Scalar min(const A& arr);
-  template <ArrayLike A> Scalar mean(const A& arr);
-} // namespace ncarray
-
-#define BASE_OPS_LIST(ACTION, L, S)                                                                \
+#define BASE_GENERAL_LIST(ACTION, L, S)                                                            \
+                                                                                                   \
+                               /* Constructors */                                                  \
+                                                                                                   \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ArrayImpl(const std::vector<ssize_t>&,        \
                                                                ncarray::DType);                    \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ArrayImpl(const ncarray::Metadata&,           \
@@ -34,168 +33,41 @@ namespace ncarray {
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ArrayImpl(                                    \
       const std::vector<void*>&, const std::vector<ssize_t>&, const std::vector<ssize_t>&,         \
       ncarray::DType, ncarray::Metadata::value_type, bool);                                        \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+(                                           \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-(                                           \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*(                                           \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(                                           \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+(const ncarray::Scalar&) const;             \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-(const ncarray::Scalar&) const;             \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*(const ncarray::Scalar&) const;             \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(const ncarray::Scalar&) const;             \
+                                                                                                   \
+                        /* Assignment/Materialization */                                           \
+                                                                                                   \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
+  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator=<ncarray::ExprMVNode<                       \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>>(                              \
+      const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);   \
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+=(const ncarray::Scalar&);                  \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-=(const ncarray::Scalar&);                  \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*=(const ncarray::Scalar&);                  \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/=(const ncarray::Scalar&);                  \
+  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator=<ncarray::DynamicExprMVNode<                \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>>(                              \
+      const ncarray::DynamicExprMVNode<                                                            \
+          typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                         \
+                                                                                                   \
+                                /* Generators */                                                   \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::iota() const;                                    \
   ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator==(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<(                                           \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>(                                           \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator==(const ncarray::Scalar&) const;            \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!=(const ncarray::Scalar&) const;            \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<(const ncarray::Scalar&) const;             \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<=(const ncarray::Scalar&) const;            \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>(const ncarray::Scalar&) const;             \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>=(const ncarray::Scalar&) const;            \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!() const;                                   \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&&(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator||(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&) const;                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(                                          \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&&(const ncarray::Scalar&) const;            \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator||(const ncarray::Scalar&) const;            \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&=(const ncarray::Scalar&);                  \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(const ncarray::Scalar&);                  \
-  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::sum() const;                  \
-  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::max() const;                  \
-  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::min() const;                  \
-  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::mean() const;                 \
-  ACTION ncarray::Scalar ncarray::sum(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
-  ACTION ncarray::Scalar ncarray::max(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
-  ACTION ncarray::Scalar ncarray::min(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);          \
-  ACTION ncarray::Scalar ncarray::mean(const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::iota(const std::vector<ssize_t>&,                \
+                                                       ncarray::DType);                            \
+                                                                                                   \
+                        /* Copy, assignment, reshaping */                                          \
+                                                                                                   \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::assign(                                  \
-      const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                          \
+     const ncarray::ArrayImpl<ncarray::L, ncarray::S>&);                                           \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::fill(ncarray::Scalar);                   \
   ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::astype(ncarray::DType&) const;                       \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::to_contiguous() const;                               \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into(void*) const;                  \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::Iterator                             \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::begin();                                             \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::Iterator                             \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::end();                                               \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::ConstIterator                        \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::begin() const;                                       \
-  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::ConstIterator                        \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::end() const;                                         \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ViewType                                      \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::view() const;                                        \
-  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::ViewType                                      \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::squeeze() const;                                     \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<char>(                  \
-      char*) const;                                                                                \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint8_t>(          \
-      std::uint8_t*) const;                                                                        \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint16_t>(         \
-      std::uint16_t*) const;                                                                       \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint32_t>(         \
-      std::uint32_t*) const;                                                                       \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint64_t>(         \
-      std::uint64_t*) const;                                                                       \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int8_t>(           \
-      std::int8_t*) const;                                                                         \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int16_t>(          \
-      std::int16_t*) const;                                                                        \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int32_t>(          \
-      std::int32_t*) const;                                                                        \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int64_t>(          \
-      std::int64_t*) const;                                                                        \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<float>(float*) const;   \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<double>(double*) const; \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<long double>(           \
-      long double*) const;                                                                         \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<bool>(bool*) const;     \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::complex<float>>(   \
-      std::complex<float>*) const;                                                                 \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::complex<double>>(  \
-      std::complex<double>*) const;                                                                \
-  ACTION void                                                                                      \
-  ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::complex<long double>>(         \
-      std::complex<long double>*) const;                                                           \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Float2>(       \
-      ncarray::Float2*) const;                                                                     \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Float3>(       \
-      ncarray::Float3*) const;                                                                     \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Float4>(       \
-      ncarray::Float4*) const;                                                                     \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double2>(      \
-      ncarray::Double2*) const;                                                                    \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double3>(      \
-      ncarray::Double3*) const;                                                                    \
-  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double4>(      \
-      ncarray::Double4*) const;                                                                    \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                                     \
+  ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_as_shape(const ssize_t*, ssize_t) const;        \
+                                                                                                   \
+                        /* Repr, small utilities */                                                \
+                                                                                                   \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::get_scalar(void*) const;      \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<char>(         \
       std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;                                \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<std::uint8_t>( \
@@ -252,69 +124,440 @@ namespace ncarray {
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<ncarray::Double4>(         \
       std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;
 
+#define BASE_ARITHMETIC_LIST(ACTION, L, S)                                                         \
+                                                                                                   \
+                             /* Unary ops */                                                       \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-() const;                               \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator++();                                    \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator--();                                    \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!() const;                               \
+                                                                                                   \
+                             /* Binary Arithmetic */                                               \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator%(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+                                                                                                   \
+                        /* Binary Inplace Arithmetic */                                            \
+                                                                                                   \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator+=(const ncarray::ExprMVNode<            \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator-=(const ncarray::ExprMVNode<            \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator*=(const ncarray::ExprMVNode<            \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator/=(const ncarray::ExprMVNode<            \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
+
+#define BASE_COMPARISON_LIST(ACTION, L, S)                                                         \
+                                                                                                   \
+                              /* Comparisons */                                                    \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator==(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator!=(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator<=(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>(                                       \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator>=(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+
+#define BASE_LOGICAL_LIST(ACTION, L, S)                                                            \
+                                                                                                   \
+                        /* Logical Operations */                                                   \
+                                                                                                   \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&&(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+  ACTION ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,ncarray::S>::MemType>          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator||(                                      \
+          const ncarray::ExprMVNode<typename ncarray::ArrayImpl<ncarray::L,                        \
+          ncarray::S>::MemType>&) const;                                                           \
+                                                                                                   \
+                        /* Logical Inplace Operations */                                           \
+                                                                                                   \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator&=(const ncarray::ExprMVNode<            \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
+  ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>&                                               \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::operator|=(const ncarray::ExprMVNode<            \
+      typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::MemType>&);                             \
+
+
+#define BASE_REDUCTIONS_LIST(ACTION, L, S)                                                         \
+                                                                                                   \
+                        /* Full Reductions To Scalar */                                            \
+                                                                                                   \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::sum() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::max() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::argmax() const;               \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::min() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::argmin() const;               \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::mean() const;                 \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::var(ssize_t) const;           \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::std(ssize_t) const;           \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::all() const;                  \
+  ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::any() const;                  \
+                                                                                                   \
+                        /* Axis Aware Reductions */                                                \
+                                                                                                   \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::sum(const std::vector<ssize_t>&) const;          \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::max(const std::vector<ssize_t>&) const;          \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::argmax(const std::vector<ssize_t>&) const;       \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::min(const std::vector<ssize_t>&) const;          \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::argmin(const std::vector<ssize_t>&) const;       \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::mean(const std::vector<ssize_t>&) const;         \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::var(const std::vector<ssize_t>&, ssize_t) const; \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::std(const std::vector<ssize_t>&, ssize_t) const; \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::all(const std::vector<ssize_t>&) const;          \
+  ACTION typename ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::any(const std::vector<ssize_t>&) const;
+
+
+#define INSTANTIATE_NC_BASE_GENERAL(L, S) BASE_GENERAL_LIST(template, L, S)
+#define EXTERN_NC_BASE_GENERAL(L, S) BASE_GENERAL_LIST(extern template, L, S)
+
+#define INSTANTIATE_NC_BASE_ARITHMETIC(L, S) BASE_ARITHMETIC_LIST(template, L, S)
+#define EXTERN_NC_BASE_ARITHMETIC(L, S) BASE_ARITHMETIC_LIST(extern template, L, S)
+
+#define INSTANTIATE_NC_BASE_COMPARISON(L, S) BASE_COMPARISON_LIST(template, L, S)
+#define EXTERN_NC_BASE_COMPARISON(L, S) BASE_COMPARISON_LIST(extern template, L, S)
+
+#define INSTANTIATE_NC_BASE_LOGICAL(L, S) BASE_LOGICAL_LIST(template, L, S)
+#define EXTERN_NC_BASE_LOGICAL(L, S) BASE_LOGICAL_LIST(extern template, L, S)
+
+#define INSTANTIATE_NC_BASE_REDUCTIONS(L, S) BASE_REDUCTIONS_LIST(template, L, S)
+#define EXTERN_NC_BASE_REDUCTIONS(L, S) BASE_REDUCTIONS_LIST(extern template, L, S)
+
+
+#define EXTERN_NC_BASE_OPS(L, S)  \
+  EXTERN_NC_BASE_GENERAL(L, S)    \
+  EXTERN_NC_BASE_ARITHMETIC(L, S) \
+  EXTERN_NC_BASE_COMPARISON(L, S) \
+  EXTERN_NC_BASE_LOGICAL(L, S)    \
+  EXTERN_NC_BASE_REDUCTIONS(L, S)
+
+
+#define INSTANTIATE_NC_BASE_OPS(L, S)  \
+  INSTANTIATE_NC_BASE_GENERAL(L, S)    \
+  INSTANTIATE_NC_BASE_ARITHMETIC(L, S) \
+  INSTANTIATE_NC_BASE_COMPARISON(L, S) \
+  INSTANTIATE_NC_BASE_LOGICAL(L, S)    \
+  INSTANTIATE_NC_BASE_REDUCTIONS(L, S)
+
+
+#define INSTANTIATE_HOST_VM_REDUCE(T, L, Trait)                                                    \
+  template void ncarray::HostEngine::execute_reduce_axes<T,                                        \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>,                                         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>>(                                        \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&,                              \
+          const ncarray::ReductionParams&,                                                         \
+          ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&);
+
+#define EXTERN_HOST_VM_REDUCE(T, L, Trait)                                                         \
+  extern template void ncarray::HostEngine::execute_reduce_axes<T,                                 \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>,                                         \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>>(                                        \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&,                              \
+          const ncarray::ReductionParams&,                                                         \
+          ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&);
+
+/* NOT CURRENTLY DEFINED YET!
+#define INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, Trait)                                               \
+  template ncarray::Scalar ncarray::HostEngine::execute_full_reduce<T,                             \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>>(                                        \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&);
+
+#define EXTERN_HOST_VM_FULL_REDUCE(T, L, Trait)                                                    \
+  extern template ncarray::Scalar ncarray::HostEngine::execute_full_reduce<T,                      \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>>(                                        \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::ViewPolicy>&);
+*/
+
+#define INSTANTIATE_HOST_VM_OPS(T, L)                                                              \
+  template void ncarray::HostEngine::execute_binary_expression<                                    \
+      T, ncarray::ExprMVNode<ncarray::HostTag>,                                                    \
+      ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>>(                                       \
+      const ncarray::ExprMVNode<ncarray::HostTag>&,                                                \
+      ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>&);
+
+
+#define EXTERN_HOST_VM_OPS(T, L)                                                                   \
+  extern template void ncarray::HostEngine::execute_binary_expression<                             \
+      T, ncarray::ExprMVNode<ncarray::HostTag>,                                                    \
+      ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>>(                                       \
+      const ncarray::ExprMVNode<ncarray::HostTag>&,                                                \
+      ncarray::ArrayImpl<ncarray::L, ncarray::OwnerPolicy>&);                                      \
+  EXTERN_HOST_VM_REDUCE(T, L, SumTraits)                                                           \
+  EXTERN_HOST_VM_REDUCE(T, L, MaxTraits)                                                           \
+  EXTERN_HOST_VM_REDUCE(T, L, ArgmaxTraits)                                                        \
+  EXTERN_HOST_VM_REDUCE(T, L, MinTraits)                                                           \
+  EXTERN_HOST_VM_REDUCE(T, L, ArgminTraits)                                                        \
+  EXTERN_HOST_VM_REDUCE(T, L, MeanTraits)                                                          \
+  EXTERN_HOST_VM_REDUCE(T, L, VarTraits)                                                           \
+  EXTERN_HOST_VM_REDUCE(T, L, StdTraits)                                                           \
+  EXTERN_HOST_VM_REDUCE(T, L, AllTraits)                                                           \
+  EXTERN_HOST_VM_REDUCE(T, L, AnyTraits)
+
+/* NOT CURRENTLY DEFINED YET!
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, SumTraits)                                                      \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, MaxTraits)                                                      \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, ArgmaxTraits)                                                   \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, MinTraits)                                                      \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, ArgminTraits)                                                   \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, MeanTraits)                                                     \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, VarTraits)                                                      \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, StdTraits)                                                      \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, AllTraits)                                                      \
+  EXTERN_HOST_VM_FULL_REDUCE(T, L, AnyTraits)
+*/
+
+#define INSTANTIATE_HOST_REDUCTIONS(T, L)                                                          \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, SumTraits)                                                      \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, MaxTraits)                                                      \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, ArgmaxTraits)                                                   \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, MinTraits)                                                      \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, ArgminTraits)                                                   \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, MeanTraits)                                                     \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, VarTraits)                                                      \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, StdTraits)                                                      \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, AllTraits)                                                      \
+  INSTANTIATE_HOST_VM_REDUCE(T, L, AnyTraits)
+
+/* NOT CURRENTLY DEFINED YET!
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, SumTraits)                                                 \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, MaxTraits)                                                 \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, ArgmaxTraits)                                              \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, MinTraits)                                                 \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, ArgminTraits)                                              \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, MeanTraits)                                                \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, VarTraits)                                                 \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, StdTraits)                                                 \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, AllTraits)                                                 \
+  INSTANTIATE_HOST_VM_FULL_REDUCE(T, L, AnyTraits)
+*/
+
+#ifdef __CUDACC__
+// --- DEVICE MACROS (CUDA-Guarded) ---
+
+#define INSTANTIATE_DEV_VM_REDUCE(T, L, Trait)                                                     \
+  template __global__ void axes_reduce_kernel<true, T,                                             \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
+  template __global__ void axes_reduce_kernel<false, T,                                            \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
+  template void ncarray::GPUEngine::execute_reduce_axes<T,                                         \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&,                           \
+          const ncarray::ReductionParams&,                                                         \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
+
+#define EXTERN_DEV_VM_REDUCE(T, L, Trait)                                                          \
+  extern template __global__ void axes_reduce_kernel<true, T,                                      \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
+  extern template __global__ void axes_reduce_kernel<false, T,                                     \
+      typename ncarray::Reducer<T, Trait>::AccumT,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          typename ncarray::Reducer<T, Trait>::AccumT*,                                            \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                  \
+          ncarray::ReductionParams,                                                                \
+          ncarray::Reducer<T, Trait>);                                                             \
+  extern template void ncarray::GPUEngine::execute_reduce_axes<T,                                  \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&,                           \
+          const ncarray::ReductionParams&,                                                         \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
+
+#define INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, Trait)                                                \
+  template __global__ void reduce_kernel<256, T,                                                   \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                            \
+          ncarray::Reducer<T, Trait>,                                                              \
+          typename ncarray::Reducer<T, Trait>::AccumT*);                                           \
+  template ncarray::Scalar ncarray::GPUEngine::execute_full_reduce<T,                              \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&, double);
+
+#define EXTERN_DEV_VM_FULL_REDUCE(T, L, Trait)                                                     \
+  extern template __global__ void reduce_kernel<256, T,                                            \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                                      \
+      ncarray::Reducer<T, Trait>>(                                                                 \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>,                            \
+          ncarray::Reducer<T, Trait>,                                                              \
+          typename ncarray::Reducer<T, Trait>::AccumT*);                                           \
+  extern template ncarray::Scalar ncarray::GPUEngine::execute_full_reduce<T,                       \
+      ncarray::Trait,                                                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+          const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&, double);
+
+#define INSTANTIATE_DEV_VM_OPS(T, L)                                                               \
+  template __global__ void execute_expression_kernel<T,                                            \
+    ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                   \
+    ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                       \
+    ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                   \
+    ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>);                                       \
+  template void ncarray::GPUEngine::execute_binary_expression<                                     \
+      T, ncarray::DynamicExprMVNode<ncarray::DevTag>,                                              \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+      const ncarray::DynamicExprMVNode<ncarray::DevTag>&,                                          \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);
+
+#define INSTANTIATE_DEV_REDUCTIONS(T, L)                                                           \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, SumTraits)                                                       \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, MaxTraits)                                                       \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, ArgmaxTraits)                                                    \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, MinTraits)                                                       \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, ArgminTraits)                                                    \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, MeanTraits)                                                      \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, VarTraits)                                                       \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, StdTraits)                                                       \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, AllTraits)                                                       \
+  INSTANTIATE_DEV_VM_REDUCE(T, L, AnyTraits)                                                       \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, SumTraits)                                                  \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, MaxTraits)                                                  \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, ArgmaxTraits)                                               \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, MinTraits)                                                  \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, ArgminTraits)                                               \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, MeanTraits)                                                 \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, VarTraits)                                                  \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, StdTraits)                                                  \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, AllTraits)                                                  \
+  INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, AnyTraits)
+
+#define EXTERN_DEV_VM_OPS(T, L)                                                                    \
+  extern template __global__ void execute_expression_kernel<T,                                     \
+      ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+      ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>);                                     \
+  extern template void ncarray::GPUEngine::execute_binary_expression<T,                            \
+      ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                 \
+      ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
+          const ncarray::DynamicExprMVNode<ncarray::DevTag>&,                                      \
+          ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&);                                \
+  EXTERN_DEV_VM_REDUCE(T, L, SumTraits)                                                            \
+  EXTERN_DEV_VM_REDUCE(T, L, MaxTraits)                                                            \
+  EXTERN_DEV_VM_REDUCE(T, L, ArgmaxTraits)                                                         \
+  EXTERN_DEV_VM_REDUCE(T, L, MinTraits)                                                            \
+  EXTERN_DEV_VM_REDUCE(T, L, ArgminTraits)                                                         \
+  EXTERN_DEV_VM_REDUCE(T, L, MeanTraits)                                                           \
+  EXTERN_DEV_VM_REDUCE(T, L, VarTraits)                                                            \
+  EXTERN_DEV_VM_REDUCE(T, L, StdTraits)                                                            \
+  EXTERN_DEV_VM_REDUCE(T, L, AllTraits)                                                            \
+  EXTERN_DEV_VM_REDUCE(T, L, AnyTraits)                                                            \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, SumTraits)                                                       \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, MaxTraits)                                                       \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, ArgmaxTraits)                                                    \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, MinTraits)                                                       \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, ArgminTraits)                                                    \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, MeanTraits)                                                      \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, VarTraits)                                                       \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, StdTraits)                                                       \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, AllTraits)                                                       \
+  EXTERN_DEV_VM_FULL_REDUCE(T, L, AnyTraits)
+
+
+using CanonicalCoords = ncarray::StaticCoords<NCARRAY_MAX_NDIM, ssize_t>;
+
+#else
+  #define INSTANTIATE_DEV_VM_OPS(T, L)
+  #define EXTERN_DEV_VM_OPS(T, L)
+#endif
+
+
 // --- CROSS-OPERATIONS LIST ---
 #define CROSS_OPS_LIST(ACTION, L1, S1, L2, S2)                                                     \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator+(                                     \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator-(                                     \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator*(                                     \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator/(                                     \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator+=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator-=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator*=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator/=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator==(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator!=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator<(                                     \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator<=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator>(                                     \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator>=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator&&(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION typename ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::OwnerType                          \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator||(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&) const;                              \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator&=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
-  ACTION ncarray::ArrayImpl<ncarray::L1, ncarray::S1>&                                             \
-      ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::operator|=(                                    \
-          const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);                                    \
   ACTION void ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::assign(                                \
       const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);
 
-#define INSTANTIATE_NC_BASE_OPS(L, S) BASE_OPS_LIST(template, L, S)
-#define INSTANTIATE_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(template, L1, S1, L2, S2)
-
-#define EXTERN_NC_BASE_OPS(L, S) BASE_OPS_LIST(extern template, L, S)
 #define EXTERN_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(extern template, L1, S1, L2, S2)
-
+#define INSTANTIATE_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(template, L1, S1, L2, S2)
 #endif

@@ -9,6 +9,7 @@
 #ifndef NCARRAY_DEVICE_UTILITIES_CUH
 #define NCARRAY_DEVICE_UTILITIES_CUH
 
+#ifndef __CUDACC_RTC__
 #ifdef NCA_HAS_CUDA
 #include "cuda_runtime_api.h"
 #endif
@@ -41,5 +42,7 @@ namespace ncarray {
   }
 #endif
 } // namespace ncarray
+
+#endif // guard for nvrtc
 
 #endif // NCARRAY_DEVICE_UTILITIES_CUH

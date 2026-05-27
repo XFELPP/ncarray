@@ -62,26 +62,26 @@ TEST(NCArrayIndexingTest, ElementAccess) {
   arr.fill(1);
 
   // Test point access
-  std::int32_t& item00 = arr(0, 0);
-  std::int32_t& item01 = arr(0, 1);
-  std::int32_t& item10 = arr(1, 0);
-  std::int32_t& item11 = arr(1, 1);
+  std::int32_t& item00 = arr[{0, 0}];
+  std::int32_t& item01 = arr[{0, 1}];
+  std::int32_t& item10 = arr[{1, 0}];
+  std::int32_t& item11 = arr[{1, 1}];
   EXPECT_EQ(item00, 1);
   EXPECT_EQ(item01, 1);
   EXPECT_EQ(item10, 1);
   EXPECT_EQ(item11, 1);
 
   // Test point access and assignment
-  arr(0, 0) = 10;
-  arr(0, 1) = 20;
-  arr(1, 0) = 30;
-  arr(1, 1) = 40;
+  arr[{0, 0}] = 10;
+  arr[{0, 1}] = 20;
+  arr[{1, 0}] = 30;
+  arr[{1, 1}] = 40;
   // NOTE: In this case, a cast is needed since it won't deduce automatically
   // A comparison between ArrayElementProxy and integers won't work
-  EXPECT_EQ(static_cast<std::int32_t>(arr(0, 0)), 10);
-  EXPECT_EQ(static_cast<std::int32_t>(arr(0, 1)), 20);
-  EXPECT_EQ(static_cast<std::int32_t>(arr(1, 0)), 30);
-  EXPECT_EQ(static_cast<std::int32_t>(arr(1, 1)), 40);
+  EXPECT_EQ(static_cast<std::int32_t>(arr[{0, 0}]), 10);
+  EXPECT_EQ(static_cast<std::int32_t>(arr[{0, 1}]), 20);
+  EXPECT_EQ(static_cast<std::int32_t>(arr[{1, 0}]), 30);
+  EXPECT_EQ(static_cast<std::int32_t>(arr[{1, 1}]), 40);
 
   // Test linearized indexing
   // NOTE: MUST be a ssize_t, or wrong operator[] overload will be selected

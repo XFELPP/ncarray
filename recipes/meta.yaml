@@ -1,0 +1,111 @@
+{% set name = "ncarray" %}
+{% set version = "0.5.0" %}
+
+{% set cuda_compiler_version = cuda_compiler_version or "None" %}
+
+package:
+  name: {{ name }}-split
+  version: {{ version }}
+
+source:
+  git_url: https://github.com/XFELPP/ncarray.git
+  git_rev: v{{ version }}
+
+build:
+  number: 0
+  dynamic_linking:
+    missing_dso_allowlist:
+      - "*/nvcuda.dll"                                                           # [win]
+
+requirements:
+  build:
+    - {{ compiler('cxx') }} >=13,<14                                             # [linux]
+    - {{ compiler('cxx') }} >=19.30                                              # [win]
+    - {{ compiler('cxx') }} >=16                                                 # [osx]
+    - cuda-nvcc                                                                  # [cuda_compiler_version != "None"]
+    - meson >=1.10.1
+    - ninja
+  host:
+    - python >=3.8,<3.15.0a0
+    - pip
+    - setuptools
+    - meson-python
+    - pybind11
+    - cuda-version {{ cuda_compiler_version }}.*                                 # [cuda_compiler_version != "None"]
+  run:
+    - python >=3.8,<3.15.0a0
+    - cuda-version {{ cuda_compiler_version }}.*                                 # [cuda_compiler_version != "None"]
+outputs:
+  # C++ Library
+  - name: libncarray
+    script: build_libncarray.sh                                                  # [linux or osx]
+    script: build_libncarray.bat                                                 # [win]
+    build:
+      # Generate variant strings for CUDA and non-CUDA variants:
+      # ncarray-MAJ.MIN.MIC-cudaMAJMIN
+      # ncarray-MAJ.MIN.MIC-cpu
+      string: cuda{{ cuda_compiler_version | replace('.','') }}                  # [cuda_compiler_version != "None"]
+      string: cpu                                                                # [cuda_compiler_version == "None"]
+    requirements:
+      build:
+        - {{ compiler('cxx') }} >=13,<14                                         # [linux]
+        - {{ compiler('cxx') }} >=19.30                                          # [win]
+        - {{ compiler('cxx') }} >=16                                             # [osx]
+        - cuda-nvcc                                                              # [cuda_compiler_version != "None"]
+        - meson >=1.10.1
+        - ninja
+      host:
+        - cuda-version {{ cuda_compiler_version }}.*                             # [cuda_compiler_version != "None"]
+      run:
+        - cuda-version {{ cuda_compiler_version }}.*                             # [cuda_compiler_version != "None"]
+
+  # Python Bindings
+  - name: ncarray
+    script: build_ncarray.sh                                                     # [linux or osx]
+    script: build_ncarray.bat                                                    # [win]
+    build:
+      # Generate variant strings for CUDA and non-CUDA variants:
+      # ncarray-MAJ.MIN.MIC-pyMAJMIN_cudaMAJMIN
+      # ncarray-MAJ.MIN.MIC-pyMAJMIN_cpu
+      string: py{{ CONDA_PY }}_cuda{{ cuda_compiler_version | replace('.','') }} # [cuda_compiler_version != "None"]
+      string: py{{ CONDA_PY }}_cpu                                               # [cuda_compiler_version == "None"]
+    requirements:
+      build:
+        - {{ compiler('cxx') }} >=13,<14                                         # [linux]
+        - {{ compiler('cxx') }} >=19.30                                          # [win]
+        - {{ compiler('cxx') }} >=16                                             # [osx]
+        - cuda-nvcc                                                              # [cuda_compiler_version != "None"]
+        - meson >=1.10.1
+        - ninja
+        - python {{ python }}.*
+      host:
+        - python {{ python }}.*
+        - pip
+        - setuptools
+        - meson-python
+        - pybind11
+        - {{ pin_subpackage('libncarray', exact=True) }}
+      run:
+        - python {{ python }}.*
+        - {{ pin_subpackage('libncarray', exact=True) }}
+        - cuda-version {{ cuda_compiler_version }}.*                             # [cuda_compiler_version != "None"]
+
+about:
+  home: https://github.com/XFELPP/ncarray
+  doc_url: https://github.com/XFELPP/ncarray
+  dev_url: https://github.com/XFELPP/ncarray
+  license: MPL-2.0
+  license_family: MOZILLA
+  license_file: LICENSE
+  summary: "Non-contiguous array library with GPU support and NumPy compatible Python bindings."
+  description: |
+    `ncarray` is a C++ library consisting of a number of array classes to describe data that is not purely strided.
+    Arrays can include 'pointer' axes (i.e. 'jump-tables', indirections) in addition to strided layouts. The library
+    provides ergonomic indexing and handling of these arrays. Basic binary operations can be performed transparently.
+    A high-performance expression engine performs lazy evaluation of complex arithmetic operations on both host and
+    device, with additional classes available for further reducing run-time cost where performance is most critical.
+    Python bindings are provided via a thin wrapper with pybind11 for a NumPy compatible Python experience.
+
+extra:
+  recipe-maintainers:
+    - gadorlhiac

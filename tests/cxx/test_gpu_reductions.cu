@@ -6,14 +6,12 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "gtest/gtest.h"
-
-#include "ncarray/array_operations.hh"
-#include "ncarray/array_traits.hh"
 #include "ncarray/ncarrays.hh"
 #ifdef NCA_HAS_CUDA
 #include "ncarray/ncdevarrays.cuh"
 #endif
+
+#include "gtest/gtest.h"
 
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -27,25 +25,6 @@ typedef SSIZE_T ssize_t;
 #include <variant>
 
 #ifdef NCA_HAS_CUDA
-TEST(NCArrayOperationsTest, GPUBinaryOps) {
-  std::vector<ssize_t> shape { 4, 4, 4 };
-
-  ncarray::NCDevArray dev_arr1(shape, ncarray::DType::float32);
-  ncarray::NCDevArray dev_arr2(shape, ncarray::DType::float32);
-
-  dev_arr1.fill(2.0f);
-  dev_arr2.fill(4.0f);
-
-  auto dev_sum = dev_arr1 + dev_arr2; // A kernel!
-  cudaDeviceSynchronize();
-  ncarray::NCArray host_sum(shape, ncarray::DType::float32);
-  dev_sum.copy_into(host_sum.data());
-
-  for (ssize_t i = 0; i < dev_sum.size(); ++i) {
-    ASSERT_FLOAT_EQ(static_cast<float>(host_sum(0, 0, i)), 6.0f)
-      << "GPU addition failed at index " << i;
-  }
-}
 
 #ifdef __CUDACC__
 template <typename T, ncarray::ViewArrayLike OutT>
@@ -57,7 +36,7 @@ __global__ void iota_kernel(OutT out) {
 }
 #endif
 
-TEST(NCArrayOperationsTest, GPUReductions) {
+TEST(NCDevArrayReductionsTest, FullReductions) {
   std::vector<ssize_t> shape { 256 };
 
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
@@ -75,23 +54,86 @@ TEST(NCArrayOperationsTest, GPUReductions) {
   EXPECT_EQ(std::get<float>(dev_min), 0.0f);
 }
 
-TEST(NCArrayOperationsTest, GPUSlicedReduction) {
+TEST(NCDevArrayReductionsTest, AxisAwareReductions) {
+  std::vector<ssize_t> shape { 2, 3 };
+  ncarray::NCDevArray arr(shape, ncarray::dtype_traits<std::int32_t>::value);
+  // Initialize with [1, 2, 3]
+  //                 [4, 5, 6]
+  arr = arr.iota() + 1;
+
+  // --- Reduce axis 0 ---
+
+  // Expected sum: [5, 7, 9]
+  ncarray::NCDevArray sum_ax0 = arr.sum({0});
+  EXPECT_EQ(sum_ax0.shape()[0], 3);
+
+  cudaDeviceSynchronize();
+  std::vector<ssize_t> ax0_shape { 3 };
+  ncarray::NCArray host_res_ax0(ax0_shape, ncarray::DType::int32);
+  sum_ax0.copy_into(host_res_ax0.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{0}]), 5);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{1}]), 7);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{2}]), 9);
+
+  // Expected max: [4, 5, 6]
+
+  ncarray::NCDevArray max_ax0 = arr.max({0});
+  cudaDeviceSynchronize();
+
+  max_ax0.copy_into(host_res_ax0.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{0}]), 4);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{1}]), 5);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{2}]), 6);
+
+  // Expected min: [1, 2, 3]
+  ncarray::NCDevArray min_ax0 = arr.min({0});
+
+  min_ax0.copy_into(host_res_ax0.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{0}]), 1);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{1}]), 2);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax0[{2}]), 3);
+
+  // --- Reduce axis 1 ---
+
+  // Expected sum: [6, 15]
+  ncarray::NCDevArray sum_ax1 = arr.sum({1});
+  EXPECT_EQ(sum_ax1.shape()[0], 2);
+
+  cudaDeviceSynchronize();
+  std::vector<ssize_t> ax1_shape { 2 };
+  ncarray::NCArray host_res_ax1(ax1_shape, ncarray::DType::int32);
+  sum_ax1.copy_into(host_res_ax1.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{0}]), 6);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{1}]), 15);
+
+  // Expected max: [3, 6]
+  ncarray::NCDevArray max_ax1 = arr.max({1});
+
+  max_ax1.copy_into(host_res_ax1.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{0}]), 3);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{1}]), 6);
+
+  // Expected min: [1, 4]
+  ncarray::NCDevArray min_ax1 = arr.min({1});
+  min_ax1.copy_into(host_res_ax1.data());
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{0}]), 1);
+  EXPECT_EQ(static_cast<std::int32_t>(host_res_ax1[{1}]), 4);
+}
+
+TEST(NCDevArrayReductionsTest, SlicedFullReductions) {
   std::vector<ssize_t> shape { 4, 4 };
   ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
   dev_arr.fill(1.0f);
 
   // Slice the middle 2x2 section and fill with 10.0f
   // NOTE: Sadly, GPU code (nvcc) is limited to C++20, so this nice syntax won't work
-  // That can be used in CPU only code
-  //dev_arr[ncarray::Slice(1, 3), ncarray::Slice(1, 3)].fill(10.0f);
-  // We instead use the slightly more verbose version
-  using Idx = ncarray::IndexItem;
+  // That can be used in CPU only code when using multi-dim operator[]
+  // dev_arr[ncarray::Slice(1, 3), ncarray::Slice(1, 3)].fill(10.0f);
+  // We can use multi-dim operator() on GPU/C++20.
+
   using sl = ncarray::Slice;
-  Idx region[] = {
-    Idx(sl(1, 3)),
-    Idx(sl(1, 3))
-  };
-  auto view = dev_arr.view_from_indices(region, 2); // Pass number of indices
+
+  auto view = dev_arr(sl(1,3), sl(1,3)); // Pass number of indices
   view.fill(10.0f);
 
   auto total_sum = dev_arr.sum();
@@ -147,50 +189,6 @@ TEST(NCArrayOperationsTest, HostToGPUCopyNoCast) {
   for (int i = 0; i < 10; ++i) {
     EXPECT_FLOAT_EQ(result_buffer[i], 5.7f);
   }
-}
-
-TEST(NCArrayOperationsTest, GPUScalarArithmetic) {
-  std::vector<ssize_t> shape { 100 };
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
-  dev_arr.fill(10.0f);
-
-  // Test scalar broadcasting
-  auto res = dev_arr + 5.0f;
-
-  ncarray::NCArray host_res(shape, ncarray::DType::float32);
-  res.copy_into(host_res.data());
-
-  EXPECT_EQ(static_cast<float>(host_res(0)), 15.0f);
-}
-
-TEST(NCArrayOperationsTest, GPUComparison) {
-  std::vector<ssize_t> shape { 10 };
-  ncarray::NCDevArray dev_arr(shape, ncarray::DType::float32);
-  dev_arr.fill(10.0f);
-
-#ifdef __CUDACC__
-  // Fill only the first values - so we slice and send sliced view in
-  using sl = ncarray::Slice;
-  auto view = dev_arr[sl(0,5)];
-  iota_kernel<float><<<1, 5, 0, ncarray::alloc_stream()>>>(view);
-#endif
-
-  auto mask = dev_arr > 5.0f;
-
-  EXPECT_EQ(mask.dtype(), ncarray::DType::bool_);
-
-  ncarray::NCArray host_res(shape, ncarray::DType::bool_);
-  mask.copy_into(host_res.data());
-  EXPECT_FALSE(static_cast<bool>(host_res(0)));
-  EXPECT_FALSE(static_cast<bool>(host_res(1)));
-  EXPECT_FALSE(static_cast<bool>(host_res(2)));
-  EXPECT_FALSE(static_cast<bool>(host_res(3)));
-  EXPECT_FALSE(static_cast<bool>(host_res(4)));
-  EXPECT_TRUE(static_cast<bool>(host_res(5)));
-  EXPECT_TRUE(static_cast<bool>(host_res(6)));
-  EXPECT_TRUE(static_cast<bool>(host_res(7)));
-  EXPECT_TRUE(static_cast<bool>(host_res(8)));
-  EXPECT_TRUE(static_cast<bool>(host_res(9)));
 }
 
 #endif
