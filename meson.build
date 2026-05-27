@@ -518,6 +518,7 @@ if build_python_opt
         build_rpath: py_to_lib_install_rpath,
         version: '1',
         soversion: '1',
+        override_options: ['b_lundef=false'],
     )
 
     eager_dep = declare_dependency(
