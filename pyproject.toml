@@ -62,20 +62,17 @@ manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.linux]
+# The CI YAML pulls cuda-toolkit and determines version.
+# Just setup links here.
 before-all = [
     """
     if command -v apt-get >/dev/null; then
         apt-get update && apt-get install -y ccache
     elif command -v dnf >/dev/null; then
-        if [ "$(uname -m)" = "aarch64" ]; then
-            NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/sbsa/cuda-rhel8.repo"
-        else
-            NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo"
-        fi
-        dnf config-manager --add-repo $NVIDIA_URL && dnf clean all && dnf -y install cuda-nvcc-12-8 cuda-cudart-devel-12-8 cuda-nvrtc-devel-12-8 cuda-cccl-12-8 cuda-driver-devel-12-8 --exclude="cccl-13-*"
-        ln -sf /usr/local/cuda-12.8 /usr/local/cuda
+        ln -sf /project/cuda-toolkit /usr/local/cuda
         dnf install -y epel-release && dnf install -y ccache
     elif command -v yum >/dev/null; then
+        ln -sf /project/cuda-toolkit /usr/local/cuda
         yum install -y epel-release && yum install -y ccache
     elif command -v apk >/dev/null; then
         apk add ccache
@@ -87,21 +84,22 @@ repair-wheel-command = "auditwheel repair --exclude libncarray.so.1 --lib-sdir .
 
 [tool.cibuildwheel.macos]
 before-all = "brew install ccache && ccache -z"
+
 [tool.cibuildwheel.windows]
 before-all = "choco install sccache"
+config-settings = { "setup-args" = "--vsenv" }
 
 [tool.cibuildwheel.linux.environment]
 CC = "ccache gcc"
 CXX = "ccache g++"
 CCACHE_DIR = "/project/.ccache"
 PIP_RETRIES = "20"
-# Currently using CUDA-12.8 for wheel builds in CI.
-# NOTE: MUST update when that changes!
-# NOTE: Not sure all needed..... but will try.
-CUDA_PATH = "/usr/local/cuda-12.8"
-CUDA_HOME = "/usr/local/cuda-12.8"
-PATH = "/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH"
-LD_LIBRARY_PATH = "/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+# Copy the CUDA toolkit into /project/cuda-toolkit.
+# The CI YAML does this and determines version. Just set vars here.
+CUDA_PATH = "/project/cuda-toolkit"
+CUDA_HOME = "/project/cuda-toolkit"
+PATH = "/project/cuda-toolkit/bin:$PATH"
+LD_LIBRARY_PATH = "/project/cuda-toolkit/lib64:$LD_LIBRARY_PATH"
 
 [tool.cibuildwheel.macos.environment]
 CC = "ccache clang"
