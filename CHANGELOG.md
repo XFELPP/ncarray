@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-26
+
+### Added
+- Axis-aware reduction functions
+- Stencils for CUDA kernels of single arrays
+- JIT compilation of CUDA kernels with small numbers of operands, or using Stencils
+- Conda recipes
+
+### Changed
+- Switch to using an expression engine (inspired by numexpr) for lazily evaluating array operations.
+- Use initializer-list based indexing for indexing to references (via the proxy objects)
+- Use StaticCorrds objects for alternative to indexing to reference (used internally)
+
+### Fixed
+- Issues with suboffsets and sliced views.
+- Issues with view construction without data.
+- Clang compatibility problems.
+
 ## [0.4.0] - 2026-04-03
 
 ### Added

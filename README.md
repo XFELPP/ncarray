@@ -7,7 +7,8 @@ This project should be considered to be in an early alpha stage. The project is 
 The library is still lacking documentation, and while the tests cover the basics, their coverage is rather sparse.
 
 ## Installation
-It is recommended to get built versions from `PyPI`. Builds are available for Mac, Linux and Windows. The CUDA compatibility is included in Linux and Windows builds.
+### From PyPI
+Built versions from `PyPI` are currently available up to v0.4.0. Builds are available for Mac, Linux and Windows. The CUDA compatibility is included in Linux and Windows builds. Due to size limits and the added CUDA functionality v0.5.0+ is not yet available, pending storage-quota-increase request approval.
 
 ```bash
 > pip install ncarray
@@ -29,18 +30,33 @@ The above can be incorporated into your build system as needed.
 **NOTE:** In the C++ headers, many operator overloads have a corresponding named alternative. E.g. `operator+()` and `add()` both exist and have the same functionality. The distributed shared libraries do NOT have template specializations for the latter named variants. This helps keep the size of the files down (and helps reduce compile time a bit). The Python bindings only use the `operator+` style calls. This is just to keep it in mind should you prefer using them - they will need to be compiled from scratch.
 
 ### Building from source
+#### Using meson directly
 You can also build directly from source in this repo. The `build.sh` script may or may not work on your platform (likely yes on Linux/Mac, likely no on Windows). The project uses meson, though, and building yourself is essentially:
 ```bash
 > meson setup $MY_BUILD_DIR # --prefix=$MY_INSTALL_DIR #-Dbuildtype=debug # (or release etc).
-> meson compile -C $MY_BUILD_DIR
+> meson compile -C $MY_BUILD_DIR -j 4
 > meson install -C $MY_BUILD_DIR
 # For tests:
 > meson test -C $MY_BUILD_DIR
 ```
 
+**NOTE:** If building with CUDA compatibility, it is **HIGHLY** recommended to limit the number of parallel jobs. E.g., use `meson compile -j 4` or provide `-l 4`, or both. This value will depend on the resources available on your system; however, using all available cores as the guide for the number of jobs (which will be ninja's default behaviour) is highly likely to run into out of memory problems. Four parallel jobs could use 30 GB of memory during compilation and linking.
+
 You can also run `pip install .` directly - this will be very slow though. For wheel creation, the meson calls are done as above, and a final `pip install` is run at the end. See `build.sh` for the mechanism.
 
 **NOTE:** When building GPU support, this can be extremely painful in Python bindings. The strategy adopted by the project is to instantiate specializations for all operations (see `build_macro.hh`). This creates two shared libraries, one for host arrays and one for device arrays. Afterwards, the Python extensions are built. `nvcc` seems to handle the templates within the project fairly well, but the combination with `pybind11` (also a very template heavy project) leads to astronomical build times. If just building C++ libraries, including `array_impl.hh` and `array_operations.hh` should be fine, and no additional tricks should be needed.
+
+#### Using conda
+
+The conda recipe used for conda-forge is available in the `recipes` sub-directory. A `conda_build_config.yaml` file is also provided which can be commented and adjusted to modify the matrix of build variants.
+
+From the root of the repo, this recipe and build config YAML can be used to build with conda using:
+
+```bash
+> conda build recipes -m recipes/conda_build_config.yaml -c conda-forge -c nvidia
+```
+
+This is a split-recipe to build the `libncarray` C++ library, and then the `ncarray` Python bindings. After the builds complete, the packages can be installed from the `conda-bld` directory using `conda install ...full/path/to/file.conda`. The paths will be output to the terminal at the end of the build.
 
 #### Requirements
 This should build with `gcc 13+` and `clang 15+`. Meson `1.10.1` or greater is recommended, although earlier versions should work fine with the explicit exception of version `1.10.0`.
@@ -65,6 +81,9 @@ NumPy is extraordinarily powerful and flexible; however, it is designed for deal
 
 `ncarray` is a C++20/23 (GPU/CPU) generic library. Python bindings are provided by `pybind11`, although the C++ library can be used standalone, or wrapped using other techniques. The current set of features are:
 
+- Lazy evaluation via a backend expression engine inspired by numexpr.
+  - Python bindings by default will use eager evaluation. This can be toggled globally on/off, or managed via context manager.
+- JIT compilation and Stencil support for CUDA GPU-enabled installs.
 - Pointer axis support - zero-copy on disjoint sets of arrays
 - Type and concept system with various traits allowing for automatic type promotion (small int to wide int) when accumulating, or implementations of comparison operators for types like `std::complex<T>`.
 - Multi-dimensional array indexing using integers, slices or placeholder axes (ellipsis in Python).
@@ -97,6 +116,9 @@ first_two_ptrs: nca.NCArrayView = ncarr[:2]
 # Down to scalar if you'd like
 my_int: int = ncarr[2, 1, 2]
 
+# NOTE: Despite the expression engine, to avoid surprises, Python bindings will
+#       force eager/immediate evaluation by default
+
 # Scalar broadcasts -- This creates a new OWNING array! (NCArray)
 # Supported: +, -, *, / (Will provide % and //, i.e. int division in the future)
 scalar_bcast_res: nca.NCArray = ncarr + 2
@@ -105,6 +127,11 @@ scalar_bcast_res: nca.NCArray = ncarr + 2
 # Require identical shapes, currently!
 # Supportable broadcasts may come later (E.g. a row/col into a 2D array)
 other_res: nca.NCArray = ncarr + ncarr
+
+# Perform lazy evaluation via context manager
+with nca.lazy_mode():
+    lazy_expr = ncarr + ncarr # This is an expression object!
+    new_res: nca.NCArray = nca.materialize(lazy_expr) # And... NOW we evaluate it.
 
 # Perform operations on it -- also create new OWNING arrays
 # Any ufunc *should* work -- this builds NumPy arrays, however.
@@ -183,7 +210,7 @@ The principle components of the library are defined in:
 - `array_impl.hh` and `array_operations.hh` contain the `ArrayImpl` specification and the definitions of its operations. These two headers comprise the core of the library. If including them directly, they must be included together and in that order!
 - `array_traits.hh` contain concepts for array operations. These also contain operator traits for all the supported datatypes (e.g. to provide greater/less than functionality for `complex` numbers and so on).
 - `device/...` and `host/...` contain GPU/CPU specific implementations of the operations for arrays.
-- `engines.hh` wrap the specific implementations together for easier dispatch.
+- `engines` contain wrappers for the specific implementations on CPU and GPU for easier dispatch.
 
 **NOTE:** If also building Python extensions (and, specifically, if using `pybind11`), see the note above under the installation section. You may want to use `build_macro.hh` as a guide for instantiating your template specializations in the Python module, otherwise build times will become untenable. For pure C++ projects this should not be an issue (including `array_impl.hh` and `array_operations.hh` should lead to builds of a couple minutes - even for device code compiled with `nvcc`).
 
@@ -242,21 +269,25 @@ view.nbytes(); // 40 (size() * itemsize())
 // 1. Most generic for slicing (This is C++23, and thus host only -- see below for GPU equivalent)
 using sl = ncarray::Slice;
 auto subview = view[sl(0,1),sl(2,4)]; // New shape = (1, 2)
+// On GPU, use the equivalent operator()
+// auto subview = view(sl(0,1), sl(2,4));
 
-// 2. Index to an element, with reference semantics
-std::int32_t& item13 = view(1,3);
+// 2. Index to an element, with reference semantics via initalizer list
+std::int32_t& item13 = view[{1,3}];
 // NOTE: If you need the type, using auto here won't work (auto& item = view(...))
 // The above does NOT type check. If you need type checking use:
-// auto& proxy = view(1,3); proxy.get<T>();
+// auto& proxy = view[{1,3}]; proxy.get<T>();
 
 // Proxy references are assignable
-view(1, 2) = 12;
+view[{1, 2}] = 12;
 // Can also hold on to the proxy if desired:
 // item12 = view(1,2); item12 = 12;
 
-// 3. You can use linearized indexing to a reference as well
-ssize_t idx = 2; // IMPORTANT: *Must* be ssize_t
-std::int32_t& item02 = view[idx];
+// 3. You can use StaticCoords for indexing when dimensionality is known at compile-time
+ncarray::StaticCoords<2, unsigned> coords;
+coords[0] = 0; // First dim
+coords[1] = 2; // Second dim
+std::int32_t& item02 = view[coords];
 
 // We can also create owner type arrays.
 std::vector<ssize_t> shape { 4, 4, 4 };
@@ -271,23 +302,34 @@ arr2.fill(4.0f);
 // arr1.assign(arr2); // Will cast as needed.
 
 // NOTE: Operations below all assume same shape currently.
-// Binary operations
-auto sum_owner = arr1 + arr2; // These return *owner* type arrays
+// Binary operations evaluate lazily!
+auto sum_expr = arr1 + arr2; // These return *owner* type arrays
 
-// Inplace operations
+// Convert via assignment to an array
+ncarray::NCArray sum_owner = sum_expr;
+
+// Inplace operations evalute immediately
 arr1 += arr2;
 
 // Broadcast with a scalar
 arr2 += 4.2f;
 
 // Comparison operations
-auto res_eq = (arr1 == arr2) // All false here. Has shape of inputs
+ncarray::NCArray res_eq = (arr1 == arr2) // All false here. Has shape of inputs
 // Also available: >, <, >=, <=, &&, !, ||
 // For logical operators, inplace variants are only available for boolean arrays.
 
 // Reductions to scalar
 auto arr_sum = arr1.sum(); // or .max(), .min()
 // The above is a variant. You must use: std::get<float>(a_sum) (or other ops in <variant>)
+
+// Fill with ravel indices
+ncarray::NCArray arr3(shape, ncarray::dtype_traits<std::int32_t>::value);
+// [[[ 1, 2, 3, 4], [ 5, 6, 7, 8] ....]]
+arr3 = arr3.iota() + 1;
+
+// Axis-aware reductions, take a vector as the argument
+auto arr_sum = arr1.sum({0}) // Returns a new array
 ```
 
 ### GPU Considerations
@@ -308,19 +350,7 @@ auto ncarr = NCDevArray(...);
 my_kernel<<<blocks, TPB>>>(ncarr.view());
 ```
 
-Some language/syntax features available on the host are not available on GPU. This is because the host-side code takes advantage of C++23 features, whereas only up to C++20 is available for CUDA code. The main limitation is the fancy indexing with variadic `operator[]`. As an alternative, a slightly more verbose, but very specific, mechanism is available:
-```cpp
-ncarray::NCDevArray dev_arr(...)
-
-using Idx = ncarray::IndexItem;
-using sl = ncarray::Slice;
-Idx region[] = {
-  Idx(sl(1, 3)),
-  Idx(sl(1, 3))
-};
-auto view = dev_arr.view_from_indices(region, /*num_indices=*/2);
-```
-In the future, an overload for `operator()` may be provided to support slices. The main reason it does not currently exist is the distinction between `operator()` and `operator[]`. The former provides access to individual elements by reference, the latter is intended for construction of views (sub-views).
+Some language/syntax features available on the host are not available on GPU. This is because the host-side code takes advantage of C++23 features, whereas only up to C++20 is available for CUDA code. The main limitation is the fancy indexing with variadic `operator[]`. As an alternative, `operator()` can be used in its place.
 
 ## Roadmap
 
