@@ -317,7 +317,7 @@ if build_core_opt
                 'src/lib/ncarray/jit/rtcompiler.cc',
             ],
             cuda_args: nca_cuda_args,
-            dependencies: cuda_dep,
+            dependencies: [cuda_dep, dl_dep],
             include_directories: ncarray_headers,
             install: true,
             install_dir: libncarray_install_dir,
@@ -333,7 +333,7 @@ if build_core_opt
             link_with: [
                 libncdevarrayjit,
             ],
-            dependencies: cuda_dep,
+            dependencies: [cuda_dep, dl_dep],
             include_directories: ncarray_headers,
         )
 
