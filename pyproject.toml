@@ -72,7 +72,8 @@ before-all = [
         else
             NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo"
         fi
-        dnf config-manager --add-repo $NVIDIA_URL && dnf clean all && dnf -y install cuda-nvcc-12-8 cuda-cudart-devel-12-8 cuda-nvrtc-devel-12-8 cuda-cccl-12-8
+        dnf config-manager --add-repo $NVIDIA_URL && dnf clean all && dnf -y install cuda-nvcc-12-8 cuda-cudart-devel-12-8 cuda-nvrtc-devel-12-8 cuda-cccl-12-8 cuda-driver-devel-12-8 --exclude="cccl-13-*"
+        ln -sf /usr/local/cuda-12.8 /usr/local/cuda
         dnf install -y epel-release && dnf install -y ccache
     elif command -v yum >/dev/null; then
         yum install -y epel-release && yum install -y ccache
@@ -93,15 +94,6 @@ before-all = "choco install sccache"
 CC = "ccache gcc"
 CXX = "ccache g++"
 CCACHE_DIR = "/project/.ccache"
-# Because of PATH manipulations below, wrong Python gets found and then build fails
-# This restores the correct Python
-PYTHON = "python"
-# Currently using CUDA-12.8 for wheel builds in CI.
-# NOTE: MUST update when that changes!
-CUDA_PATH = "/usr/local/cuda-12.8"
-CUDA_HOME = "/usr/local/cuda-12.8"
-PATH = "/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH"
-LD_LIBRARY_PATH = "/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
 [tool.cibuildwheel.macos.environment]
 CC = "ccache clang"
