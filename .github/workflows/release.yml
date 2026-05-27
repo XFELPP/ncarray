@@ -82,7 +82,6 @@ jobs:
         env:
           CIBW_BUILD: ${{ matrix.python }}
           CIBW_AFTER_BUILD: "ccache -s"
-          CIBW_ENVIRONMENT: "PIP_RETRIES=20"
           CIBW_CACHE_PATH: ".cibw_cache"
 
       - uses: actions/upload-artifact@v4

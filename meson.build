@@ -123,7 +123,7 @@ endif
 #### Path Setup ####
 ####################
 
-py_install_dir = py3.get_install_dir()
+py_install_dir = py3.get_install_dir(pure: false)
 pyncarray_install_dir = py_install_dir / 'ncarray/core'
 
 if nca_as_wheel_opt
@@ -140,7 +140,7 @@ if nca_as_wheel_opt
     #           | - __init__.py (utility functions and expose core lib)
 
     libncarray_install_dir = py_install_dir / 'ncarray/lib'
-    header_install_dir = py3.get_install_dir() / 'ncarray/include'
+    header_install_dir = py_install_dir / 'ncarray/include'
 
     # Relative path from 'ncarray/core' to 'ncarray/lib'
     py_to_lib_path = '../lib'

@@ -94,14 +94,23 @@ before-all = "choco install sccache"
 CC = "ccache gcc"
 CXX = "ccache g++"
 CCACHE_DIR = "/project/.ccache"
+PIP_RETRIES = "20"
+# Currently using CUDA-12.8 for wheel builds in CI.
+# NOTE: MUST update when that changes!
+# NOTE: Not sure all needed..... but will try.
+CUDA_PATH = "/usr/local/cuda-12.8"
+CUDA_HOME = "/usr/local/cuda-12.8"
+PATH = "/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH"
+LD_LIBRARY_PATH = "/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
 [tool.cibuildwheel.macos.environment]
 CC = "ccache clang"
 CXX = "ccache clang++"
 CCACHE_DIR = ".ccache"
+PIP_RETRIES = "20"
 
 [tool.cibuildwheel.windows.environment]
 CC = "sccache cl"
 CXX = "sccache cl"
 SCCACHE_DIR = ".ccache"
-
+PIP_RETRIES = "20"
