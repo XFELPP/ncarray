@@ -7,6 +7,7 @@ meson setup builddir         ^
       -Dbuild_examples=false ^
       -Dbuild_python=true    ^
       -Dnca_as_wheel=false   ^
+      -Ddebug=false          ^
       --prefix=%PREFIX%      ^
       --libdir=lib
 if errorlevel 1 exit 1

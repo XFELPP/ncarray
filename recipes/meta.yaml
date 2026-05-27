@@ -85,6 +85,7 @@ outputs:
         - meson-python
         - pybind11
         - {{ pin_subpackage('libncarray', exact=True) }}
+        - cuda-version {{ cuda_compiler_version }}.*                             # [cuda_compiler_version != "None"]
       run:
         - python {{ python }}.*
         - {{ pin_subpackage('libncarray', exact=True) }}

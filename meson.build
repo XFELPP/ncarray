@@ -484,7 +484,7 @@ endif # end build_core_opt
 
 if build_python_opt
     # Figure out dependencies
-    deps_for_py_mod = [ncarray_dep, pybind11_dep]
+    deps_for_py_mod = [ncarray_dep, pybind11_dep, py3_dep]
 
     if nca_has_cuda
         deps_for_py_mod += cuda_dep

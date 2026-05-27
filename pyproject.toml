@@ -93,6 +93,8 @@ before-all = "choco install sccache"
 CC = "ccache gcc"
 CXX = "ccache g++"
 CCACHE_DIR = "/project/.ccache"
+PATH = "/usr/local/cuda/bin:$PATH"
+LD_LIBRARY_PATH = "/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
 [tool.cibuildwheel.macos.environment]
 CC = "ccache clang"
