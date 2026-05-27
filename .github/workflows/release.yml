@@ -139,7 +139,7 @@ jobs:
       - name: Publish to PyPI
         # Force need to manually specify the PyPI publishing
         # Currently disabled by default pending quota request
-        if: ${{ github.event.inputs.publish_to_pypi == "true" }}
+        if: inputs.publish_to_pypi == true
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Create GitHub Release
