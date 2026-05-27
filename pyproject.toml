@@ -93,8 +93,12 @@ before-all = "choco install sccache"
 CC = "ccache gcc"
 CXX = "ccache g++"
 CCACHE_DIR = "/project/.ccache"
-PATH = "/usr/local/cuda/bin:$PATH"
-LD_LIBRARY_PATH = "/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+# I don't understand.... this isn't needed anywhere except in the runners.
+LDFLAGS = "$(python3-config --ldflags)"
+# Currently using CUDA-12.8 for wheel builds in CI.
+# NOTE: MUST update when that changes!
+PATH = "/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH"
+LD_LIBRARY_PATH = "/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
 [tool.cibuildwheel.macos.environment]
 CC = "ccache clang"
