@@ -87,6 +87,7 @@ before-all = "brew install ccache && ccache -z"
 
 [tool.cibuildwheel.windows]
 before-all = "choco install sccache"
+config-settings = { "setup-args" = "-Dcpp_compiler_launcher=sccache" }
 
 [tool.cibuildwheel.linux.environment]
 CC = "ccache gcc"
@@ -107,7 +108,5 @@ CCACHE_DIR = ".ccache"
 PIP_RETRIES = "20"
 
 [tool.cibuildwheel.windows.environment]
-CC = "sccache cl"
-CXX = "sccache cl"
 SCCACHE_DIR = ".ccache"
 PIP_RETRIES = "20"
