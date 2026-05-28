@@ -88,6 +88,10 @@ jobs:
           cuda: '12.8.0'
           use-github-cache: 'false'
 
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+
       - name: Build wheels
         # Check pyproject.toml for supported versions and additional config
         uses: pypa/cibuildwheel@v2.22.0

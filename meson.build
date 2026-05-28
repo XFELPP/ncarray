@@ -123,7 +123,13 @@ endif
 #### Path Setup ####
 ####################
 
-py_install_dir = py3.get_install_dir(pure: false)
+is_windows = host_machine.system() == 'windows'
+if is_windows
+    py_install_dir = py3.get_install_dir(pure: true)
+else
+    py_install_dir = py3.get_install_dir(pure: false)
+endif
+
 pyncarray_install_dir = py_install_dir / 'ncarray/core'
 
 if nca_as_wheel_opt
