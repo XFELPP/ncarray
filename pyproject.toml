@@ -87,7 +87,6 @@ before-all = "brew install ccache && ccache -z"
 
 [tool.cibuildwheel.windows]
 before-all = "choco install sccache"
-config-settings = { "setup-args" = "--vsenv" }
 
 [tool.cibuildwheel.linux.environment]
 CC = "ccache gcc"
