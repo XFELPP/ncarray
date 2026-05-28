@@ -80,13 +80,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cibw-${{ matrix.python }}-
 
-      - name: Grab CUDA
+      - name: Grab Windows CUDA
         uses: Jimver/cuda-toolkit@v0.2.34
-        if: runner.os != 'macOS'
+        if: runner.os == 'Windows'
         id: cuda-toolkit
         with:
           cuda: '12.8.0'
-          method: 'network'
           use-github-cache: 'false'
 
       - name: Build wheels
