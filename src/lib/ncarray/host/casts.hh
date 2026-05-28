@@ -6,6 +6,20 @@
 #include <complex>
 #include <cstdint>
 
+#ifdef _WIN32
+// On Windows need to export symbols for DLLs
+#ifdef NCA_BUILD_NCARRAY_API
+#define NCA_CAST_API __declspec(dllexport)
+#define NCA_EXTERN_CAST_API
+#else
+#define NCA_CAST_API __declspec(dllimport)
+#define NCA_EXTERN_CAST_API __declspec(dllimport)
+#endif
+#else
+#define NCA_CAST_API
+#define NCA_EXTERN_CAST_API
+#endif
+
 namespace ncarray {
   namespace host {
     template <typename T>
@@ -20,8 +34,8 @@ namespace ncarray {
     template <typename T>
     inline constexpr VM_Cast_Table<T> vm_cast_table {};
 
-    #define EXTERN_VM_CAST_TABLE(T)            \
-      extern template struct VM_Cast_Table<T>;
+    #define EXTERN_VM_CAST_TABLE(T)                                \
+      extern template struct NCA_EXTERN_CAST_API VM_Cast_Table<T>;
 
     EXTERN_VM_CAST_TABLE(bool)
     EXTERN_VM_CAST_TABLE(char)

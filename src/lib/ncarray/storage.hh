@@ -229,7 +229,13 @@ namespace ncarray {
     using MemType = DevTag;
 
     // By default, owners are NOT read only.
+#ifdef __CUDACC__
+    #pragma nv_diag_suppress 20011
+#endif
     NCA_H DevOwnerPolicy() { this->m_read_only = false; }
+#ifdef __CUDACC__
+    #pragma nv_diag_default 20011
+#endif
 
     NCA_HD inline const char* storage_repr() const { return "Owner"; }
 

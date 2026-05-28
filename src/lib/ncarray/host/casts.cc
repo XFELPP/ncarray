@@ -45,8 +45,8 @@ namespace ncarray {
       vm_cast_logic<T, Double4>
     };
 
-    #define DEFINE_VM_CAST_TABLE(T)     \
-      template struct VM_Cast_Table<T>;
+    #define DEFINE_VM_CAST_TABLE(T)                  \
+      template struct NCA_CAST_API VM_Cast_Table<T>;
 
     DEFINE_VM_CAST_TABLE(bool)
     DEFINE_VM_CAST_TABLE(char)

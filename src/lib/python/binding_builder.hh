@@ -31,8 +31,17 @@
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
+
+// On Windows need to export symbols for DLLs
+#ifdef NCA_BUILD_PYNCARRAY_API
+#define NCA_PYNCARRAY_API __declspec(dllexport)
+#else
+#define NCA_PYNCARRAY_API __declspec(dllimport)
+#endif
 #else
 #include <sys/types.h>
+
+#define NCA_PYNCARRAY_API
 #endif
 
 #include <cstdint>
@@ -46,11 +55,11 @@ namespace pyncarray {
   /**
    * Global toggle for whether Python will eagerly convert Expr objects to arrays.
    */
-  extern bool g_eager_eval;
+  extern NCA_PYNCARRAY_API bool g_eager_eval;
 
-  void set_eager(bool eager);
+  NCA_PYNCARRAY_API void set_eager(bool eager);
 
-  bool is_eager();
+  NCA_PYNCARRAY_API bool is_eager();
 
   template <class LPolicy, class MemType>
   inline bool is_nc_array(const py::handle& val) {

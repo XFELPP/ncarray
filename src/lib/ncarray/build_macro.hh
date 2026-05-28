@@ -12,8 +12,20 @@
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
+
+// On Windows need to export symbols for DLLs
+#ifdef NCA_BUILD_NCARRAY_API
+#define NCA_ARRAY_API __declspec(dllexport)
+#define NCA_EXTERN_ARRAY_API
+#else
+#define NCA_ARRAY_API __declspec(dllimport)
+#define NCA_EXTERN_ARRAY_API __declspec(dllimport)
+#endif
 #else
 #include <sys/types.h>
+
+#define NCA_ARRAY_API
+#define NCA_EXTERN_ARRAY_API
 #endif
 
 #include <cstdint>
@@ -65,7 +77,7 @@ typedef SSIZE_T ssize_t;
   ACTION ncarray::ArrayImpl<ncarray::L, ncarray::S>::OwnerType                                     \
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_as_shape(const ssize_t*, ssize_t) const;        \
                                                                                                    \
-                        /* Repr, small utilities */                                                \
+                        /* Repr and copy utilities */                                              \
                                                                                                    \
   ACTION ncarray::Scalar ncarray::ArrayImpl<ncarray::L, ncarray::S>::get_scalar(void*) const;      \
   ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<char>(         \
@@ -122,7 +134,48 @@ typedef SSIZE_T ssize_t;
       std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;                                \
   ACTION void                                                                                      \
   ncarray::ArrayImpl<ncarray::L, ncarray::S>::repr_recursive_dispatched<ncarray::Double4>(         \
-      std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;
+      std::ostringstream&, void*, ssize_t, ssize_t, ssize_t) const;                                \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<char>(char*) const;     \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint8_t>(          \
+      std::uint8_t*) const;                                                                        \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint16_t>(         \
+      std::uint16_t*) const;                                                                       \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint32_t>(         \
+      std::uint32_t*) const;                                                                       \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::uint64_t>(         \
+      std::uint64_t*) const;                                                                       \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int8_t>(           \
+      std::int8_t*) const;                                                                         \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int16_t>(          \
+      std::int16_t*) const;                                                                        \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int32_t>(          \
+      std::int32_t*) const;                                                                        \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::int64_t>(          \
+      std::int64_t*) const;                                                                        \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<float>(float*) const;   \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<double>(double*) const; \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<long double>(           \
+      long double*) const;                                                                         \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<bool>(bool*) const;     \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::complex<float>>(   \
+      std::complex<float>*) const;                                                                 \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::complex<double>>(  \
+      std::complex<double>*) const;                                                                \
+  ACTION void                                                                                      \
+      ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<std::complex<long double>>(     \
+          std::complex<long double>*) const;                                                       \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Float2>(       \
+      ncarray::Float2*) const;                                                                     \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Float3>(       \
+      ncarray::Float3*) const;                                                                     \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Float4>(       \
+      ncarray::Float4*) const;                                                                     \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double2>(      \
+      ncarray::Double2*) const;                                                                    \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double3>(      \
+      ncarray::Double3*) const;                                                                    \
+  ACTION void ncarray::ArrayImpl<ncarray::L, ncarray::S>::copy_into_astype<ncarray::Double4>(      \
+      ncarray::Double4*) const;
 
 #define BASE_ARITHMETIC_LIST(ACTION, L, S)                                                         \
                                                                                                    \
@@ -266,20 +319,20 @@ typedef SSIZE_T ssize_t;
       ncarray::ArrayImpl<ncarray::L, ncarray::S>::any(const std::vector<ssize_t>&) const;
 
 
-#define INSTANTIATE_NC_BASE_GENERAL(L, S) BASE_GENERAL_LIST(template, L, S)
-#define EXTERN_NC_BASE_GENERAL(L, S) BASE_GENERAL_LIST(extern template, L, S)
+#define INSTANTIATE_NC_BASE_GENERAL(L, S) BASE_GENERAL_LIST(template NCA_ARRAY_API, L, S)
+#define EXTERN_NC_BASE_GENERAL(L, S) BASE_GENERAL_LIST(extern template NCA_EXTERN_ARRAY_API, L, S)
 
-#define INSTANTIATE_NC_BASE_ARITHMETIC(L, S) BASE_ARITHMETIC_LIST(template, L, S)
-#define EXTERN_NC_BASE_ARITHMETIC(L, S) BASE_ARITHMETIC_LIST(extern template, L, S)
+#define INSTANTIATE_NC_BASE_ARITHMETIC(L, S) BASE_ARITHMETIC_LIST(template NCA_ARRAY_API, L, S)
+#define EXTERN_NC_BASE_ARITHMETIC(L, S) BASE_ARITHMETIC_LIST(extern template NCA_EXTERN_ARRAY_API, L, S)
 
-#define INSTANTIATE_NC_BASE_COMPARISON(L, S) BASE_COMPARISON_LIST(template, L, S)
-#define EXTERN_NC_BASE_COMPARISON(L, S) BASE_COMPARISON_LIST(extern template, L, S)
+#define INSTANTIATE_NC_BASE_COMPARISON(L, S) BASE_COMPARISON_LIST(template NCA_ARRAY_API, L, S)
+#define EXTERN_NC_BASE_COMPARISON(L, S) BASE_COMPARISON_LIST(extern template NCA_EXTERN_ARRAY_API, L, S)
 
-#define INSTANTIATE_NC_BASE_LOGICAL(L, S) BASE_LOGICAL_LIST(template, L, S)
-#define EXTERN_NC_BASE_LOGICAL(L, S) BASE_LOGICAL_LIST(extern template, L, S)
+#define INSTANTIATE_NC_BASE_LOGICAL(L, S) BASE_LOGICAL_LIST(template NCA_ARRAY_API, L, S)
+#define EXTERN_NC_BASE_LOGICAL(L, S) BASE_LOGICAL_LIST(extern template NCA_EXTERN_ARRAY_API, L, S)
 
-#define INSTANTIATE_NC_BASE_REDUCTIONS(L, S) BASE_REDUCTIONS_LIST(template, L, S)
-#define EXTERN_NC_BASE_REDUCTIONS(L, S) BASE_REDUCTIONS_LIST(extern template, L, S)
+#define INSTANTIATE_NC_BASE_REDUCTIONS(L, S) BASE_REDUCTIONS_LIST(template NCA_ARRAY_API, L, S)
+#define EXTERN_NC_BASE_REDUCTIONS(L, S) BASE_REDUCTIONS_LIST(extern template NCA_EXTERN_ARRAY_API, L, S)
 
 
 #define EXTERN_NC_BASE_OPS(L, S)  \
@@ -558,6 +611,6 @@ using CanonicalCoords = ncarray::StaticCoords<NCARRAY_MAX_NDIM, ssize_t>;
   ACTION void ncarray::ArrayImpl<ncarray::L1, ncarray::S1>::assign(                                \
       const ncarray::ArrayImpl<ncarray::L2, ncarray::S2>&);
 
-#define EXTERN_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(extern template, L1, S1, L2, S2)
-#define INSTANTIATE_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(template, L1, S1, L2, S2)
+#define EXTERN_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(extern template NCA_EXTERN_ARRAY_API, L1, S1, L2, S2)
+#define INSTANTIATE_NC_CROSS_OPS(L1, S1, L2, S2) CROSS_OPS_LIST(template NCA_ARRAY_API, L1, S1, L2, S2)
 #endif

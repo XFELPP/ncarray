@@ -566,7 +566,7 @@ namespace ncarray {
       void* out_data = const_cast<void*>(this->data());
       ssize_t lin_idx { idx };
 
-#if defined(__CUDACC__)
+#if defined(__CUDA_ARCH__)
 #pragma unroll
 #elif defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC unroll 10
@@ -589,7 +589,7 @@ namespace ncarray {
       const void* out_data = this->data();
       ssize_t lin_idx { idx };
 
-#if defined(__CUDACC__)
+#if defined(__CUDA_ARCH__)
 #pragma unroll
 #elif defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC unroll 10
@@ -621,7 +621,7 @@ namespace ncarray {
     NCA_HD void lin_to_md(ssize_t idx, Coords& coords) {
       ssize_t lin_idx { idx };
 
-#if defined(__CUDACC__)
+#if defined(__CUDA_ARCH__)
 #pragma unroll
 #elif defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC unroll 10

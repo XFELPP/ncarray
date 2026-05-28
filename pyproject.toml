@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "meson-python", "pybind11"]
+requires = ["setuptools", "meson-python", "pybind11[global]"]
 build-backend = "mesonpy"
 
 [project]
@@ -53,7 +53,7 @@ build-frontend = { name = "pip", args = ["--no-build-isolation"] }
 
 before-build = [
     "python -m pip install -U pip",
-    "python -m pip install \"meson>=1.10.1\" meson-python ninja pybind11 setuptools",
+    "python -m pip install \"meson>=1.10.1\" meson-python ninja \"pybind11[global]\" setuptools",
 ]
 
 # For C++23 need a newer GCC coming from manylinux_2_28 (GCC 13) and later
@@ -85,14 +85,13 @@ before-all = [
     ccache -z
     """,
 ]
-repair-wheel-command = "auditwheel repair --exclude libncarray.so.1 --lib-sdir . -w {dest_dir} {wheel}"
+repair-wheel-command = "python utilities/repair_wheel.py {wheel} {dest_dir}"
 
 [tool.cibuildwheel.macos]
 before-all = "brew install ccache && ccache -z"
 
 [tool.cibuildwheel.windows]
-before-all = "choco install sccache"
-config-settings = { "setup-args" = ["-Dcpp_compiler_launcher=sccache", "-Dcpp_std=c++latest"] }
+config-settings = { "setup-args" = ["-Dcpp_compiler_launcher=", "-Dcuda_compiler_launcher="] }
 
 [tool.cibuildwheel.linux.environment]
 CC = "ccache gcc"
@@ -111,8 +110,8 @@ CCACHE_DIR = ".ccache"
 PIP_RETRIES = "20"
 
 [tool.cibuildwheel.windows.environment]
-SCCACHE_DIR = ".ccache"
 PIP_RETRIES = "20"
 CUDA_PATH = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
 CUDA_HOME = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
 PATH = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/bin;$PATH"
+PreferredToolArchitecture = "x64"

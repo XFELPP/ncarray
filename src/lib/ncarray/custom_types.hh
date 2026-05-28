@@ -686,9 +686,15 @@ namespace ncarray {
 #endif
 
   template <typename T>
+#ifdef __CUDACC__
+  #pragma nv_diag_suppress 20011, 20014
+#endif
   NCA_HD inline T nca_sqrt(const T& val) {
     return sqrt(val);
   }
+#ifdef __CUDACC__
+  #pragma nv_diag_default 20011, 20014
+#endif
 
   template <Vector2DType T>
   NCA_HD inline T nca_sqrt(const T& v) {

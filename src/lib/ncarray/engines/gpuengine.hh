@@ -158,7 +158,13 @@ namespace ncarray {
             }
           };
 
+#ifdef __CUDACC__
+          #pragma nv_diag_suppress 20014
+#endif
           dispatch(work_dtype, launch_op);
+#ifdef __CUDACC__
+          #pragma nv_diag_default 20014
+#endif
           cuCtxSynchronize();
         } else {
           auto total_bytes = bytes_for_dynamic_vm(expr);
@@ -285,9 +291,9 @@ namespace ncarray {
       class Array
     >
     static Scalar execute_full_reduce(const Array& arr, double ddof = 0.0) {
-      using AccumT = typename Traits::AccumT<SrcT>;
+      using AccumT = typename Traits::template AccumT<SrcT>;
 
-      using OutT = typename Traits::OutT<SrcT>;
+      using OutT = typename Traits::template OutT<SrcT>;
 
       Reducer<SrcT, Traits> reducer;
       AccumT identity { reducer.identity() };

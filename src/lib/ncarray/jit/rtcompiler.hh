@@ -35,9 +35,18 @@
 #include <BaseTsd.h>
 #include <windows.h>
 typedef SSIZE_T ssize_t;
+
+// On Windows need to export symbols for DLLs
+#ifdef NCA_BUILD_JIT_API
+#define NCA_JIT_API __declspec(dllexport)
+#else
+#define NCA_JIT_API __declspec(dllimport)
+#endif
 #else
 #include <dlfcn.h>
 #include <sys/types.h>
+
+#define NCA_JIT_API
 #endif
 
 #include <cstdint>
@@ -80,7 +89,7 @@ do {                                                     \
 namespace fs = std::filesystem;
 
 namespace ncarray {
-  class RuntimeCompiler {
+  class NCA_JIT_API RuntimeCompiler {
   public:
     static RuntimeCompiler& instance();
 

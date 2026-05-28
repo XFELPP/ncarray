@@ -136,7 +136,7 @@ namespace ncarray {
     static void execute_reduce_axes(const Source& src,
                                     const ReductionParams& params,
                                     Result& res) {
-      using AccumT = typename Traits::AccumT<T>;
+      using AccumT = typename Traits::template AccumT<T>;
 
       res.fill(Scalar(Traits::template fill<T>()));
 
