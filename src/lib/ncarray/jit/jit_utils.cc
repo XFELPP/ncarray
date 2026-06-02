@@ -32,7 +32,7 @@ namespace ncarray {
     cuDeviceGetAttribute(&minor_v, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev);
 
     std::string arch_opt {
-      "-arch=compute_" + std::to_string(major_v) + std::to_string(minor_v)
+      "-arch=sm_" + std::to_string(major_v) + std::to_string(minor_v)
     };
 
     return arch_opt;

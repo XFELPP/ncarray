@@ -96,7 +96,7 @@ namespace ncarray {
   }
 
   std::string read_file(fs::path file_path) {
-    std::ifstream in_f(file_path);
+    std::ifstream in_f(file_path, std::ios::binary);
 
     if (!in_f) {
       std::cerr << "Failed to open file!\n";
@@ -109,7 +109,7 @@ namespace ncarray {
   }
 
   void write_file(fs::path file_path, const std::string& contents) {
-    std::ofstream out_f(file_path);
+    std::ofstream out_f(file_path, std::ios::binary);
 
     if (!out_f) {
       std::cerr << "Failed to open stream for writing!\n";
@@ -117,6 +117,6 @@ namespace ncarray {
       return;
     }
 
-    out_f << contents;
+    out_f.write(contents.data(), contents.size());
   }
 } // namespace ncarray

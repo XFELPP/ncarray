@@ -71,18 +71,18 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
-    fs::path cache_path = get_cache_dir() / (k_id + ".ptx");
-    std::string ptx;
+    fs::path cache_path = get_cache_dir() / (k_id + ".cubin");
+    std::string cubin;
 
     if (fs::exists(cache_path)) {
-      ptx = read_file(cache_path);
+      cubin = read_file(cache_path);
 
-      CUfunction k_func = ptx_to_sass(ptx, "jit_expression_kernel");
+      CUfunction k_func = to_sass(cubin, "jit_expression_kernel");
       m_kernel_cache[k_id] = k_func;
     } else {
-      ptx = compile_kernel(kernel_str, k_id, "jit_expression_kernel");
+      cubin = compile_kernel(kernel_str, k_id, "jit_expression_kernel");
 
-      write_file(cache_path, ptx);
+      write_file(cache_path, cubin);
     }
 
     return m_kernel_cache[k_id];
@@ -97,18 +97,18 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
-    fs::path cache_path = get_cache_dir() / (k_id + ".ptx");
-    std::string ptx;
+    fs::path cache_path = get_cache_dir() / (k_id + ".cubin");
+    std::string cubin;
 
     if (fs::exists(cache_path)) {
-      ptx = read_file(cache_path);
+      cubin = read_file(cache_path);
 
-      CUfunction k_func = ptx_to_sass(ptx, "jit_fill_kernel");
+      CUfunction k_func = to_sass(cubin, "jit_fill_kernel");
       m_kernel_cache[k_id] = k_func;
     } else {
-      ptx = compile_kernel(kernel_str, k_id, "jit_fill_kernel");
+      cubin = compile_kernel(kernel_str, k_id, "jit_fill_kernel");
 
-      write_file(cache_path, ptx);
+      write_file(cache_path, cubin);
     }
 
     return m_kernel_cache[k_id];
@@ -123,18 +123,18 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
-    fs::path cache_path = get_cache_dir() / (k_id + ".ptx");
-    std::string ptx;
+    fs::path cache_path = get_cache_dir() / (k_id + ".cubin");
+    std::string cubin;
 
     if (fs::exists(cache_path)) {
-      ptx = read_file(cache_path);
+      cubin = read_file(cache_path);
 
-      CUfunction k_func = ptx_to_sass(ptx, "jit_copy_kernel");
+      CUfunction k_func = to_sass(cubin, "jit_copy_kernel");
       m_kernel_cache[k_id] = k_func;
     } else {
-      ptx = compile_kernel(kernel_str, k_id, "jit_copy_kernel");
+      cubin = compile_kernel(kernel_str, k_id, "jit_copy_kernel");
 
-      write_file(cache_path, ptx);
+      write_file(cache_path, cubin);
     }
 
     return m_kernel_cache[k_id];
@@ -155,28 +155,28 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
-    fs::path cache_path = get_cache_dir() / (k_id + ".ptx");
-    std::string ptx;
+    fs::path cache_path = get_cache_dir() / (k_id + ".cubin");
+    std::string cubin;
 
     if (fs::exists(cache_path)) {
-      ptx = read_file(cache_path);
+      cubin = read_file(cache_path);
 
-      CUfunction k_func = ptx_to_sass(ptx, "jit_copy_view_into_view_kernel");
+      CUfunction k_func = to_sass(cubin, "jit_copy_view_into_view_kernel");
       m_kernel_cache[k_id] = k_func;
     } else {
-      ptx = compile_kernel(kernel_str, k_id, "jit_copy_view_into_view_kernel");
+      cubin = compile_kernel(kernel_str, k_id, "jit_copy_view_into_view_kernel");
 
-      write_file(cache_path, ptx);
+      write_file(cache_path, cubin);
     }
 
     return m_kernel_cache[k_id];
   }
 
-  CUfunction RuntimeCompiler::ptx_to_sass(std::string ptx, const char* func_name) {
+  CUfunction RuntimeCompiler::to_sass(std::string cubin, const char* func_name) {
     CUmodule cu_mod;
     // Optimization level is from 0-4. By default it applies 4, most optimized.
     // Could override with CU_JIT_OPTIMIZATION_LEVEL and using cuModuleLoadDataEx
-    CUDA_SAFE_CALL(cuModuleLoadData(&cu_mod, ptx.data()));
+    CUDA_SAFE_CALL(cuModuleLoadData(&cu_mod, cubin.data()));
     CUfunction k_func;
     CUDA_SAFE_CALL(cuModuleGetFunction(&k_func, cu_mod, func_name));
 
@@ -398,9 +398,7 @@ namespace ncarray {
     cuDeviceGetAttribute(&major_v, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev);
     cuDeviceGetAttribute(&minor_v, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev);
 
-    std::string arch_opt {
-      "-arch=compute_" + std::to_string(major_v) + std::to_string(minor_v)
-    };
+    std::string arch_opt = get_arch_opt();
 
     std::string nca_inc_dir = get_install_include_path();
     std::string jit_inc_dir;
@@ -438,18 +436,20 @@ namespace ncarray {
       throw std::runtime_error("JIT Compilation Failed!\n" + std::string(log.data()));
     }
 
-    // Get PTX
-    std::size_t ptx_size;
-    nvrtcGetPTXSize(prog, &ptx_size);
-    std::vector<char> ptx(ptx_size);
-    nvrtcGetPTX(prog, ptx.data());
+    // Get CUBIN
+    std::size_t cubin_size;
+    nvrtcGetCUBINSize(prog, &cubin_size);
+    std::vector<char> cubin(cubin_size);
+    nvrtcGetCUBIN(prog, cubin.data());
 
-    // Load PTX into a CUDA module
-    CUfunction k_func = ptx_to_sass(std::string(ptx.data()), func_name);
+    std::string cubin_str(cubin.data(), cubin.size());
+
+    // Load into a CUDA module
+    CUfunction k_func = to_sass(cubin_str, func_name);
 
     m_kernel_cache[k_id] = k_func;
 
     nvrtcDestroyProgram(&prog);
-    return std::string(ptx.data(), ptx.size());
+    return cubin_str;
   }
 } // namespace ncarray

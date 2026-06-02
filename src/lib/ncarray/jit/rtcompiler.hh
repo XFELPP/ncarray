@@ -127,18 +127,18 @@ namespace ncarray {
         return m_kernel_cache[k_id];
       }
 
-      fs::path cache_path = get_cache_dir() / (k_id + ".ptx");
-      std::string ptx;
+      fs::path cache_path = get_cache_dir() / (k_id + ".cubin");
+      std::string cubin;
 
       if (fs::exists(cache_path)) {
-        ptx = read_file(cache_path);
+        cubin = read_file(cache_path);
 
-        CUfunction k_func = ptx_to_sass(ptx, "jit_stencil_expr_kernel");
+        CUfunction k_func = to_sass(cubin, "jit_stencil_expr_kernel");
         m_kernel_cache[k_id] = k_func;
       } else {
-        ptx = compile_kernel(kernel_str, k_id, "jit_stencil_expr_kernel");
+        cubin = compile_kernel(kernel_str, k_id, "jit_stencil_expr_kernel");
 
-        write_file(cache_path, ptx);
+        write_file(cache_path, cubin);
       }
 
       return m_kernel_cache[k_id];
@@ -164,7 +164,7 @@ namespace ncarray {
       return type_name;
     }
 
-    CUfunction ptx_to_sass(std::string ptx, const char* func_name);
+    CUfunction to_sass(std::string cubin, const char* func_name);
 
     std::string get_expression_kernel_str(DType dest_t,
                                           DType src_t,
