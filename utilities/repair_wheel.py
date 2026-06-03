@@ -9,31 +9,44 @@ from typing import List
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: repair_wheel.py <wheel_path> <dest_dir>")
+        print("Usage: repair_wheel.py <wheel_path> <dest_dir> [--no-exclude-core]")
         sys.exit(1)
 
     wheel_path: str = sys.argv[1]
     dest_dir: str = sys.argv[2]
 
+    # Check if the exclusion flag is set. When building in the split mode you
+    # do NOT exclude them, otherwise you do.
+    no_exclude_core: bool = "--no-exclude-core" in sys.argv
+
     cmd: List[str] = [
         "auditwheel",
         "repair",
-        "--exclude",
-        "libncarray.so.1",
-        "--exclude",
-        "libncdevarray.so.1",
-        "--exclude",
-        "libncdevarrayjit.so.1",
-        "--exclude",
-        "libeagereval.so.1",
-        "--exclude",
-        "libcuda.so.1",
-        "--lib-sdir",
-        ".",
-        "-w",
-        dest_dir,
-        wheel_path,
     ]
+    if not no_exclude_core:
+        cmd.extend(
+            [
+                "--exclude",
+                "libncarray.so.1",
+                "--exclude",
+                "libncdevarray.so.1",
+                "--exclude",
+                "libncdevarrayjit.so.1",
+            ]
+        )
+    cmd.extend(
+        [
+            "--exclude",
+            "libeagereval.so.1",
+            "--exclude",
+            "libcuda.so.1",
+            "--lib-sdir",
+            ".",
+            "-w",
+            dest_dir,
+            wheel_path,
+        ]
+    )
     print(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
