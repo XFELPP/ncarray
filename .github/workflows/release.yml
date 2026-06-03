@@ -22,10 +22,10 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       max-parallel: 6
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python: ["cp38-*", "cp39-*", "cp310-*", "cp311-*", "cp312-*", "cp313-*"]
 
     steps:
       - name: Free Unused Disk Space
@@ -67,7 +67,7 @@ jobs:
             ~/.cache/pip
             ~/Library/Caches/pip
             ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ matrix.python }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -85,9 +85,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cibw_cache
-          key: ${{ runner.os }}-cibw-${{ matrix.python }}-v1
+          key: ${{ runner.os }}-cibw-v1
           restore-keys: |
-            ${{ runner.os }}-cibw-${{ matrix.python }}-
+            ${{ runner.os }}-cibw-
 
       - name: Grab Windows CUDA
         uses: Jimver/cuda-toolkit@v0.2.34
@@ -115,7 +115,6 @@ jobs:
         # Check pyproject.toml for supported versions and additional config
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          CIBW_BUILD: ${{ matrix.python }}
           CIBW_CACHE_PATH: ".cibw_cache"
           PreferredToolArchitecture: "x64"
 

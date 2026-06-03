@@ -9,31 +9,44 @@ from typing import List
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: repair_wheel.py <wheel_path> <dest_dir>")
+        print("Usage: repair_wheel.py <wheel_path> <dest_dir> [--no-exclude-core]")
         sys.exit(1)
 
     wheel_path: str = sys.argv[1]
     dest_dir: str = sys.argv[2]
 
+    # Check if the exclusion flag is set. When building in the split mode you
+    # do NOT exclude them, otherwise you do.
+    no_exclude_core: bool = "--no-exclude-core" in sys.argv
+
     cmd: List[str] = [
         "auditwheel",
         "repair",
-        "--exclude",
-        "libncarray.so.1",
-        "--exclude",
-        "libncdevarray.so.1",
-        "--exclude",
-        "libncdevarrayjit.so.1",
-        "--exclude",
-        "libeagereval.so.1",
-        "--exclude",
-        "libcuda.so.1",
-        "--lib-sdir",
-        ".",
-        "-w",
-        dest_dir,
-        wheel_path,
     ]
+    if not no_exclude_core:
+        cmd.extend(
+            [
+                "--exclude",
+                "libncarray.so.1",
+                "--exclude",
+                "libncdevarray.so.1",
+                "--exclude",
+                "libncdevarrayjit.so.1",
+            ]
+        )
+    cmd.extend(
+        [
+            "--exclude",
+            "libeagereval.so.1",
+            "--exclude",
+            "libcuda.so.1",
+            "--lib-sdir",
+            ".",
+            "-w",
+            dest_dir,
+            wheel_path,
+        ]
+    )
     print(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
@@ -66,6 +79,7 @@ def main():
                 ),
                 None,
             )
+
             if not libs_dir:
                 libs_dir = next(
                     (
@@ -75,9 +89,14 @@ def main():
                     ),
                     "ncarray.libs",
                 )
-            target_path: str = os.path.join(libs_dir, os.path.basename(builtins_file))
-            print(f"  Adding {builtins_file} -> {target_path}")
-            z.write(builtins_file, target_path)
+
+            for builtins_file in builtins_src:
+                # Make sure to update symlink'd filenames appropriately
+                real_file: str = os.path.realpath(builtins_file)
+                basename: str = os.path.basename(builtins_file)
+                target_path: str = os.path.join(libs_dir, basename)
+                print(f"  Adding {real_file} -> {target_path}")
+                z.write(real_file, target_path)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 {% set name = "ncarray" %}
-{% set version = "0.5.0" %}
+{% set version = "0.5.1" %}
 
 {% set cuda_compiler_version = cuda_compiler_version or "None" %}
 
@@ -8,8 +8,8 @@ package:
   version: {{ version }}
 
 source:
-  git_url: https://github.com/XFELPP/ncarray.git
-  git_rev: v{{ version }}
+  url: https://github.com/XFELPP/ncarray/releases/download/v{{ version }}/ncarray-{{ version }}.tar.gz
+  sha256: 2b9d6efff8ad6e9423434626cf5182d27d03d1d3d0a43f69bb43acf295e35efa
 
 build:
   number: 0
