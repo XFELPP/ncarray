@@ -85,13 +85,18 @@ namespace ncarray {
       return std::string(env_inc);
     }
 
-    fs::path lib_file = fs::absolute(get_install_library_path());
+    std::error_code ec;
+    fs::path lib_file = fs::canonical(get_install_library_path(), ec);
+    if (ec) {
+      lib_file = fs::absolute(get_install_library_path());
+    }
 
-    // The install hierarchy is something like:
+    // The install hierarchy is something like this, inside the wheel variant:
     // PREFIX/lib/..../ncarray/
     //                    | ----- lib/
     //                    | ----- include/
     // So, get the parent path from the lib, and then append include to get headers
+    // This should work for a standard installation as well (e.g. via conda)
     return (lib_file.parent_path().parent_path() / "include").string();
   }
 
