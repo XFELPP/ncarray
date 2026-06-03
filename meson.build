@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.5.0',
+    version: '0.5.1',
     default_options: [
         'cpp_std=c++23,c++latest',
         'cuda_std=c++20',
@@ -18,8 +18,64 @@ if nca_has_cuda
     cuda_version = cuda.version()
 endif
 
-# For Windows adjust for limit of 65,536 COFF sections
 cpp = meson.get_compiler('cpp')
+
+# Check compiler versions (for C++23 suppport especially)
+if cpp.get_id() == 'gcc'
+    gcc_version = cpp.version()
+    if not gcc_version.version_compare('>=13')
+        if gcc_version.version_compare('>=12')
+            warning('GCC >=13 is recommended, however, GCC 12+ should work.')
+        else
+            error('Builds with GCC require version >=12')
+        endif
+    endif
+
+    if nca_has_cuda
+        # Too new a compiler for CUDA support also causes problems
+        if cuda_version.version_compare('<12.4') and not gcc_version.version_compare('<13')
+            error('For CUDA < 12.4 builds, must use GCC < 13')
+        elif cuda_version.version_compare('<12.8') and not gcc_version.version_compare('<14')
+            error('For CUDA < 12.8 builds, must use GCC < 14')
+        elif not gcc_version.version_compare('<15')
+            error('For CUDA 12.8+ builds, must use GCC < 15')
+        endif
+    endif
+elif cpp.get_id() == 'clang'
+    clang_version = cpp.version()
+    if not clang_version.version_compare('>=16')
+        error('Builds with clang require version >=16')
+    endif
+
+    if nca_has_cuda
+        # Too new a compiler for CUDA support also causes problems
+        if cuda_version.version_compare('<12.4') and not clang_version.version_compare('<17')
+            error('For CUDA < 12.4 builds, must use clang < 17')
+        elif cuda_version.version_compare('<12.8') and not clang_version.version_compare('<19')
+            error('For CUDA < 12.8 builds, must use clang < 19')
+        elif not clang_version.version_compare('<20')
+            error('For CUDA 12.8+ builds, must use clang < 20')
+        endif
+    endif
+elif cpp.get_id() == 'msvc'
+    msvc_version = cpp.version()
+    if not msvc_version.version_compare('>=19.30')
+        error('Builds with msvc require version >=19.30')
+    endif
+
+    if nca_has_cuda
+        # Too new a compiler for CUDA support also causes problems
+        if cuda_version.version_compare('<12.4') and not msvc_version.version_compare('<19.38')
+            error('For CUDA < 12.4 builds, must use msvc < 19.38 (VS 2022 < 17.8)')
+        elif cuda_version.version_compare('<12.8') and not msvc_version.version_compare('<19.41')
+            error('For CUDA < 12.8 builds, must use msvc < 19.41 (VS 2022 < 17.11)')
+        elif not msvc_version.version_compare('<19.50')
+            error('For CUDA 12.8+ builds, must use msvc < 19.50 (VS 2022 < 18.0)')
+        endif
+    endif
+endif
+
+# For Windows adjust for limit of 65,536 COFF sections
 if cpp.get_id() == 'msvc'
     add_project_arguments('/bigobj', '/DNOMINMAX', language: 'cpp')
     if nca_has_cuda
@@ -217,6 +273,78 @@ endif
 
 ncarray_headers = include_directories('src/lib', 'src/lib/ncarray')
 
+# Headers to install. If nca_as_wheel_opt these go inside the wheel.
+installed_headers = [
+    'src/lib/ncarray/array_element_proxy.hh',
+    'src/lib/ncarray/array_impl.hh',
+    'src/lib/ncarray/array_operations.hh',
+    'src/lib/ncarray/array_traits.hh',
+    'src/lib/ncarray/build_macro.hh',
+    'src/lib/ncarray/custom_types.hh',
+    'src/lib/ncarray/dtype.hh',
+    'src/lib/ncarray/engines.hh',
+    'src/lib/ncarray/indexing.hh',
+    'src/lib/ncarray/layout.hh',
+    'src/lib/ncarray/ncarrays.hh',
+    'src/lib/ncarray/op_code.hh',
+    'src/lib/ncarray/op_traits.hh',
+    'src/lib/ncarray/reductions.hh',
+    'src/lib/ncarray/soarrays.hh',
+    'src/lib/ncarray/storage.hh',
+]
+
+installed_host_headers = [
+    'src/lib/ncarray/host/allocator.hh',
+    'src/lib/ncarray/host/casts.hh',
+    'src/lib/ncarray/host/elementwise.hh',
+    'src/lib/ncarray/host/reductions.hh',
+]
+
+installed_host_engine_headers = [
+    'src/lib/ncarray/engines/hostengine.hh',
+]
+
+installed_expression_headers = [
+    'src/lib/ncarray/expression/dynamicmvnode.hh',
+    'src/lib/ncarray/expression/interface.hh',
+    'src/lib/ncarray/expression/mvnode.hh',
+    'src/lib/ncarray/expression/staticmvnode.hh',
+]
+
+# GPU-support only headers
+installed_gpu_engine_headers = [
+    'src/lib/ncarray/engines/gpuengine.hh',
+]
+
+# Currently, Stencil support is for GPU only
+installed_expression_stencil_headers = [
+    'src/lib/ncarray/expression/stencil.hh',
+]
+
+installed_jit_headers = [
+    'src/lib/ncarray/jit/path_utils.hh',
+    'src/lib/ncarray/jit/jit_utils.hh',
+    'src/lib/ncarray/jit/rtcompiler.hh',
+]
+
+# The following headers are for integration with device code on host side
+installed_device_compat_headers = [
+    'src/lib/ncarray/ncdevarrays.cuh',
+    'src/lib/ncarray/sodevarrays.cuh',
+]
+
+# The following headers are device only as well as host-called kernels
+installed_device_headers = [
+    'src/lib/ncarray/device/atomic.cuh',
+    'src/lib/ncarray/device/casts.cuh',
+    'src/lib/ncarray/device/elementwise.cuh',
+    'src/lib/ncarray/device/kernels.cuh',
+    'src/lib/ncarray/device/mem_pool.cuh',
+    'src/lib/ncarray/device/reductions.cuh',
+    'src/lib/ncarray/device/utilities.cuh',
+    'src/lib/ncarray/device/warp.cuh',
+]
+
 if build_core_opt
     host_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/host'
 
@@ -266,66 +394,7 @@ if build_core_opt
         include_directories: ncarray_headers,
     )
 
-    # Install headers into the package for easy bundling
-    installed_headers = [
-        'src/lib/ncarray/array_element_proxy.hh',
-        'src/lib/ncarray/array_impl.hh',
-        'src/lib/ncarray/array_operations.hh',
-        'src/lib/ncarray/array_traits.hh',
-        'src/lib/ncarray/build_macro.hh',
-        'src/lib/ncarray/custom_types.hh',
-        'src/lib/ncarray/dtype.hh',
-        'src/lib/ncarray/engines.hh',
-        'src/lib/ncarray/indexing.hh',
-        'src/lib/ncarray/layout.hh',
-        'src/lib/ncarray/ncarrays.hh',
-        'src/lib/ncarray/op_code.hh',
-        'src/lib/ncarray/op_traits.hh',
-        'src/lib/ncarray/reductions.hh',
-        'src/lib/ncarray/soarrays.hh',
-        'src/lib/ncarray/storage.hh',
-    ]
-
-    installed_host_headers = [
-        'src/lib/ncarray/host/allocator.hh',
-        'src/lib/ncarray/host/casts.hh',
-        'src/lib/ncarray/host/elementwise.hh',
-        'src/lib/ncarray/host/reductions.hh',
-    ]
-
-    installed_host_engine_headers = [
-        'src/lib/ncarray/engines/hostengine.hh',
-    ]
-
-    installed_expression_headers = [
-        'src/lib/ncarray/expression/dynamicmvnode.hh',
-        'src/lib/ncarray/expression/interface.hh',
-        'src/lib/ncarray/expression/mvnode.hh',
-        'src/lib/ncarray/expression/staticmvnode.hh',
-    ]
-
-    if nca_as_wheel_opt
-        py3.install_sources(
-            installed_headers,
-            pure: false,
-            subdir: 'ncarray/include/ncarray',
-        )
-        py3.install_sources(
-            installed_host_headers,
-            pure: false,
-            subdir: 'ncarray/include/ncarray/host',
-        )
-        py3.install_sources(
-            installed_host_engine_headers,
-            pure: false,
-            subdir: 'ncarray/include/ncarray/engines',
-        )
-        py3.install_sources(
-            installed_expression_headers,
-            pure: false,
-            subdir: 'ncarray/include/ncarray/expression',
-        )
-    else
+    if not nca_as_wheel_opt
         install_headers(
             installed_headers,
             install_dir: header_install_dir / 'ncarray',
@@ -345,18 +414,9 @@ if build_core_opt
             installed_expression_headers,
             install_dir: header_install_dir / 'ncarray/expression',
         )
-    endif # nca_as_wheel_opt
+    endif # not nca_as_wheel_opt
 
     if nca_has_cuda
-        installed_gpu_engine_headers = [
-            'src/lib/ncarray/engines/gpuengine.hh',
-        ]
-
-        # Currently, Stencil support is for GPU only
-        installed_expression_stencil_headers = [
-            'src/lib/ncarray/expression/stencil.hh',
-        ]
-
         libncdevarrayjit = shared_library(
             'ncdevarrayjit',
             [
@@ -388,31 +448,7 @@ if build_core_opt
             include_directories: ncarray_headers,
         )
 
-        installed_jit_headers = [
-            'src/lib/ncarray/jit/path_utils.hh',
-            'src/lib/ncarray/jit/jit_utils.hh',
-            'src/lib/ncarray/jit/rtcompiler.hh',
-        ]
-
-        if nca_as_wheel_opt
-            py3.install_sources(
-                installed_gpu_engine_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/engines',
-            )
-
-            py3.install_sources(
-                installed_expression_stencil_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/expression',
-            )
-
-            py3.install_sources(
-                installed_jit_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/jit',
-            )
-        else
+        if not nca_as_wheel_opt
             install_headers(
                 installed_gpu_engine_headers,
                 install_dir: header_install_dir / 'ncarray/engines',
@@ -427,7 +463,7 @@ if build_core_opt
                 installed_jit_headers,
                 install_dir: header_install_dir / 'ncarray/jit',
             )
-        endif # nca_as_wheel_opt
+        endif # not nca_as_wheel_opt
 
         #### Install CCCL Headers for JIT ####
         # Will run a little Python script to copy the current CUDA toolkit CCCL headers
@@ -439,17 +475,8 @@ if build_core_opt
             check: true,
         )
 
-        # Install CCCL headers into the wheel/include headers path
-        if nca_as_wheel_opt
-            install_subdir(
-                jit_headers_build_dir / 'cuda',
-                install_dir: py3.get_install_dir() / 'ncarray/include/ncarray/jit',
-            )
-            install_subdir(
-                jit_headers_build_dir / 'nv',
-                install_dir: py3.get_install_dir() / 'ncarray/include/ncarray/jit',
-            )
-        else
+        # Install CCCL headers into the prefix include headers path
+        if not nca_as_wheel_opt
             install_subdir(
                 jit_headers_build_dir / 'cuda',
                 install_dir: header_install_dir / 'ncarray/jit',
@@ -458,7 +485,7 @@ if build_core_opt
                 jit_headers_build_dir / 'nv',
                 install_dir: header_install_dir / 'ncarray/jit',
             )
-        endif # nca_as_wheel_opt
+        endif # not nca_as_wheel_opt
 
         dev_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/device'
 
@@ -517,37 +544,7 @@ if build_core_opt
             include_directories: ncarray_headers,
         )
 
-        # The following headers are for integration with device code on host side
-        installed_device_compat_headers = [
-            'src/lib/ncarray/ncdevarrays.cuh',
-            'src/lib/ncarray/sodevarrays.cuh',
-        ]
-
-        # The following headers are device only as well as host-called kernels
-        installed_device_headers = [
-            'src/lib/ncarray/device/atomic.cuh',
-            'src/lib/ncarray/device/casts.cuh',
-            'src/lib/ncarray/device/elementwise.cuh',
-            'src/lib/ncarray/device/kernels.cuh',
-            'src/lib/ncarray/device/mem_pool.cuh',
-            'src/lib/ncarray/device/reductions.cuh',
-            'src/lib/ncarray/device/utilities.cuh',
-            'src/lib/ncarray/device/warp.cuh',
-        ]
-
-        if nca_as_wheel_opt
-            py3.install_sources(
-                installed_device_compat_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray',
-            )
-
-            py3.install_sources(
-                installed_device_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/device',
-            )
-        else
+        if not nca_as_wheel_opt
             install_headers(
                 installed_device_compat_headers,
                 install_dir: header_install_dir / 'ncarray',
@@ -557,7 +554,7 @@ if build_core_opt
                 installed_device_headers,
                 install_dir: header_install_dir / 'ncarray/device',
             )
-        endif # nca_as_wheel_opt
+        endif # not nca_as_wheel_opt
 
     endif # end nca_has_cuda
 else
@@ -597,6 +594,87 @@ if build_python_opt
         deps_for_py_mod += cuda_dep
         deps_for_py_mod += ncdevarray_dep
     endif
+
+    # If building bindings as a wheel, install the headers into the package itself
+    # If not building as a wheel, then these should be installed in prefix/include when
+    # building the core libraries
+    if nca_as_wheel_opt
+        # Core host headers
+        py3.install_sources(
+            installed_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray',
+        )
+        py3.install_sources(
+            installed_host_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/host',
+        )
+        py3.install_sources(
+            installed_host_engine_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/engines',
+        )
+        py3.install_sources(
+            installed_expression_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/expression',
+        )
+
+        if nca_has_cuda
+            # Core GPU/CUDA headers
+            py3.install_sources(
+                installed_gpu_engine_headers,
+                pure: false,
+                subdir: 'ncarray/include/ncarray/engines',
+            )
+
+            py3.install_sources(
+                installed_expression_stencil_headers,
+                pure: false,
+                subdir: 'ncarray/include/ncarray/expression',
+            )
+
+            py3.install_sources(
+                installed_jit_headers,
+                pure: false,
+                subdir: 'ncarray/include/ncarray/jit',
+            )
+
+            #### Install CCCL Headers for JIT ####
+            # Will run a little Python script to copy the current CUDA toolkit CCCL headers
+            # Afterwards, these will be installed into the wheel for use by the JIT compiler
+            jit_headers_build_dir = meson.current_build_dir() / 'jit_tmp_headers'
+
+            run_command(
+                py3, 'utilities/copy_cccl_headers.py', jit_headers_build_dir,
+                check: true,
+            )
+
+            # Install CCCL headers into the wheel headers path
+            install_subdir(
+                jit_headers_build_dir / 'cuda',
+                install_dir: py3.get_install_dir() / 'ncarray/include/ncarray/jit',
+            )
+            install_subdir(
+                jit_headers_build_dir / 'nv',
+                install_dir: py3.get_install_dir() / 'ncarray/include/ncarray/jit',
+            )
+
+            # Device-compat headers for integration with host code
+            py3.install_sources(
+                installed_device_compat_headers,
+                pure: false,
+                subdir: 'ncarray/include/ncarray',
+            )
+
+            py3.install_sources(
+                installed_device_headers,
+                pure: false,
+                subdir: 'ncarray/include/ncarray/device',
+            )
+        endif # nca_has_cuda
+    endif # nca_as_wheel_opt
 
     py_bindings_headers = [
         'src/lib/python/binding_builder.hh',
@@ -726,13 +804,30 @@ if build_python_opt
             nvcc_path = nvcc_bin.full_path()
 
             cuda_root = fs.parent(fs.parent(nvcc_path))
-            cuda_stub_lib = cuda_root / 'lib64/stubs/libcuda.so'
-            message('**** Installing libcuda stub library: ' + cuda_stub_lib + ' ****')
 
-            install_data(
-                cuda_stub_lib,
-                install_dir: py3.get_install_dir() / 'ncarray/core/stubs'
-            )
+            # Check `lib64/stubs` and `lib/stubs` for driver stub
+            cuda_stub_lib = cuda_root / 'lib64/stubs/libcuda.so'
+            if not fs.exists(cuda_stub_lib)
+                cuda_stub_lib = cuda_root / 'lib/stubs/libcuda.so'
+            endif
+
+            # For conda environments it's generally under targets
+            if not fs.exists(cuda_stub_lib)
+                cuda_stub_lib = cuda_root / 'targets/x86_64-linux/lib/stubs/libcuda.so'
+            endif
+
+            if fs.exists(cuda_stub_lib)
+                message('**** Installing libcuda stub library: ' + cuda_stub_lib + ' ****')
+
+                install_data(
+                    cuda_stub_lib,
+                    install_dir: py3.get_install_dir() / 'ncarray/core/stubs'
+                )
+            else
+                # The stub must be provided to prevent issues for CUDA-enabled builds
+                # for users running without the CUDA driver (CPU-only mode).
+                error('Cannot find CUDA driver stub (libcuda.so) from CUDA root: ' + cuda_root)
+            endif
         endif # Linux guard
     endif
 
