@@ -66,6 +66,7 @@ def main():
                 ),
                 None,
             )
+
             if not libs_dir:
                 libs_dir = next(
                     (
@@ -75,9 +76,14 @@ def main():
                     ),
                     "ncarray.libs",
                 )
-            target_path: str = os.path.join(libs_dir, os.path.basename(builtins_file))
-            print(f"  Adding {builtins_file} -> {target_path}")
-            z.write(builtins_file, target_path)
+
+            for builtins_file in builtins_src:
+                # Make sure to update symlink'd filenames appropriately
+                real_file: str = os.path.realpath(builtins_file)
+                basename: str = os.path.basename(builtins_file)
+                target_path: str = os.path.join(libs_dir, basename)
+                print(f"  Adding {real_file} -> {target_path}")
+                z.write(real_file, target_path)
 
 
 if __name__ == "__main__":
