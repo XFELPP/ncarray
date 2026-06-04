@@ -382,6 +382,11 @@ namespace ncarray {
   template <typename List>
   struct list_dispatcher;
 
+  // Silence very verbose warning about use of unqualified std::forward below
+#if defined(__clang__)
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wunqualified-std-cast-call"
+#endif
   template <typename T, typename... Ts>
   struct list_dispatcher<type_list<T, Ts...>> {
     template <typename Visitor>
@@ -417,6 +422,10 @@ namespace ncarray {
   NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
     return list_dispatcher<base_types>::dispatch(type, forward<Visitor>(visitor));
   }
+
+#if defined(__clang__)
+  #pragma clang diagnostic pop
+#endif
 
 } // namespace ncarray
 

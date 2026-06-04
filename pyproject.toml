@@ -110,12 +110,12 @@ meson install -C builddir
 
 [tool.cibuildwheel.windows]
 config-settings = { "setup-args" = ["-Dcpp_compiler_launcher=", "-Dcuda_compiler_launcher=", "-Dbuild_core=false"] }
-before-all = """
-pip install meson ninja
-meson setup builddir -Dbuild_core=true -Dbuild_python=false -Dnca_as_wheel=false --prefix=$PWD/install
-meson compile -j 2 -C builddir
-meson install -C builddir
-"""
+before-all = [
+    "python -m pip install meson ninja",
+    "meson setup builddir -Dbuild_core=true -Dbuild_python=false -Dnca_as_wheel=false --prefix=%CD%/install",
+    "meson compile -j 2 -C builddir",
+    "meson install -C builddir"
+]
 
 [tool.cibuildwheel.linux.environment]
 CC = "ccache gcc"
@@ -125,21 +125,24 @@ PIP_RETRIES = "20"
 CUDA_PATH = "/usr/local/cuda-12.8"
 CUDA_HOME = "/usr/local/cuda-12.8"
 PATH = "/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH"
-LIBRARY_PATH = "{project}/install/lib:{project}/install/lib64:$LIBRARY_PATH"
-LD_LIBRARY_PATH = "{project}/install/lib:{project}/install/lib64:/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+LIBRARY_PATH = "/project/install/lib:/project/install/lib64:$LIBRARY_PATH"
+LD_LIBRARY_PATH = "/project/install/lib:/project/install/lib64:/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+LDFLAGS = "-L/project/install/lib -L/project/install/lib64"
 
 [tool.cibuildwheel.macos.environment]
 CC = "ccache clang"
 CXX = "ccache clang++"
 CCACHE_DIR = ".ccache"
 PIP_RETRIES = "20"
-LIBRARY_PATH = "{project}/install/lib:$LIBRARY_PATH"
-DYLD_LIBRARY_PATH = "{project}/install/lib:$DYLD_LIBRARY_PATH"
+MACOSX_DEPLOYMENT_TARGET = "11.0"
+LIBRARY_PATH = "$GITHUB_WORKSPACE/install/lib:$LIBRARY_PATH"
+DYLD_LIBRARY_PATH = "$GITHUB_WORKSPACE/install/lib:$DYLD_LIBRARY_PATH"
+LDFLAGS = "-L$GITHUB_WORKSPACE/install/lib"
 
 [tool.cibuildwheel.windows.environment]
 PIP_RETRIES = "20"
 CUDA_PATH = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
 CUDA_HOME = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
-LIB = "{project}/install/lib;$LIB"
-PATH = "{project}/install/bin;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/bin;$PATH"
+LIB = "$GITHUB_WORKSPACE/install/lib;$LIB"
+PATH = "$GITHUB_WORKSPACE/install/bin;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/bin;$PATH"
 PreferredToolArchitecture = "x64"

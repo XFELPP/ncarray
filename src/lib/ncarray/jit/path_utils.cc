@@ -91,13 +91,25 @@ namespace ncarray {
       lib_file = fs::absolute(get_install_library_path());
     }
 
+    fs::path grandparent = lib_file.parent_path().parent_path();
+
     // The install hierarchy is something like this, inside the wheel variant:
     // PREFIX/lib/..../ncarray/
     //                    | ----- lib/
     //                    | ----- include/
     // So, get the parent path from the lib, and then append include to get headers
     // This should work for a standard installation as well (e.g. via conda)
-    return (lib_file.parent_path().parent_path() / "include").string();
+    fs::path std_inc = grandparent / "include";
+    if (fs::exists(std_inc, ec)) {
+      return std_inc.string();
+    }
+
+    // In this case, we are in a split-wheel setup
+    // site-packages/ncarray.libs/libncdevarrrayjit.so ...
+    // site-packages/ncarray
+    //                 | ------- include/
+    // So must use grandparent / ncarray/include
+    return (grandparent / "ncarray/include").string();
   }
 
   std::string read_file(fs::path file_path) {
