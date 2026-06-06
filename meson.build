@@ -423,6 +423,8 @@ if build_core_opt
                 'src/lib/ncarray/jit/path_utils.cc',
                 'src/lib/ncarray/jit/jit_utils.cc',
                 'src/lib/ncarray/jit/rtcompiler.cc',
+                #'src/lib/ncarray/jit/device/jit_utils.cc',
+                #'src/lib/ncarray/jit/device/rtcompiler.cc',
             ],
             cpp_args: ['-DNCA_BUILD_JIT_API'],
             cuda_args: nca_cuda_args,
@@ -1027,7 +1029,7 @@ if build_core_opt
     ##########################
     if build_examples_opt
         if nca_has_cuda
-            pixel_binning = executable(
+            pixel_binning_device = executable(
                 'benchmark_pixel_binning',
                 [
                     'examples/benchmark_binning.cu',
@@ -1042,5 +1044,24 @@ if build_core_opt
                 override_options: ['cpp_std=c++20', 'cuda_std=c++20'],
             )
         endif # Has CUDA
+
+        cmake = import('cmake')
+        asmjit_opts = cmake.subproject_options()
+        asmjit_opts.add_cmake_defines({
+            'ASMJIT_STATIC': true,
+            'ASMJIT_NO_INSTALL': true,
+        })
+        asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
+        asmjit_dep = asmjit_proj.dependency('asmjit')
+
+        pixel_binning_host = executable(
+            'benchmark_pixel_binning_host',
+            [
+                'examples/benchmark_binning.cc',
+            ],
+            dependencies: deps_for_tests + [asmjit_dep],
+            install: true,
+            include_directories: ncarray_headers,
+        )
     endif # build_examples_opt
 endif # build_core_opt
