@@ -14,7 +14,8 @@
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
 
-#include <asmjit/asmjit.h>
+#include <asmjit/core.h>
+#include <asmjit/x86.h>
 
 #ifdef _WIN32
 typedef SSIZE_T ssize_t;

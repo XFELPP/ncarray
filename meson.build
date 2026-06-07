@@ -200,6 +200,7 @@ asmjit_opts = cmake.subproject_options()
 asmjit_opts.add_cmake_defines({
     'ASMJIT_STATIC': true,
     'ASMJIT_NO_INSTALL': true,
+    'CMAKE_POSITION_INDEPENDENT_CODE': true,
 })
 asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
 asmjit_dep = asmjit_proj.dependency('asmjit')
@@ -359,6 +360,7 @@ if build_core_opt
         'ncarrayjit',
         [
             'src/lib/ncarray/jit/jit_utils.cc',
+            'src/lib/ncarray/jit/path_utils.cc',
             'src/lib/ncarray/jit/host/jit_utils.cc',
             'src/lib/ncarray/jit/host/rtcompiler.cc',
         ],
@@ -410,7 +412,7 @@ if build_core_opt
             'src/lib/ncarray/soarrayviews.cc',
         ] + host_cc,
         cpp_args: ['-DNCA_BUILD_NCARRAY_API'],
-        dependencies: deps_for_ncarray,
+        dependencies: deps_for_ncarray + [asmjit_dep, ncarrayjit_dep],
         include_directories: ncarray_headers,
         install: true,
         install_dir: libncarray_install_dir,
@@ -557,7 +559,7 @@ if build_core_opt
             cpp_args: ['-DNCA_BUILD_NCARRAY_API'],
             cuda_args: nca_cuda_args + ['-DNCA_BUILD_NCARRAY_API'],
             include_directories: ncarray_headers,
-            dependencies: [ncdevarrayjit_dep, ncarray_dep],
+            dependencies: [asmjit_dep, ncdevarrayjit_dep, ncarray_dep],
             install: true,
             install_dir: libncarray_install_dir,
             install_rpath: lib_install_rpath,
@@ -748,7 +750,7 @@ if build_python_opt
         install_dir: pyncarray_install_dir,
         include_directories: ncarray_headers,
         cpp_args: ['-DNCA_BUILD_PYNCARRAY_API'],
-        dependencies : deps_for_py_mod,
+        dependencies : deps_for_py_mod + [asmjit_dep, ncarrayjit_dep],
         install_rpath: py_to_lib_install_rpath,
         build_rpath: py_to_lib_install_rpath,
         link_args: py_mod_link_args,
@@ -774,7 +776,7 @@ if build_python_opt
         install: true,
         install_dir: pyncarray_install_dir,
         include_directories: ncarray_headers,
-        dependencies : deps_for_py_mod + eager_dep,
+        dependencies : deps_for_py_mod + eager_dep + [asmjit_dep, ncarrayjit_dep],
         install_rpath: py_to_lib_install_rpath,
         build_rpath: py_to_lib_install_rpath,
         link_args: py_mod_link_args,
@@ -821,7 +823,7 @@ if build_python_opt
             install: true,
             install_dir: pyncarray_install_dir,
             include_directories: ncarray_headers,
-            dependencies : deps_for_py_mod + eager_dep,
+            dependencies : deps_for_py_mod + eager_dep + [asmjit_dep, ncarrayjit_dep],
             install_rpath: py_to_lib_install_rpath,
             build_rpath: py_to_lib_install_rpath,
             cuda_args: nca_cuda_args + py_ext_cuda_args,
@@ -897,7 +899,7 @@ if build_core_opt
         gtest_dep = gtest_proj.get_variable('gtest_main_dep')
     endif
 
-    deps_for_tests = [gtest_dep, ncarray_dep]
+    deps_for_tests = [gtest_dep, ncarray_dep] + [asmjit_dep, ncarrayjit_dep]
     if nca_has_cuda
         deps_for_tests += cuda_dep
         deps_for_tests += ncdevarray_dep

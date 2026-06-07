@@ -20,6 +20,7 @@
 #include "ncarray/host/elementwise.hh"
 #include "ncarray/host/reductions.hh"
 #include "ncarray/indexing.hh"
+#include "ncarray/jit/host/rtcompiler.hh"
 #include "ncarray/layout.hh"
 #include "ncarray/op_traits.hh"
 #include "ncarray/reductions.hh"
@@ -51,6 +52,24 @@ namespace ncarray {
 
     template <typename DestT, class Expr, OwningArrayLike Result>
     static void execute_binary_expression(const Expr& expr, Result& result) {
+      if constexpr (is_exprmv_node_v<Expr>) {
+        DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
+        DType work_dtype { expr.work_dtype };
+
+        auto kernel =
+          host::RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
+                                                            src_dtype,
+                                                            work_dtype,
+                                                            expr.ndim(),
+                                                            expr.shape(),
+                                                            expr.instrs,
+                                                            expr.layouts,
+                                                            expr.scalars,
+                                                            expr.soarray);
+
+        kernel(const_cast<const void**>(expr.data.data()), result.data());
+      }
+      /*
       if constexpr (is_exprmv_node_v<Expr>) {
         ssize_t size { result.size() };
 
@@ -123,6 +142,7 @@ namespace ncarray {
         case 10: launch_recursive(std::integral_constant<int, 10> {});  break;
         }
       }
+      */
     }
 
     // --- Axis-Aware Reductions --- //

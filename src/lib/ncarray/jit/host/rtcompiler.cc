@@ -16,7 +16,8 @@
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
 
-#include <asmjit/asmjit.h>
+#include <asmjit/core.h>
+#include <asmjit/x86.h>
 
 #include <cstdlib>
 #include <iomanip>
@@ -317,8 +318,6 @@ namespace ncarray {
           }
         }
       }
-
-      asmjit::x86::Gp term = cc.new_gp_ptr("term");
 
       // Run the innermost loop body for evaluating the expression
       // ---------------------------------------------------------
