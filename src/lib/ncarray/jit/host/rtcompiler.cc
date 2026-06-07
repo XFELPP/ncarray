@@ -212,6 +212,14 @@ namespace ncarray {
       func->set_arg(0, src_ptrs_reg);
       func->set_arg(1, dest_ptr_reg);
 
+      // For IDX index generator, record the number of element strides
+      std::vector<ssize_t> cum_nelem_strides(ndim);
+      ssize_t current_stride { 1 };
+      for (ssize_t dim = ndim - 1; dim >= 0; --dim) {
+        cum_nelem_strides[dim] = current_stride;
+        current_stride *= final_shape[dim];
+      }
+
       // NOTE: The strategy here is to reduce redundant calculations and dereferencing
       //       in the innermost loop
       //       - Pull out the base pointer for each array view
@@ -462,6 +470,30 @@ namespace ncarray {
         } else if (op == OpCode::LOAD_CONST) {
           asmjit::Reg s_reg = load_constant_x86(cc, scalars[idx], type_id);
           reg_stack.push_back(s_reg);
+        } else if (op == OpCode::IDX) {
+          asmjit::x86::Gp lin_idx_reg { cc.new_gp(asmjit::TypeId::kInt64) };
+          cc.mov(lin_idx_reg, 0);
+          for (ssize_t dim = 0; dim < ndim; ++dim) {
+            ssize_t stride { cum_nelem_strides[dim] };
+            if (stride == 1) {
+              cc.add(lin_idx_reg, loop_regs[dim]);
+            } else {
+              asmjit::x86::Gp term { cc.new_gp(asmjit::TypeId::kInt64) };
+              cc.mov(term, loop_regs[dim]);
+              cc.imul(term, stride);
+              cc.add(lin_idx_reg, term);
+            }
+          }
+          // Convert the IDX ravel index to the working type and push to stack
+          asmjit::Reg v_reg = cc.new_reg<asmjit::Reg>(type_id);
+          if (asmjit::TypeUtils::is_int(type_id)) {
+            cc.mov(v_reg.as<asmjit::x86::Gp>(), lin_idx_reg);
+          } else if (type_id == asmjit::TypeId::kFloat32) {
+            cc.cvtsi2ss(v_reg.as<asmjit::x86::Vec>(), lin_idx_reg);
+          } else if (type_id == asmjit::TypeId::kFloat64) {
+            cc.cvtsi2sd(v_reg.as<asmjit::x86::Vec>(), lin_idx_reg);
+          }
+          reg_stack.push_back(v_reg);
         } else {
           // Perform an operation from the virtual stack
 
@@ -490,9 +522,10 @@ namespace ncarray {
       asmjit::x86::Gp dest_addr = cc.new_gp_ptr("dest_addr");
       cc.mov(dest_addr, dest_ptr_reg);
 
+      // NOTE: These are normal byte strides, unlike the element strides used for IDX above
       std::vector<ssize_t> dest_strides(ndim);
       asmjit::TypeId dest_type_id { dtype_to_typeid(dest_t) };
-      ssize_t current_stride { asmjit::TypeUtils::size_of(dest_type_id) };
+      current_stride = asmjit::TypeUtils::size_of(dest_type_id);
       for (ssize_t dim = ndim - 1; dim >= 0; --dim) {
         dest_strides[dim] = current_stride;
         current_stride *= final_shape[dim];
