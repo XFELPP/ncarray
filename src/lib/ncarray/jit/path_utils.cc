@@ -12,9 +12,12 @@
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#include <sys/mman.h>
 #endif
 
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -125,6 +128,27 @@ namespace ncarray {
     return contents;
   }
 
+  void* read_bin_file_to_exec_mem(fs::path file_path) {
+    std::ifstream in_f(file_path, std::ios::binary | std::ios::ate);
+    std::streamsize size{in_f.tellg()};
+    in_f.seekg(0, std::ios::beg);
+
+    std::vector<char> buffer(size);
+    in_f.read(buffer.data(), size);
+
+    void* exec_mem{nullptr};
+#ifdef _WIN32
+    exec_mem = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+#else
+    exec_mem =
+        mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+#endif
+
+    std::memcpy(exec_mem, buffer.data(), size);
+
+    return exec_mem;
+  }
+
   void write_file(fs::path file_path, const std::string& contents) {
     std::ofstream out_f(file_path, std::ios::binary);
 
@@ -135,5 +159,17 @@ namespace ncarray {
     }
 
     out_f.write(contents.data(), contents.size());
+  }
+
+  void write_file(fs::path file_path, std::size_t k_size, const std::uint8_t* k_data) {
+    std::ofstream out_f(file_path, std::ios::binary);
+
+    if (!out_f) {
+      std::cerr << "Failed to open stream for writing!\n";
+
+      return;
+    }
+
+    out_f.write(reinterpret_cast<const char*>(k_data), k_size);
   }
 } // namespace ncarray

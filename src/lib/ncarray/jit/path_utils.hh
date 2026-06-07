@@ -9,6 +9,8 @@
 #ifndef NCARRAY_JIT_PATH_UTILS_HH
 #define NCARRAY_JIT_PATH_UTILS_HH
 
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -42,12 +44,29 @@ namespace ncarray {
   std::string read_file(fs::path file_path);
 
   /**
+   * Read a binary file at the provided path into executable memory.
+   *
+   * @param file_path The path to read.
+   * @returns contents The data loaded into executable memory.
+   */
+  void* read_bin_file_to_exec_mem(fs::path file_path);
+
+  /**
    * Write a file to the provided path.
    *
    * @param file_path The path to write to.
    * @param contents The file contents to write out.
    */
   void write_file(fs::path file_path, const std::string& contents);
+
+  /**
+   * Write a binary object to the provided path.
+   *
+   * @param file_path The path to write to.
+   * @param k_size Number of bytes to write.
+   * @param k_data Pointer to the start of the data to write.
+   */
+  void write_file(fs::path file_path, std::size_t k_size, const std::uint8_t* k_data);
 } // namespace ncarray
 
 #endif // NCARRAY_JIT_PATH_UTILS_HH

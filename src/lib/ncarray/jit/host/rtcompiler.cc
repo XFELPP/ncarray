@@ -9,7 +9,6 @@
 #include "ncarray/jit/host/rtcompiler.hh"
 
 #include "ncarray/dtype.hh"
-#include "ncarray/jit/host/jit_utils.hh"
 #include "ncarray/jit/jit_utils.hh"
 #include "ncarray/jit/path_utils.hh"
 #include "ncarray/layout.hh"
@@ -179,7 +178,8 @@ namespace ncarray {
                                 expr_is_soarr);
       }
       // Load function from disk
-      ExprKernelFunc k_func = load_kernel_from_disk(cache_path);
+      ExprKernelFunc k_func =
+        reinterpret_cast<ExprKernelFunc>(read_bin_file_to_exec_mem(cache_path));
       m_kernel_cache[k_id] = k_func;
 
       return m_kernel_cache[k_id];
@@ -530,7 +530,7 @@ namespace ncarray {
       asmjit::CodeBuffer& buffer = code.section_by_id(0)->buffer();
       std::size_t k_size { buffer.size() };
       const std::uint8_t* k_data = buffer.data();
-      write_kernel_to_disk(cache_path, k_size, k_data);
+      write_file(cache_path, k_size, k_data);
     }
 
     asmjit::InstId RuntimeCompiler::get_binary_x86_inst(OpCode op, asmjit::TypeId type_id) {
