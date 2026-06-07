@@ -211,6 +211,27 @@ namespace ncarray {
       func->set_arg(0, src_ptrs_reg);
       func->set_arg(1, dest_ptr_reg);
 
+      // NOTE: The strategy here is to reduce redundant calculations and dereferencing
+      //       in the innermost loop
+      //       - Pull out the base pointer for each array view
+      //       - Dereference and propagate offset at each level of the loop as you go
+      // NOTE: Finally, in the innermost loop, x86 supports hardware scaling when
+      //       you address a pointer like [base + index * scale] and scale is 1,2,4,8
+      std::vector<asmjit::x86::Gp> base_ptrs(instrs.size());
+      for (const auto& instr : instrs) {
+        OpCode op { get_op(instr) };
+        if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
+          continue;
+        }
+        int idx { get_index(instr) };
+        base_ptrs[idx] = cc.new_gp_ptr();
+        cc.mov(base_ptrs[idx], asmjit::x86::ptr(src_ptrs_reg, idx * sizeof(void*)));
+      }
+
+      // Hold the pointer for the view up to dimension `dim`: op_ptrs[view_idx][dim]
+      std::vector<std::vector<asmjit::x86::Gp>> op_ptrs(instrs.size(),
+                                                        std::vector<asmjit::x86::Gp>(ndim));
+
       // Setup loop limits and load into registers
       std::vector<asmjit::x86::Gp> loop_limits;
       // Setup loop indexing registers
@@ -234,6 +255,67 @@ namespace ncarray {
         cc.bind(loop_labels[dim]);
         cc.cmp(loop_regs[dim], loop_limits[dim]);
         cc.jge(loop_ends[dim]);
+
+        if (dim < ndim - 1) {
+          for (const auto& instr : instrs) {
+            OpCode op { get_op(instr) };
+            if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
+              continue;
+            }
+            int idx { get_index(instr) };
+            op_ptrs[idx][dim] = cc.new_gp_ptr();
+
+            // Pickup where the last dimension left off (or base_ptr if dim == 0)
+            if (dim == 0) {
+              cc.mov(op_ptrs[idx][dim], base_ptrs[idx]);
+            } else {
+              cc.mov(op_ptrs[idx][dim], op_ptrs[idx][dim - 1]);
+            }
+
+            if (!expr_is_soarr) {
+              auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(layouts[idx]);
+              if (ncl.is_pointer_axis(dim)) {
+                // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
+                asmjit::x86::Gp ptr_idx = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(ptr_idx, loop_regs[dim]);
+                if (ncl.offset(dim) != 0) {
+                  cc.add(ptr_idx, ncl.offset(dim));
+                }
+                cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
+                cc.add(op_ptrs[idx][dim], ptr_idx);
+                // Now dereference
+                cc.mov(op_ptrs[idx][dim], asmjit::x86::ptr(op_ptrs[idx][dim]));
+              } else {
+                // Normal strided traversal (index * stride + offset)
+                asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term, loop_regs[dim]);
+                cc.imul(term, ncl.stride(dim));
+                cc.add(op_ptrs[idx][dim], term);
+                if (ncl.offset(dim) != 0) {
+                  asmjit::x86::Gp term_off = cc.new_gp(asmjit::TypeId::kInt64);
+                  cc.mov(term_off, ncl.offset(dim));
+                  cc.add(op_ptrs[idx][dim], term_off);
+                }
+              }
+            } else {
+              auto& sol = layouts[idx];
+              // For SOArrayPolicy we first do normal strided traversal (index * stride)
+              asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+              cc.mov(term, loop_regs[dim]);
+              cc.imul(term, sol.stride(dim));
+              cc.add(op_ptrs[idx][dim], term);
+              if (sol.suboffset(dim) >= 0) {
+                // Then, if it has a suboffset, dereference and add it
+                cc.mov(op_ptrs[idx][dim], asmjit::x86::ptr(op_ptrs[idx][dim]));
+                if (sol.suboffset(dim) != 0) {
+                  asmjit::x86::Gp term_sub = cc.new_gp(asmjit::TypeId::kInt64);
+                  cc.mov(term_sub, sol.suboffset(dim));
+                  cc.add(op_ptrs[idx][dim], term_sub);
+                }
+              }
+            }
+          }
+        }
       }
 
       asmjit::x86::Gp term = cc.new_gp_ptr("term");
@@ -246,60 +328,135 @@ namespace ncarray {
         OpCode op = get_op(instr);
         int idx = get_index(instr);
         if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
-          // Allocate virtual vector register for the array element
           asmjit::Reg v_reg = cc.new_reg<asmjit::Reg>(type_id);
-
           asmjit::x86::Gp val_addr = cc.new_gp_ptr();
-          cc.mov(val_addr, asmjit::x86::ptr(src_ptrs_reg, idx * sizeof(void*)));
+
+          // Start from the pointer that was propagated with offsets up to ndim - 2
+          // Or, if there's only 1 dimension, just use the base pointer
+          if (ndim > 1) {
+            cc.mov(val_addr, op_ptrs[idx][ndim - 2]);
+          } else {
+            cc.mov(val_addr, base_ptrs[idx]);
+          }
+
+          ssize_t inner_dim { ndim - 1 };
           if (!expr_is_soarr) {
             auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(layouts[idx]);
-            for (ssize_t dim = 0; dim < ndim; ++dim) {
-              if (ncl.is_pointer_axis(dim)) {
-                // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
-                asmjit::x86::Gp ptr_idx = cc.new_gp(asmjit::TypeId::kInt64);
-                cc.mov(ptr_idx, loop_regs[dim]);
-                if (ncl.offset(dim) != 0) {
-                  cc.add(ptr_idx, ncl.offset(dim));
-                }
-                cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
-                cc.add(val_addr, ptr_idx);
-                // Now dereference
-                cc.mov(val_addr, asmjit::x86::ptr(val_addr));
+            if (ncl.is_pointer_axis(inner_dim)) {
+              // For NCOffsetsPolicy for pointer axis dereference and load
+              asmjit::x86::Gp ptr_idx = cc.new_gp(asmjit::TypeId::kInt64);
+              cc.mov(ptr_idx, loop_regs[inner_dim]);
+              if (ncl.offset(inner_dim) != 0) {
+                cc.add(ptr_idx, ncl.offset(inner_dim));
+              }
+              cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
+              cc.add(val_addr, ptr_idx);
+              // Now dereference
+              cc.mov(val_addr, asmjit::x86::ptr(val_addr));
+              cc.emit(get_move_x86_inst(type_id), v_reg, asmjit::x86::ptr(val_addr));
+            } else {
+              // Normal strided traversal, with scaled loading
+              ssize_t stride { ncl.stride(inner_dim) };
+              ssize_t offset { ncl.offset(inner_dim) };
+              if (offset != 0) {
+                asmjit::x86::Gp term_off = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term_off, offset);
+                cc.add(val_addr, term_off);
+              }
+
+              // Use x86 scaled hardware loading
+              int scale_shift { -1 };
+              switch (stride) {
+              case 1: {
+                scale_shift = 0;
+                break;
+              }
+              case 2: {
+                scale_shift = 1;
+                break;
+              }
+              case 4: {
+                scale_shift = 2;
+                break;
+              }
+              case 8: {
+                scale_shift = 3;
+                break;
+              }
+              default: {
+                scale_shift = -1;
+                break;
+              }
+              }
+
+              if (scale_shift >= 0) {
+                cc.emit(get_move_x86_inst(type_id),
+                        v_reg,
+                        asmjit::x86::ptr(val_addr, loop_regs[inner_dim], scale_shift));
               } else {
-                // Normal strided traversal (index * stride + offset)
-                asmjit::x86::Gp term_dim = cc.new_gp(asmjit::TypeId::kInt64);
-                cc.mov(term_dim, loop_regs[dim]);
-                cc.imul(term_dim, ncl.stride(dim));
-                cc.add(val_addr, term_dim);
-                if (ncl.offset(dim) != 0) {
-                  asmjit::x86::Gp term_off = cc.new_gp(asmjit::TypeId::kInt64);
-                  cc.mov(term_off, ncl.offset(dim));
-                  cc.add(val_addr, term_off);
-                }
+                asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term, loop_regs[inner_dim]);
+                cc.imul(term, stride);
+                cc.add(val_addr, term);
+                cc.emit(get_move_x86_inst(type_id), v_reg, asmjit::x86::ptr(val_addr));
               }
             }
           } else {
             auto& sol = layouts[idx];
-            for (ssize_t dim = 0; dim < ndim; ++dim) {
-              // For SOArrayPolicy we first do normal strided traversal (index * stride)
-              asmjit::x86::Gp term_dim = cc.new_gp(asmjit::TypeId::kInt64);
-              cc.mov(term_dim, loop_regs[dim]);
-              cc.imul(term_dim, sol.stride(dim));
-              cc.add(val_addr, term_dim);
-              if (sol.suboffset(dim) >= 0) {
-                // Then, if it has a suboffset, dereference and add it
-                cc.mov(val_addr, asmjit::x86::ptr(val_addr));
-                if (sol.suboffset(dim) != 0) {
-                  asmjit::x86::Gp term_sub = cc.new_gp(asmjit::TypeId::kInt64);
-                  cc.mov(term_sub, sol.suboffset(dim));
-                  cc.add(val_addr, term_sub);
-                }
+            // For SOArrayPolicy we first do normal strided traversal (index * stride)
+            ssize_t stride { sol.stride(inner_dim) };
+            if (sol.suboffset(inner_dim) >= 0) {
+              // Then, if it has a suboffset, dereference and add it
+              asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+              cc.mov(term, loop_regs[inner_dim]);
+              cc.imul(term, stride);
+              cc.add(val_addr, term);
+              cc.mov(val_addr, asmjit::x86::ptr(val_addr));
+              if (sol.suboffset(inner_dim) != 0) {
+                asmjit::x86::Gp term_sub = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term_sub, sol.suboffset(inner_dim));
+                cc.add(val_addr, term_sub);
+              }
+              cc.emit(get_move_x86_inst(type_id), v_reg, asmjit::x86::ptr(val_addr));
+            } else {
+              // Without pointer axis, use x86 scaled hardware loading
+              int scale_shift { -1 };
+              switch (stride) {
+              case 1: {
+                scale_shift = 0;
+                break;
+              }
+              case 2: {
+                scale_shift = 1;
+                break;
+              }
+              case 4: {
+                scale_shift = 2;
+                break;
+              }
+              case 8: {
+                scale_shift = 3;
+                break;
+              }
+              default: {
+                scale_shift = -1;
+                break;
+              }
+              }
+
+              if (scale_shift >= 0) {
+                cc.emit(get_move_x86_inst(type_id),
+                        v_reg,
+                        asmjit::x86::ptr(val_addr, loop_regs[inner_dim], scale_shift));
+              } else {
+                asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term, loop_regs[inner_dim]);
+                cc.imul(term, stride);
+                cc.add(val_addr, term);
+                cc.emit(get_move_x86_inst(type_id), v_reg, asmjit::x86::ptr(val_addr));
               }
             }
           }
-
-          // Setup appropriate load for type
-          cc.emit(get_move_x86_inst(type_id), v_reg, asmjit::x86::ptr(val_addr));
 
           // Push to stack and advance
           reg_stack.push_back(v_reg);
