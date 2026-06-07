@@ -666,4 +666,55 @@ int main(int argc, char* argv[]) {
                         n_cols,
                         npix,
                         npix_rest);
+
+  // ------------------------------------------------------------------------------------
+
+  std::cout << "----------------------------------------------------------" << std::endl
+            << "Testing with non-contiguous data (float32)." << std::endl
+            << "----------------------------------------------------------" << std::endl;
+
+  std::vector<void*> h_vecs(n_panels);
+  for (ssize_t i = 0; i < n_panels; ++i) {
+    int n_panel_elems { static_cast<int>(data.nbytes() / n_panels) };
+    std::uint8_t* ptr = new std::uint8_t[n_panel_elems];
+    h_vecs[i] = ptr;
+  }
+
+  std::vector<ssize_t> strides(3, data.itemsize());
+  strides[1] = shape[2] * strides[2];
+  strides[0] = 1;
+
+  ncarray::NCArrayView data_view(h_vecs.data(),
+                                 shape.size(),
+                                 shape.data(),
+                                 strides.data(),
+                                 ncarray::DType::float32,
+                                 0,
+                                 false);
+
+  data_view = data_view.iota();
+
+  // Only the RuntimeCompiler and VM support this. Need to rewrite a handrolled
+  // example for the non-contiguous case still.
+  test_vm(data_view,
+          res_shape,
+          n_iter,
+          n_panels,
+          n_rows,
+          n_cols,
+          npix,
+          npix_rest);
+
+  test_runtime_compiler(data_view,
+                        res_shape,
+                        n_iter,
+                        n_panels,
+                        n_rows,
+                        n_cols,
+                        npix,
+                        npix_rest);
+
+  for (ssize_t i = 0; i < n_panels; ++i) {
+    delete[] h_vecs[i];
+  }
 }
