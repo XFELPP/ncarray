@@ -9,7 +9,7 @@ package:
 
 source:
   url: https://github.com/XFELPP/ncarray/releases/download/v{{ version }}/ncarray-{{ version }}.tar.gz
-  sha256: 2b9d6efff8ad6e9423434626cf5182d27d03d1d3d0a43f69bb43acf295e35efa
+  sha256: 549c6ef6c985589edd383267344f8d5f805f1df85610fde30cba777c9abbc8a0
 
 build:
   number: 0
