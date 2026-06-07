@@ -242,7 +242,6 @@ namespace ncarray {
       // ---------------------------------------------------------
       std::vector<asmjit::Reg> reg_stack;
       asmjit::TypeId type_id = dtype_to_typeid(work_t);
-      int v_ptr = 0;
       for (const auto& instr : instrs) {
         OpCode op = get_op(instr);
         int idx = get_index(instr);
@@ -250,33 +249,53 @@ namespace ncarray {
           // Allocate virtual vector register for the array element
           asmjit::Reg v_reg = cc.new_reg<asmjit::Reg>(type_id);
 
-          // Get the address (stride and offset calculation hoisted outside this loop)
           asmjit::x86::Gp val_addr = cc.new_gp_ptr();
           cc.mov(val_addr, asmjit::x86::ptr(src_ptrs_reg, idx * sizeof(void*)));
-          asmjit::x86::Gp coord_offset = cc.new_gp(asmjit::TypeId::kInt64);
-          cc.xor_(coord_offset, coord_offset);
-          for (ssize_t dim = 0; dim < ndim; ++dim) {
-            asmjit::x86::Gp term_dim = cc.new_gp(asmjit::TypeId::kInt64);
-            cc.mov(term_dim, loop_regs[dim]);
-            cc.imul(term_dim, layouts[idx].stride(dim));
-            cc.add(coord_offset, term_dim);
-          }
-          cc.add(val_addr, coord_offset);
-
-          // Get the dynamic offset from summation over dimensions
-          ssize_t total_slice_offset { 0 };
-          for (ssize_t dim = 0; dim < ndim; ++dim) {
-            if (!expr_is_soarr) {
-              auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(layouts[idx]);
-              total_slice_offset += ncl.offset(dim);
-            } else {
-              total_slice_offset += layouts[v_ptr].suboffset(dim);
+          if (!expr_is_soarr) {
+            auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(layouts[idx]);
+            for (ssize_t dim = 0; dim < ndim; ++dim) {
+              if (ncl.is_pointer_axis(dim)) {
+                // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
+                asmjit::x86::Gp ptr_idx = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(ptr_idx, loop_regs[dim]);
+                if (ncl.offset(dim) != 0) {
+                  cc.add(ptr_idx, ncl.offset(dim));
+                }
+                cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
+                cc.add(val_addr, ptr_idx);
+                // Now dereference
+                cc.mov(val_addr, asmjit::x86::ptr(val_addr));
+              } else {
+                // Normal strided traversal (index * stride + offset)
+                asmjit::x86::Gp term_dim = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term_dim, loop_regs[dim]);
+                cc.imul(term_dim, ncl.stride(dim));
+                cc.add(val_addr, term_dim);
+                if (ncl.offset(dim) != 0) {
+                  asmjit::x86::Gp term_off = cc.new_gp(asmjit::TypeId::kInt64);
+                  cc.mov(term_off, ncl.offset(dim));
+                  cc.add(val_addr, term_off);
+                }
+              }
             }
-          }
-
-          if (total_slice_offset != 0) {
-            cc.mov(term, total_slice_offset);
-            cc.add(val_addr, term);
+          } else {
+            auto& sol = layouts[idx];
+            for (ssize_t dim = 0; dim < ndim; ++dim) {
+              // For SOArrayPolicy we first do normal strided traversal (index * stride)
+              asmjit::x86::Gp term_dim = cc.new_gp(asmjit::TypeId::kInt64);
+              cc.mov(term_dim, loop_regs[dim]);
+              cc.imul(term_dim, sol.stride(dim));
+              cc.add(val_addr, term_dim);
+              if (sol.suboffset(dim) >= 0) {
+                // Then, if it has a suboffset, dereference and add it
+                cc.mov(val_addr, asmjit::x86::ptr(val_addr));
+                if (sol.suboffset(dim) != 0) {
+                  asmjit::x86::Gp term_sub = cc.new_gp(asmjit::TypeId::kInt64);
+                  cc.mov(term_sub, sol.suboffset(dim));
+                  cc.add(val_addr, term_sub);
+                }
+              }
+            }
           }
 
           // Setup appropriate load for type
@@ -284,7 +303,6 @@ namespace ncarray {
 
           // Push to stack and advance
           reg_stack.push_back(v_reg);
-          v_ptr++;
         } else if (op == OpCode::LOAD_CONST) {
           asmjit::Reg s_reg = load_constant_x86(cc, scalars[idx], type_id);
           reg_stack.push_back(s_reg);
