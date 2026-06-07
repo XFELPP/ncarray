@@ -195,6 +195,15 @@ if build_python_opt
     pybind11_dep = dependency('pybind11', required: true)
 endif
 
+cmake = import('cmake')
+asmjit_opts = cmake.subproject_options()
+asmjit_opts.add_cmake_defines({
+    'ASMJIT_STATIC': true,
+    'ASMJIT_NO_INSTALL': true,
+})
+asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
+asmjit_dep = asmjit_proj.dependency('asmjit')
+
 #### Main Python Setup ####
 ###########################
 
@@ -346,6 +355,29 @@ installed_device_headers = [
 ]
 
 if build_core_opt
+    libncarrayjit = static_library(
+        'ncarrayjit',
+        [
+            'src/lib/ncarray/jit/jit_utils.cc',
+            'src/lib/ncarray/jit/host/jit_utils.cc',
+            'src/lib/ncarray/jit/host/rtcompiler.cc',
+        ],
+        cpp_args: ['-DNCA_BUILD_JIT_API'],
+        dependencies: deps_for_ncarray + [asmjit_dep],
+        include_directories: ncarray_headers,
+        install: true,
+        install_dir: libncarray_install_dir,
+        install_rpath: lib_install_rpath,
+    )
+
+    ncarrayjit_dep = declare_dependency(
+        link_with: [
+            libncarrayjit,
+        ],
+        dependencies: deps_for_ncarray + [asmjit_dep],
+        include_directories: ncarray_headers,
+    )
+
     host_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/host'
 
     # Create the translation units if they don't already exist.
@@ -1045,21 +1077,12 @@ if build_core_opt
             )
         endif # Has CUDA
 
-        cmake = import('cmake')
-        asmjit_opts = cmake.subproject_options()
-        asmjit_opts.add_cmake_defines({
-            'ASMJIT_STATIC': true,
-            'ASMJIT_NO_INSTALL': true,
-        })
-        asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
-        asmjit_dep = asmjit_proj.dependency('asmjit')
-
         pixel_binning_host = executable(
             'benchmark_pixel_binning_host',
             [
                 'examples/benchmark_binning.cc',
             ],
-            dependencies: deps_for_tests + [asmjit_dep],
+            dependencies: deps_for_tests + [asmjit_dep, ncarrayjit_dep],
             install: true,
             include_directories: ncarray_headers,
         )

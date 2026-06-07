@@ -1,4 +1,5 @@
 #include "ncarray/ncarrays.hh"
+#include "ncarray/jit/host/rtcompiler.hh"
 
 #include <asmjit/asmjit.h>
 
@@ -481,6 +482,90 @@ void test_asmjit_opt(ncarray::NCArrayView data,
             << " (Expected: " << expected << ")" << std::endl;
 }
 
+void test_runtime_compiler(ncarray::NCArrayView data,
+                           std::vector<ssize_t>& res_shape,
+                           ssize_t n_iter,
+                           ssize_t n_panels,
+                           ssize_t n_rows,
+                           ssize_t n_cols,
+                           ssize_t npix,
+                           ssize_t npix_rest)
+{
+  std::cout << "\n----------------------------------------------------------" << std::endl;
+  std::cout << "Testing sum of views with RuntimeCompiler JIT Implementation" << std::endl;
+  std::cout << "----------------------------------------------------------" << std::endl;
+
+  ncarray::NCArray res(res_shape, ncarray::DType::float32);
+
+  using sl = ncarray::Slice;
+
+  float scale_factor { 1.0f / (npix * npix_rest * npix_rest) };
+
+  auto build_start = std::chrono::high_resolution_clock::now();
+
+  ncarray::ExprMVNode<ncarray::HostTag> expr;
+  for (ssize_t p = 0; p < npix; ++p) {
+    for (ssize_t r = 0; r < npix_rest; ++r) {
+      for (ssize_t c = 0; c < npix_rest; ++c) {
+        if (p == 0 && r == 0 && c == 0) {
+          expr.build_node(data(sl(p, n_panels, npix), sl(r, n_rows, npix_rest), sl(c, n_cols, npix_rest)));
+        } else {
+          expr = expr +
+            data(sl(p, n_panels, npix), sl(r, n_rows, npix_rest), sl(c, n_cols, npix_rest));
+        }
+      }
+    }
+  }
+  expr = expr * scale_factor;
+
+  DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
+  DType work_dtype { expr.work_dtype };
+  auto kernel =
+    ncarray::host::RuntimeCompiler::instance().get_expr_kernel(res.dtype(),
+                                                               src_dtype,
+                                                               work_dtype,
+                                                               expr.ndim(),
+                                                               expr.shape(),
+                                                               expr.instrs,
+                                                               expr.layouts,
+                                                               expr.scalars,
+                                                               expr.soarray);
+  // Setup input pointers for each view
+  std::size_t num_views { expr.layouts.size() };
+  std::vector<const float*> src_ptrs(num_views);
+  for (int v = 0; v < num_views; ++v) {
+    // Collect the advanced base data pointer for this slice
+    ssize_t p = v / (npix_rest * npix_rest);
+    ssize_t r = (v % (npix_rest * npix_rest)) / npix_rest;
+    ssize_t c = v % npix_rest;
+    auto view = data(sl(p, n_panels, npix), sl(r, n_rows, npix_rest), sl(c, n_cols, npix_rest));
+    src_ptrs[v] = reinterpret_cast<const float*>(view.data());
+  }
+  float* dest_data = reinterpret_cast<float*>(res.data());
+  double total_time { 0.0 };
+  for (ssize_t i = 0; i < n_iter; ++i) {
+    auto start = std::chrono::high_resolution_clock::now();
+    kernel(reinterpret_cast<const void**>(src_ptrs.data()), dest_data);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    if (i > 0)
+      total_time += diff.count();
+  }
+  std::cout << "RuntimeCompiler took: " << (total_time / (n_iter - 1)) * 1e6 << " microseconds"
+            << std::endl;
+  auto first_proxy = res[{0, 0, 0}];
+  float& first_val = first_proxy;
+  auto p_end { static_cast<std::uint64_t>(res_shape[0] - 1) };
+  auto r_end { static_cast<std::uint64_t>(res_shape[1] - 1) };
+  auto c_end { static_cast<std::uint64_t>(res_shape[2] - 1) };
+  auto last_proxy = res[{p_end, r_end, c_end}];
+  float& last_val = last_proxy;
+  float expected { (npix * npix_rest * npix_rest) * scale_factor };
+  std::cout << "Result[0, 0, 0]: " << first_val << " (Expected: " << expected << ")" << std::endl
+            << "Result[" << p_end << ", " << r_end << ", " << c_end << "]: " << last_val
+            << " (Expected: " << expected << ")" << std::endl;
+}
+
 int main(int argc, char* argv[]) {
   int c;
 
@@ -572,43 +657,13 @@ int main(int argc, char* argv[]) {
                   n_cols,
                   npix,
                   npix_rest);
-  // Output is self-contained, and should be fully position independent
-  // Can therefore, probably just dump to disk as a bin
 
-  /*
-   * To store the binary machine code, could use:
-asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
-size_t code_size = buffer.size();
-const uint8_t* code_data = buffer.data();
-
-std::ofstream outfile("kernel.bin", std::ios::binary);
-outfile.write(reinterpret_cast<const char*>(code_data), code_size);
-
-   * To reload something like
-#include <fstream>
-#include <vector>
-#if defined(_WIN32)
-#include <windows.h>
-#else
-#include <sys/mman.h>
-#endif
-BinningKernelFunc load_kernel(const std::string& filepath) {
-
-  std::ifstream infile(filepath, std::ios::binary | std::ios::ate);
-  std::streamsize size = infile.tellg();
-  infile.seekg(0, std::ios::beg);
-  std::vector<char> buffer(size);
-  infile.read(buffer.data(), size);
-
-  void* exec_mem = nullptr;
-#if defined(_WIN32)
-  exec_mem = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-#else
-  exec_mem = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1,
-0); #endif
-
-  std::memcpy(exec_mem, buffer.data(), size);
-  return reinterpret_cast<BinningKernelFunc>(exec_mem);
-}
-   */
+  test_runtime_compiler(data.view(),
+                        res_shape,
+                        n_iter,
+                        n_panels,
+                        n_rows,
+                        n_cols,
+                        npix,
+                        npix_rest);
 }
