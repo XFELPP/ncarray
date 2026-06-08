@@ -82,8 +82,7 @@ namespace ncarray {
        *            or may not be equivalent to dest_t. E.g. a long expression may use
        *            float/int64 while performing intermediate operations, while the
        *            final result of the expression is a comparison returning bool.
-       * @param[in] ndim The number of dimensions of the arrays involved.
-       * @param[in] final_shape The final output shape of the result array.
+       * @param[in] dest_layout The destination/result Layout to write into.
        * @param[in] instrs The instructions (packed index + OpCode) for the expression.
        * @param[in] layouts The layouts of the arrays involved.
        * @param[in] scalars Any scalar constants involved.
@@ -93,8 +92,7 @@ namespace ncarray {
       ExprKernelFunc get_expr_kernel(DType dest_t,
                                      DType src_t,
                                      DType work_t,
-                                     ssize_t ndim,
-                                     const ssize_t* final_shape,
+                                     const SOArrayPolicy& dest_layout,
                                      const std::vector<Instruction>& instrs,
                                      const std::vector<SOArrayPolicy>& layouts,
                                      const std::vector<Scalar>& scalars,
@@ -116,8 +114,7 @@ namespace ncarray {
        *            or may not be equivalent to dest_t. E.g. a long expression may use
        *            float/int64 while performing intermediate operations, while the
        *            final result of the expression is a comparison returning bool.
-       * @param[in] ndim The number of dimensions of the arrays involved.
-       * @param[in] final_shape The final output shape of the result array.
+       * @param[in] dest_layout The destination/result Layout to write into.
        * @param[in] instrs The instructions (packed index + OpCode) for the expression.
        * @param[in] layouts The layouts of the arrays involved.
        * @param[in] scalars Any scalar constants involved.
@@ -127,8 +124,7 @@ namespace ncarray {
                                    DType dest_t,
                                    DType src_t,
                                    DType work_t,
-                                   ssize_t ndim,
-                                   const ssize_t* final_shape,
+                                   const SOArrayPolicy& dest_layout,
                                    const std::vector<Instruction>& instrs,
                                    const std::vector<SOArrayPolicy>& layouts,
                                    const std::vector<Scalar>& scalars,

@@ -56,12 +56,14 @@ namespace ncarray {
         DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
         DType work_dtype { expr.work_dtype };
 
+        const SOArrayPolicy& dest_layout =
+          reinterpret_cast<const SOArrayPolicy&>(result);
+
         auto kernel =
           host::RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
                                                             src_dtype,
                                                             work_dtype,
-                                                            expr.ndim(),
-                                                            expr.shape(),
+                                                            dest_layout,
                                                             expr.instrs,
                                                             expr.layouts,
                                                             expr.scalars,

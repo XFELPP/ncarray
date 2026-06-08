@@ -331,14 +331,17 @@ installed_expression_stencil_headers = [
     'src/lib/ncarray/expression/stencil.hh',
 ]
 
-installed_jit_headers = [
+installed_host_jit_headers = [
     'src/lib/ncarray/jit/host/rtcompiler.hh',
+]
+
+installed_common_jit_headers = [
     'src/lib/ncarray/jit/jit_utils.hh',
     'src/lib/ncarray/jit/path_utils.hh',
 ]
 
 if nca_has_cuda
-    installed_jit_headers += [
+    installed_device_jit_headers = [
         'src/lib/ncarray/jit/device/rtcompiler.hh',
     ]
 endif # nca_has_cuda
@@ -485,6 +488,16 @@ if build_core_opt
             installed_expression_headers,
             install_dir: header_install_dir / 'ncarray/expression',
         )
+
+        install_headers(
+            installed_host_jit_headers,
+            install_dir: header_install_dir / 'ncarray/jit/host',
+        )
+
+        install_headers(
+            installed_common_jit_headers,
+            install_dir: header_install_dir / 'ncarray/jit',
+        )
     endif # not nca_as_wheel_opt
 
     if nca_has_cuda
@@ -500,8 +513,8 @@ if build_core_opt
             )
 
             install_headers(
-                installed_jit_headers,
-                install_dir: header_install_dir / 'ncarray/jit',
+                installed_device_jit_headers,
+                install_dir: header_install_dir / 'ncarray/jit/device',
             )
         endif # not nca_as_wheel_opt
 
@@ -654,6 +667,16 @@ if build_python_opt
             pure: false,
             subdir: 'ncarray/include/ncarray/expression',
         )
+        py3.install_sources(
+            installed_host_jit_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/jit/host',
+        )
+        py3.install_sources(
+            installed_common_jit_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/jit',
+        )
 
         if nca_has_cuda
             # Core GPU/CUDA headers
@@ -670,9 +693,9 @@ if build_python_opt
             )
 
             py3.install_sources(
-                installed_jit_headers,
+                installed_device_jit_headers,
                 pure: false,
-                subdir: 'ncarray/include/ncarray/jit',
+                subdir: 'ncarray/include/ncarray/jit/device',
             )
 
             #### Install CCCL Headers for JIT ####

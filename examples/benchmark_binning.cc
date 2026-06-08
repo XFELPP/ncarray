@@ -520,12 +520,14 @@ void test_runtime_compiler(ncarray::NCArrayView data,
 
   DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
   DType work_dtype { expr.work_dtype };
+
+  const ncarray::SOArrayPolicy& dest_layout =
+    reinterpret_cast<const ncarray::SOArrayPolicy&>(res);
   auto kernel =
     ncarray::host::RuntimeCompiler::instance().get_expr_kernel(res.dtype(),
                                                                src_dtype,
                                                                work_dtype,
-                                                               expr.ndim(),
-                                                               expr.shape(),
+                                                               dest_layout,
                                                                expr.instrs,
                                                                expr.layouts,
                                                                expr.scalars,

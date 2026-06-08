@@ -38,56 +38,68 @@ namespace ncarray {
     std::string compute_kernel_hash(DType dest_t,
                                     DType src_t,
                                     DType work_t,
-                                    ssize_t ndim,
-                                    const ssize_t* final_shape,
+                                    const SOArrayPolicy& dest_layout,
                                     const std::vector<Instruction>& instrs,
                                     const std::vector<SOArrayPolicy>& layouts,
                                     const std::vector<Scalar>& scalars,
                                     bool expr_is_soarr) {
-    std::stringstream ss(std::ios::binary | std::ios::out | std::ios::in);
-    // Serialize all the data types and array dimensions
-    ss.write(reinterpret_cast<const char*>(&dest_t), sizeof(dest_t));
-    ss.write(reinterpret_cast<const char*>(&src_t), sizeof(src_t));
-    ss.write(reinterpret_cast<const char*>(&work_t), sizeof(work_t));
-    ss.write(reinterpret_cast<const char*>(&ndim), sizeof(ndim));
-    ss.write(reinterpret_cast<const char*>(&expr_is_soarr), sizeof(expr_is_soarr));
-    // Serialize the shape
-    ss.write(reinterpret_cast<const char*>(final_shape), ndim * sizeof(ssize_t));
-    // Serialize the VM operations/instructions
-    std::size_t n_instrs = instrs.size();
-    ss.write(reinterpret_cast<const char*>(&n_instrs), sizeof(n_instrs));
-    ss.write(reinterpret_cast<const char*>(instrs.data()), n_instrs * sizeof(Instruction));
-    // Serialize the layout
-    size_t n_layouts = layouts.size();
-    ss.write(reinterpret_cast<const char*>(&n_layouts), sizeof(n_layouts));
-    for (const auto& l : layouts) {
+      ssize_t ndim { dest_layout.ndim() };
+      const ssize_t* final_shape { dest_layout.shape() };
+      std::stringstream ss(std::ios::binary | std::ios::out | std::ios::in);
+      // Serialize all the data types and array dimensions
+      ss.write(reinterpret_cast<const char*>(&dest_t), sizeof(dest_t));
+      ss.write(reinterpret_cast<const char*>(&src_t), sizeof(src_t));
+      ss.write(reinterpret_cast<const char*>(&work_t), sizeof(work_t));
+      ss.write(reinterpret_cast<const char*>(&ndim), sizeof(ndim));
+      ss.write(reinterpret_cast<const char*>(&expr_is_soarr), sizeof(expr_is_soarr));
+      // Serialize the shape, strides, pointer info of the result/destination
       for (ssize_t d = 0; d < ndim; ++d) {
-        ssize_t stride = l.stride(d);
+        ssize_t stride { dest_layout.stride(d) };
         ssize_t offset { 0 };
         if (expr_is_soarr) {
-          offset = l.suboffset(d);
+          offset = dest_layout.suboffset(d);
         } else {
-          auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(l);
-          offset = ncl.offset(d);
+          auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(dest_layout);
         }
         ss.write(reinterpret_cast<const char*>(&stride), sizeof(stride));
         ss.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
       }
+      ss.write(reinterpret_cast<const char*>(final_shape), ndim * sizeof(ssize_t));
+      // Serialize the VM operations/instructions
+      std::size_t n_instrs = instrs.size();
+      ss.write(reinterpret_cast<const char*>(&n_instrs), sizeof(n_instrs));
+      ss.write(reinterpret_cast<const char*>(instrs.data()), n_instrs * sizeof(Instruction));
+      // Serialize the layout
+      size_t n_layouts = layouts.size();
+      ss.write(reinterpret_cast<const char*>(&n_layouts), sizeof(n_layouts));
+      for (const auto& l : layouts) {
+        for (ssize_t d = 0; d < ndim; ++d) {
+          ssize_t stride = l.stride(d);
+          ssize_t offset { 0 };
+          if (expr_is_soarr) {
+            offset = l.suboffset(d);
+          } else {
+            auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(l);
+            offset = ncl.offset(d);
+          }
+          ss.write(reinterpret_cast<const char*>(&stride), sizeof(stride));
+          ss.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
+        }
+      }
+      // Serialize the constant types
+      std::size_t n_scalars = scalars.size();
+      ss.write(reinterpret_cast<const char*>(&n_scalars), sizeof(n_scalars));
+      for (const auto& s : scalars) {
+        std::size_t variant_idx = s.index();
+        ss.write(reinterpret_cast<const char*>(&variant_idx), sizeof(variant_idx));
+        auto serialize_op = [&](auto&& val) {
+          ss.write(reinterpret_cast<const char*>(&val), sizeof(val));
+        };
+        std::visit(serialize_op, s);
+      }
+      // Return the hash
+      return hash_to_hex(ss.str());
     }
-    // Serialize the constant types
-    std::size_t n_scalars = scalars.size();
-    ss.write(reinterpret_cast<const char*>(&n_scalars), sizeof(n_scalars));
-    for (const auto& s : scalars) {
-      std::size_t variant_idx = s.index();
-      ss.write(reinterpret_cast<const char*>(&variant_idx), sizeof(variant_idx));
-      auto serialize_op = [&](auto&& val) {
-        ss.write(reinterpret_cast<const char*>(&val), sizeof(val));
-      };
-      std::visit(serialize_op, s);
-    }
-    // Return the hash
-    return hash_to_hex(ss.str());
-  }
 
     RuntimeCompiler::RuntimeCompiler() {}
 
@@ -142,8 +154,7 @@ namespace ncarray {
     ExprKernelFunc RuntimeCompiler::get_expr_kernel(DType dest_t,
                                                     DType src_t,
                                                     DType work_t,
-                                                    ssize_t ndim,
-                                                    const ssize_t* final_shape,
+                                                    const SOArrayPolicy& dest_layout,
                                                     const std::vector<Instruction>& instrs,
                                                     const std::vector<SOArrayPolicy>& layouts,
                                                     const std::vector<Scalar>& scalars,
@@ -151,8 +162,7 @@ namespace ncarray {
       std::string k_id = compute_kernel_hash(dest_t,
                                              src_t,
                                              work_t,
-                                             ndim,
-                                             final_shape,
+                                             dest_layout,
                                              instrs,
                                              layouts,
                                              scalars,
@@ -170,8 +180,7 @@ namespace ncarray {
                                 dest_t,
                                 src_t,
                                 work_t,
-                                ndim,
-                                final_shape,
+                                dest_layout,
                                 instrs,
                                 layouts,
                                 scalars,
@@ -189,8 +198,7 @@ namespace ncarray {
                                                   DType dest_t,
                                                   DType src_t,
                                                   DType work_t,
-                                                  ssize_t ndim,
-                                                  const ssize_t* final_shape,
+                                                  const SOArrayPolicy& dest_layout,
                                                   const std::vector<Instruction>& instrs,
                                                   const std::vector<SOArrayPolicy>& layouts,
                                                   const std::vector<Scalar>& scalars,
@@ -211,6 +219,9 @@ namespace ncarray {
 
       func->set_arg(0, src_ptrs_reg);
       func->set_arg(1, dest_ptr_reg);
+
+      ssize_t ndim { dest_layout.ndim() };
+      const ssize_t* final_shape { dest_layout.shape() };
 
       // For IDX index generator, record the number of element strides
       std::vector<ssize_t> cum_nelem_strides(ndim);
@@ -241,6 +252,9 @@ namespace ncarray {
       std::vector<std::vector<asmjit::x86::Gp>> op_ptrs(instrs.size(),
                                                         std::vector<asmjit::x86::Gp>(ndim));
 
+      // Likewise, track the destination pointer accumulation
+      std::vector<asmjit::x86::Gp> dest_ptrs(ndim);
+
       // Setup loop limits and load into registers
       std::vector<asmjit::x86::Gp> loop_limits;
       // Setup loop indexing registers
@@ -266,6 +280,57 @@ namespace ncarray {
         cc.jge(loop_ends[dim]);
 
         if (dim < ndim - 1) {
+          // Propagate the destination pointer offset/strides etc.
+          // Pickup where the last dimension left off (or base_ptr if dim == 0)
+          dest_ptrs[dim] = cc.new_gp_ptr();
+          if (dim == 0) {
+            cc.mov(dest_ptrs[dim], dest_ptr_reg);
+          } else {
+            cc.mov(dest_ptrs[dim], dest_ptrs[dim - 1]);
+          }
+
+          if (!expr_is_soarr) {
+            auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(dest_layout);
+            if (ncl.is_pointer_axis(dim)) {
+              // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
+              asmjit::x86::Gp ptr_idx { cc.new_gp(asmjit::TypeId::kInt64) };
+              cc.mov(ptr_idx, loop_regs[dim]);
+              if (ncl.offset(dim) != 0) {
+                cc.add(ptr_idx, ncl.offset(dim));
+              }
+              cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
+              cc.add(dest_ptrs[dim], ptr_idx);
+              // Now dereference
+              cc.mov(dest_ptrs[dim], asmjit::x86::ptr(dest_ptrs[dim]));
+            } else {
+              // Normal strided traversal (index * stride + offset)
+              asmjit::x86::Gp term { cc.new_gp(asmjit::TypeId::kInt64) };
+              cc.mov(term, loop_regs[dim]);
+              cc.imul(term, ncl.stride(dim));
+              cc.add(dest_ptrs[dim], term);
+              if (ncl.offset(dim) != 0) {
+                asmjit::x86::Gp term_off { cc.new_gp(asmjit::TypeId::kInt64) };
+                cc.mov(term_off, ncl.offset(dim));
+                cc.add(dest_ptrs[dim], term_off);
+              }
+            }
+          } else {
+            // For SOArrayPolicy we first do normal strided traversal (index * stride)
+            asmjit::x86::Gp term { cc.new_gp(asmjit::TypeId::kInt64) };
+            cc.mov(term, loop_regs[dim]);
+            cc.imul(term, dest_layout.stride(dim));
+            cc.add(dest_ptrs[dim], term);
+            if (dest_layout.suboffset(dim) >= 0) {
+              // Then, if it has a suboffset, dereference and add it
+              cc.mov(dest_ptrs[dim], asmjit::x86::ptr(dest_ptrs[dim]));
+              if (dest_layout.suboffset(dim) != 0) {
+                asmjit::x86::Gp term_sub = cc.new_gp(asmjit::TypeId::kInt64);
+                cc.mov(term_sub, dest_layout.suboffset(dim));
+                cc.add(dest_ptrs[dim], term_sub);
+              }
+            }
+          }
+
           for (const auto& instr : instrs) {
             OpCode op { get_op(instr) };
             if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
@@ -520,29 +585,138 @@ namespace ncarray {
 
       // Resolve the location for storing the result in the destination
       asmjit::x86::Gp dest_addr = cc.new_gp_ptr("dest_addr");
-      cc.mov(dest_addr, dest_ptr_reg);
+      if (ndim > 1) {
+        cc.mov(dest_addr, dest_ptrs[ndim - 2]);
+      } else {
+        cc.mov(dest_addr, dest_ptr_reg);
+      }
 
-      // NOTE: These are normal byte strides, unlike the element strides used for IDX above
-      std::vector<ssize_t> dest_strides(ndim);
+      ssize_t inner_dim { ndim - 1 };
       asmjit::TypeId dest_type_id { dtype_to_typeid(dest_t) };
-      current_stride = asmjit::TypeUtils::size_of(dest_type_id);
-      for (ssize_t dim = ndim - 1; dim >= 0; --dim) {
-        dest_strides[dim] = current_stride;
-        current_stride *= final_shape[dim];
-      }
+      if (!expr_is_soarr) {
+        auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(dest_layout);
+        if (ncl.is_pointer_axis(inner_dim)) {
+          // For NCOffsetsPolicy for pointer axis dereference and load
+          asmjit::x86::Gp ptr_idx = cc.new_gp(asmjit::TypeId::kInt64);
+          cc.mov(ptr_idx, loop_regs[inner_dim]);
+          if (ncl.offset(inner_dim) != 0) {
+            cc.add(ptr_idx, ncl.offset(inner_dim));
+          }
+          cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
+          cc.add(dest_addr, ptr_idx);
+          // Now dereference
+          cc.mov(dest_addr, asmjit::x86::ptr(dest_addr));
+          cc.emit(get_move_x86_inst(dest_type_id),
+                  asmjit::x86::ptr(dest_addr),
+                  final_res);
+        } else {
+          // Normal strided traversal, with scaled loading
+          ssize_t stride { ncl.stride(inner_dim) };
+          ssize_t offset { ncl.offset(inner_dim) };
+          if (offset != 0) {
+            asmjit::x86::Gp term_off = cc.new_gp(asmjit::TypeId::kInt64);
+            cc.mov(term_off, offset);
+            cc.add(dest_addr, term_off);
+          }
 
-      asmjit::x86::Gp dest_offset = cc.new_gp(asmjit::TypeId::kInt64);
-      cc.xor_(dest_offset, dest_offset);
-      for (ssize_t dim = 0; dim < ndim; ++dim) {
-        asmjit::x86::Gp term_dim = cc.new_gp(asmjit::TypeId::kInt64);
-        cc.mov(term_dim, loop_regs[dim]);
-        cc.imul(term_dim, dest_strides[dim]);
-        cc.add(dest_offset, term_dim);
-      }
-      cc.add(dest_addr, dest_offset);
+          // Use x86 scaled hardware loading
+          int scale_shift { -1 };
+          switch (stride) {
+          case 1: {
+            scale_shift = 0;
+            break;
+          }
+          case 2: {
+            scale_shift = 1;
+            break;
+          }
+          case 4: {
+            scale_shift = 2;
+            break;
+          }
+          case 8: {
+            scale_shift = 3;
+            break;
+          }
+          default: {
+            scale_shift = -1;
+            break;
+          }
+          }
 
-      // Store the result
-      cc.emit(get_move_x86_inst(dest_type_id), asmjit::x86::ptr(dest_addr), final_res);
+          if (scale_shift >= 0) {
+            cc.emit(get_move_x86_inst(dest_type_id),
+                    asmjit::x86::ptr(dest_addr, loop_regs[inner_dim], scale_shift),
+                    final_res);
+          } else {
+            asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+            cc.mov(term, loop_regs[inner_dim]);
+            cc.imul(term, stride);
+            cc.add(dest_addr, term);
+            cc.emit(get_move_x86_inst(dest_type_id),
+                    asmjit::x86::ptr(dest_addr),
+                    final_res);
+          }
+        }
+      } else {
+        // For SOArrayPolicy we first do normal strided traversal (index * stride)
+        ssize_t stride { dest_layout.stride(inner_dim) };
+        if (dest_layout.suboffset(inner_dim) >= 0) {
+          // Then, if it has a suboffset, dereference and add it
+          asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+          cc.mov(term, loop_regs[inner_dim]);
+          cc.imul(term, stride);
+          cc.add(dest_addr, term);
+          cc.mov(dest_addr, asmjit::x86::ptr(dest_addr));
+          if (dest_layout.suboffset(inner_dim) != 0) {
+            asmjit::x86::Gp term_sub = cc.new_gp(asmjit::TypeId::kInt64);
+            cc.mov(term_sub, dest_layout.suboffset(inner_dim));
+            cc.add(dest_addr, term_sub);
+          }
+          cc.emit(get_move_x86_inst(dest_type_id),
+                  asmjit::x86::ptr(dest_addr),
+                  final_res);
+        } else {
+          // Without pointer axis, use x86 scaled hardware loading
+          int scale_shift { -1 };
+          switch (stride) {
+          case 1: {
+            scale_shift = 0;
+            break;
+          }
+          case 2: {
+            scale_shift = 1;
+            break;
+          }
+          case 4: {
+            scale_shift = 2;
+            break;
+          }
+          case 8: {
+            scale_shift = 3;
+            break;
+          }
+          default: {
+            scale_shift = -1;
+            break;
+          }
+          }
+
+          if (scale_shift >= 0) {
+            cc.emit(get_move_x86_inst(dest_type_id),
+                    asmjit::x86::ptr(dest_addr, loop_regs[inner_dim], scale_shift),
+                    final_res);
+          } else {
+            asmjit::x86::Gp term = cc.new_gp(asmjit::TypeId::kInt64);
+            cc.mov(term, loop_regs[inner_dim]);
+            cc.imul(term, stride);
+            cc.add(dest_addr, term);
+            cc.emit(get_move_x86_inst(dest_type_id),
+                    asmjit::x86::ptr(dest_addr),
+                    final_res);
+          }
+        }
+      }
 
       // ---------------------------------------------------------
       // End inner loop body
