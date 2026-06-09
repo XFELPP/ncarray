@@ -147,6 +147,23 @@ namespace ncarray {
       case DType::float128: {
         return asmjit::TypeId::kFloat80;
       }
+      // asmjit has packed SIMD types for SSE/AVX packed instructions
+      case DType::complex64:
+      case DType::vfloat2: {
+        return asmjit::TypeId::kFloat32x2; // xmm (lower)
+      }
+      case DType::vfloat3: // No native 3 float types, use the 4 version and ignore 4th channel
+      case DType::vfloat4: {
+        return asmjit::TypeId::kFloat32x4; // xmm (all)
+      }
+      case DType::complex128:
+      case DType::vdouble2: {
+        return asmjit::TypeId::kFloat64x2; // xmm
+      }
+      case DType::vdouble3:
+      case DType::vdouble4: {
+        return asmjit::TypeId::kFloat64x4; // ymm
+      }
       default: {
         return asmjit::TypeId::kVoid;
       }

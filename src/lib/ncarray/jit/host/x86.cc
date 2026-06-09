@@ -95,13 +95,23 @@ namespace ncarray {
 
     asmjit::InstId get_binary_arithmetic_inst(OpCode op, asmjit::TypeId type_id) {
       bool is_double { (type_id == asmjit::TypeId::kFloat64) };
+      bool is_double_vec {
+        (type_id == asmjit::TypeId::kFloat64x2 || type_id == asmjit::TypeId::kFloat64x4)
+      };
       bool is_float { (type_id == asmjit::TypeId::kFloat32) };
+      bool is_float_vec {
+        (type_id == asmjit::TypeId::kFloat32x2 || type_id == asmjit::TypeId::kFloat32x4)
+      };
       switch (op) {
       case OpCode::ADD: {
         if (is_double) {
           return asmjit::x86::Inst::kIdAddsd;
+        } else if (is_double_vec) {
+          return asmjit::x86::Inst::kIdAddpd;
         } else if (is_float) {
           return asmjit::x86::Inst::kIdAddss;
+        } else if (is_float_vec) {
+          return asmjit::x86::Inst::kIdAddps;
         } else {
           return asmjit::x86::Inst::kIdAdd;
         }
@@ -109,26 +119,40 @@ namespace ncarray {
       case OpCode::SUB: {
         if (is_double) {
           return asmjit::x86::Inst::kIdSubsd;
+        } else if (is_double_vec) {
+          return asmjit::x86::Inst::kIdSubpd;
         } else if (is_float) {
           return asmjit::x86::Inst::kIdSubss;
+        } else if (is_float_vec) {
+          return asmjit::x86::Inst::kIdSubps;
         } else {
           return asmjit::x86::Inst::kIdSub;
         }
       }
       case OpCode::MUL: {
+        // NOTE: Vec ops NOT appropriate for complex numbers!
         if (is_double) {
           return asmjit::x86::Inst::kIdMulsd;
+        } else if (is_double_vec) {
+          return asmjit::x86::Inst::kIdMulpd;
         } else if (is_float) {
           return asmjit::x86::Inst::kIdMulss;
+        } else if (is_float_vec) {
+          return asmjit::x86::Inst::kIdMulps;
         } else {
           return asmjit::x86::Inst::kIdImul; // Signed integer multiplication
         }
       }
       case OpCode::DIV: {
+        // NOTE: Vec ops NOT appropriate for complex numbers!
         if (is_double) {
           return asmjit::x86::Inst::kIdDivsd;
+        } else if (is_double_vec) {
+          return asmjit::x86::Inst::kIdDivpd;
         } else if (is_float) {
           return asmjit::x86::Inst::kIdDivss;
+        } else if (is_float_vec) {
+          return asmjit::x86::Inst::kIdDivps;
         } else {
           return asmjit::x86::Inst::kIdIdiv;
         }
@@ -551,6 +575,14 @@ namespace ncarray {
         return asmjit::x86::Inst::kIdMovss;
       } else if (type_id == asmjit::TypeId::kFloat64) {
         return asmjit::x86::Inst::kIdMovsd;
+      } else if (type_id == asmjit::TypeId::kFloat32x2) {
+        return asmjit::x86::Inst::kIdMovq;
+      } else if (type_id == asmjit::TypeId::kFloat32x4) {
+        return asmjit::x86::Inst::kIdMovups;
+      } else if (type_id == asmjit::TypeId::kFloat64x2) {
+        return asmjit::x86::Inst::kIdMovupd;
+      } else if (type_id == asmjit::TypeId::kFloat64x4) {
+        return asmjit::x86::Inst::kIdVmovupd;
       }
       return asmjit::BaseInst::kIdNone;
     }
