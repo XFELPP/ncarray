@@ -29,6 +29,70 @@ typedef SSIZE_T ssize_t;
 
 namespace ncarray {
   namespace host::x86 {
+    void unary_operation(asmjit::x86::Compiler& cc,
+                         OpCode op,
+                         asmjit::TypeId type_id,
+                         asmjit::Reg& operand,
+                         asmjit::Reg& res) {
+      switch (op) {
+      case OpCode::NEG: {
+        if (asmjit::TypeUtils::is_int(type_id)) {
+          cc.mov(res.as<asmjit::x86::Gp>(), operand.as<asmjit::x86::Gp>());
+          cc.neg(res.as<asmjit::x86::Gp>());
+        } else {
+          asmjit::x86::Vec op_vec { operand.as<asmjit::x86::Vec>() };
+          asmjit::x86::Vec res_vec { res.as<asmjit::x86::Vec>() };
+
+          if (type_id == asmjit::TypeId::kFloat32) {
+            // Create mask for bit 31 (sign bit)
+            asmjit::x86::Gp tmp { cc.new_gp32() };
+            cc.mov(tmp, 0x80000000u);
+
+            asmjit::x86::Vec mask { cc.new_xmm_ss() };
+            cc.movd(mask, tmp);
+
+            // Negate with XOR
+            cc.vxorps(res_vec, op_vec, mask);
+          } else {
+            // Create mask for bit 63 (sign bit)
+            asmjit::x86::Gp tmp { cc.new_gp64() };
+            cc.mov(tmp, 0x8000000000000000uLL);
+
+            asmjit::x86::Vec mask { cc.new_xmm_sd() };
+            cc.movd(mask, tmp);
+
+            // Negate with XOR
+            cc.vxorps(res_vec, op_vec, mask);
+          }
+        }
+        break;
+      }
+      case OpCode::INC: {
+        if (asmjit::TypeUtils::is_int(type_id)) {
+          cc.mov(res.as<asmjit::x86::Gp>(), operand.as<asmjit::x86::Gp>());
+          cc.inc(res.as<asmjit::x86::Gp>());
+        } else {
+          asmjit::Reg one { load_constant(cc, Scalar(1.0), type_id) };
+          cc.emit(x86::get_move_inst(type_id), res, operand);                       // res = operand
+          cc.emit(x86::get_binary_arithmetic_inst(OpCode::ADD, type_id), res, one); // res = res + 1
+        }
+        break;
+      }
+      case OpCode::DEC: {
+        if (asmjit::TypeUtils::is_int(type_id)) {
+          cc.mov(res.as<asmjit::x86::Gp>(), operand.as<asmjit::x86::Gp>());
+          cc.dec(res.as<asmjit::x86::Gp>());
+        } else {
+          asmjit::Reg one { load_constant(cc, Scalar(1.0), type_id) };
+          cc.emit(x86::get_move_inst(type_id), res, operand);                       // res = operand
+          cc.emit(x86::get_binary_arithmetic_inst(OpCode::SUB, type_id), res, one); // res = res - 1
+        }
+        break;
+      }
+      default: break;
+      }
+    }
+
     asmjit::InstId get_binary_arithmetic_inst(OpCode op, asmjit::TypeId type_id) {
       bool is_double { (type_id == asmjit::TypeId::kFloat64) };
       bool is_float { (type_id == asmjit::TypeId::kFloat32) };
@@ -243,6 +307,7 @@ namespace ncarray {
           }
           break;
         }
+        default: break;
         }
       } else {
         asmjit::x86::Vec left_vec { left.as<asmjit::x86::Vec>() };
@@ -277,6 +342,7 @@ namespace ncarray {
           imm = asmjit::x86::VCmpImm::kGE_OQ;
           break;
         }
+        default: break;
         }
 
         if (type_id == asmjit::TypeId::kFloat32) {

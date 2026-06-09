@@ -414,9 +414,27 @@ namespace ncarray {
             x86::cast_register(cc, lin_idx_reg.as<asmjit::Reg>(), asmjit::TypeId::kInt64, type_id)
           };
           reg_stack.push_back(v_reg);
-        } else {
-          // Perform an operation from the virtual stack
+        } else if (static_cast<int>(op) < static_cast<int>(OpCode::ADD)) {
+          // NOTE: OpCodes are ordered, so comparisons of value work.
+          //       - First are loads
+          //       - Unary Ops
+          //       - Arithemtic (Binary)
+          //       - Comparisons (Binary)
+          //       - Logical (Binary)
 
+          // Unary Operations
+          // -----------------
+          // Get the operand
+          asmjit::Reg operand { reg_stack.back() };
+          reg_stack.pop_back();
+
+          // Allocate new register for result and perform operation
+          asmjit::Reg res { cc.new_reg<asmjit::Reg>(type_id) };
+          x86::unary_operation(cc, op, type_id, operand, res);
+
+          // Push result back onto stack
+          reg_stack.push_back(res);
+        } else {
           // Binary operations
           // -----------------
           // Get left and right operands
@@ -429,12 +447,6 @@ namespace ncarray {
           // Allocate a new virtual register for the result of the operation
           asmjit::Reg res { cc.new_reg<asmjit::Reg>(type_id) };
 
-          // NOTE: OpCodes are ordered, so comparisons of value work.
-          //       - First are loads
-          //       - Unary Ops
-          //       - Arithemtic (Binary)
-          //       - Comparisons (Binary)
-          //       - Logical (Binary)
           if (static_cast<int>(op) < static_cast<int>(OpCode::EQ)) {
             // Arithmetic
             if (asmjit::TypeUtils::is_int(type_id) && (op == OpCode::DIV || op == OpCode::MOD)) {

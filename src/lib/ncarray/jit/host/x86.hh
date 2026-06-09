@@ -36,6 +36,25 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
   namespace host::x86 {
     /**
+     * Determine the appropriate x86 instruction for the unary operation.
+     *
+     * This function will incorporate the correct x86 instruction to perform the unary
+     * operation considering signed/unsignededness, width, and floating-point/integer
+     * type of the operand.
+     *
+     * @param[in] cc The compiler building the function.
+     * @param[in] op The OpCode for the unary operation.
+     * @param[in] type_id The asmjit type being operated on (kUInt8, kFloat32, etc.).
+     * @param[in] operand The register for the unary operand.
+     * @param[in] res The register for the result.
+     */
+    NCA_JIT_API void unary_operation(asmjit::x86::Compiler& cc,
+                                     OpCode op,
+                                     asmjit::TypeId type_id,
+                                     asmjit::Reg& operand,
+                                     asmjit::Reg& res);
+
+    /**
      * Determine the appropriate x86 arithmetic instruction given the operation and working type.
      *
      * This function will provide the correct instruction to emit given the type under
