@@ -408,15 +408,11 @@ namespace ncarray {
               cc.add(lin_idx_reg, term);
             }
           }
+
           // Convert the IDX ravel index to the working type and push to stack
-          asmjit::Reg v_reg { cc.new_reg<asmjit::Reg>(type_id) };
-          if (asmjit::TypeUtils::is_int(type_id)) {
-            cc.mov(v_reg.as<asmjit::x86::Gp>(), lin_idx_reg);
-          } else if (type_id == asmjit::TypeId::kFloat32) {
-            cc.cvtsi2ss(v_reg.as<asmjit::x86::Vec>(), lin_idx_reg);
-          } else if (type_id == asmjit::TypeId::kFloat64) {
-            cc.cvtsi2sd(v_reg.as<asmjit::x86::Vec>(), lin_idx_reg);
-          }
+          asmjit::Reg v_reg {
+            x86::cast_register(cc, lin_idx_reg.as<asmjit::Reg>(), asmjit::TypeId::kInt64, type_id)
+          };
           reg_stack.push_back(v_reg);
         } else {
           // Perform an operation from the virtual stack
