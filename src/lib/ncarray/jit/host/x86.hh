@@ -36,7 +36,7 @@ typedef SSIZE_T ssize_t;
 namespace ncarray {
   namespace host::x86 {
     /**
-     * Determine the appropriate x86 binary instruction given the operation and working type.
+     * Determine the appropriate x86 arithmetic instruction given the operation and working type.
      *
      * This function will provide the correct instruction to emit given the type under
      * consideration. This accounts for signed/unsigned, width, and floating-point/integer
@@ -44,9 +44,31 @@ namespace ncarray {
      *
      * @param[in] op The OpCode to emit an instruction for (ADD, SUB, etc.)
      * @param[in] type_id The asmjit type being operated on (kUInt8, kFloat32, etc.).
-     * @returns instr The correct instruction to incorporate into the function.
+     * @returns instr The correct arithmetic instruction to incorporate into the function.
      */
-    NCA_JIT_API asmjit::InstId get_binary_inst(OpCode op, asmjit::TypeId type_id);
+    NCA_JIT_API asmjit::InstId get_binary_arithmetic_inst(OpCode op,
+                                                          asmjit::TypeId type_id);
+
+    /**
+     * Perform the appropriate binary comparison.
+     *
+     * This function will emit the correct set of instructions accounting for signed or
+     * unsigned values, different widths, and integer/floating-point differences.
+     *
+     * @param[in] cc The compiler building the function.
+     * @param[in] op The OpCode to emit an instruction for (ADD, SUB, etc.)
+     * @param[in] type_id The asmjit type being operated on (kUInt8, kFloat32, etc.).
+     * @param[in] left The register for the left-side operand.
+     * @param[in] right The register for the right-side operand.
+     * @param[in] res The register for the result.
+     * @returns instr The correct arithmetic instruction to incorporate into the function.
+     */
+    NCA_JIT_API void binary_compare(asmjit::x86::Compiler& cc,
+                                    OpCode op,
+                                    asmjit::TypeId type_id,
+                                    asmjit::Reg& left,
+                                    asmjit::Reg& right,
+                                    asmjit::Reg& res);
 
     /**
      * Emit the correct x86 load instruction for a scalar of the specified type.

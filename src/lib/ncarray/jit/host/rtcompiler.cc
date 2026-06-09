@@ -433,10 +433,20 @@ namespace ncarray {
           // Allocate a new virtual register for the result of the operation
           asmjit::Reg res { cc.new_reg<asmjit::Reg>(type_id) };
 
-          // Perform linearized math using emit
-          cc.emit(x86::get_move_inst(type_id), res, l);       // res = l
-          cc.emit(x86::get_binary_inst(op, type_id), res, r); // res = res op r
-
+          // NOTE: OpCodes are ordered, so comparisons of value work.
+          //       - First are loads
+          //       - Unary Ops
+          //       - Arithemtic (Binary)
+          //       - Comparisons (Binary)
+          //       - Logical (Binary)
+          if (static_cast<int>(op) < static_cast<int>(OpCode::EQ)) {
+            // Arithmetic
+            cc.emit(x86::get_move_inst(type_id), res, l);       // res = l
+            cc.emit(x86::get_binary_arithmetic_inst(op, type_id), res, r); // res = res op r
+          } else if (static_cast<int>(op) < static_cast<int>(OpCode::LAND)) {
+            // Comparisons
+            x86::binary_compare(cc, op, type_id, l, r, res);
+          }
           reg_stack.push_back(res);
         }
       }

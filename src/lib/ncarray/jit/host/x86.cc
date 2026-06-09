@@ -29,7 +29,7 @@ typedef SSIZE_T ssize_t;
 
 namespace ncarray {
   namespace host::x86 {
-    asmjit::InstId get_binary_inst(OpCode op, asmjit::TypeId type_id) {
+    asmjit::InstId get_binary_arithmetic_inst(OpCode op, asmjit::TypeId type_id) {
       bool is_double { (type_id == asmjit::TypeId::kFloat64) };
       bool is_float { (type_id == asmjit::TypeId::kFloat32) };
       switch (op) {
@@ -71,6 +71,120 @@ namespace ncarray {
       }
       default: {
         return asmjit::BaseInst::kIdNone;
+        }
+      }
+    }
+
+    void binary_compare(asmjit::x86::Compiler& cc,
+                        OpCode op,
+                        asmjit::TypeId type_id,
+                        asmjit::Reg& left,
+                        asmjit::Reg& right,
+                        asmjit::Reg& res) {
+      if (asmjit::TypeUtils::is_int(type_id)) {
+        asmjit::x86::Gp left_addr { left.as<asmjit::x86::Gp>() };
+        asmjit::x86::Gp right_addr { right.as<asmjit::x86::Gp>() };
+        asmjit::x86::Gp res_addr { res.as<asmjit::x86::Gp>() };
+
+        cc.xor_(res_addr, res_addr);
+        cc.cmp(left_addr, right_addr);
+
+        bool is_unsigned { false };
+        if (type_id == asmjit::TypeId::kUInt8  ||
+            type_id == asmjit::TypeId::kUInt16 ||
+            type_id == asmjit::TypeId::kUInt32 ||
+            type_id == asmjit::TypeId::kUInt64) {
+          is_unsigned = true;
+        }
+
+        switch (op) {
+        case OpCode::EQ: {
+          cc.sete(res_addr.r8());
+          break;
+        }
+        case OpCode::NE: {
+          cc.setne(res_addr.r8());
+          break;
+        }
+        case OpCode::LT: {
+          if (is_unsigned) {
+            cc.setb(res_addr.r8());
+          } else {
+            cc.setl(res_addr.r8());
+          }
+          break;
+        }
+        case OpCode::LE: {
+          if (is_unsigned) {
+            cc.setbe(res_addr.r8());
+          } else {
+            cc.setle(res_addr.r8());
+          }
+          break;
+        }
+        case OpCode::GT: {
+          if (is_unsigned) {
+            cc.seta(res_addr.r8());
+          } else {
+            cc.setg(res_addr.r8());
+          }
+          break;
+        }
+        case OpCode::GE: {
+          if (is_unsigned) {
+            cc.setae(res_addr.r8());
+          } else {
+            cc.setge(res_addr.r8());
+          }
+          break;
+        }
+        }
+      } else {
+        asmjit::x86::Vec left_vec { left.as<asmjit::x86::Vec>() };
+        asmjit::x86::Vec right_vec { right.as<asmjit::x86::Vec>() };
+
+        if (type_id == asmjit::TypeId::kFloat32) {
+          cc.ucomiss(left_vec, right_vec);
+        } else {
+          cc.ucomisd(left_vec, right_vec);
+        }
+
+        asmjit::x86::Gp tmp { cc.new_gp(asmjit::TypeId::kInt32) };
+        cc.xor_(tmp, tmp);
+
+        switch (op) {
+        case OpCode::EQ: {
+          cc.sete(tmp.r8());
+          break;
+        }
+        case OpCode::NE: {
+          cc.setne(tmp.r8());
+          break;
+        }
+        case OpCode::LT: {
+          cc.setb(tmp.r8());
+          break;
+        }
+        case OpCode::LE: {
+          cc.setbe(tmp.r8());
+          break;
+        }
+        case OpCode::GT: {
+          cc.seta(tmp.r8());
+          break;
+        }
+        case OpCode::GE: {
+          cc.setae(tmp.r8());
+          break;
+        }
+        }
+
+        asmjit::x86::Vec res_vec { res.as<asmjit::x86::Vec>() };
+
+        if (type_id == asmjit::TypeId::kFloat32) {
+          cc.cvtsi2ss(res_vec, tmp);
+        } else {
+          cc.cvtsi2sd(res_vec, tmp);
         }
       }
     }
