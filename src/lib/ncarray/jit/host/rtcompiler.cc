@@ -452,6 +452,9 @@ namespace ncarray {
       }
       asmjit::Reg final_res { reg_stack.back() };
 
+      asmjit::TypeId dest_type_id { dtype_to_typeid(dest_t) };
+      asmjit::Reg casted_res { x86::cast_register(cc, final_res, type_id, dest_type_id) };
+
       // Resolve the location for storing the result in the destination
       asmjit::x86::Gp dest_addr { cc.new_gp_ptr("dest_addr") };
       if (ndim > 1) {
@@ -461,11 +464,10 @@ namespace ncarray {
       }
 
       ssize_t inner_dim { ndim - 1 };
-      asmjit::TypeId dest_type_id { dtype_to_typeid(dest_t) };
       x86::scaled_address_array(cc,
                                 dest_addr,
                                 loop_regs[inner_dim],
-                                final_res,
+                                casted_res,
                                 inner_dim,
                                 dest_layout,
                                 dest_type_id,

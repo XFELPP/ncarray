@@ -143,50 +143,183 @@ namespace ncarray {
         asmjit::x86::Vec left_vec { left.as<asmjit::x86::Vec>() };
         asmjit::x86::Vec right_vec { right.as<asmjit::x86::Vec>() };
 
-        if (type_id == asmjit::TypeId::kFloat32) {
-          cc.ucomiss(left_vec, right_vec);
-        } else {
-          cc.ucomisd(left_vec, right_vec);
-        }
+        asmjit::x86::Vec res_vec { res.as<asmjit::x86::Vec>() };
 
-        asmjit::x86::Gp tmp { cc.new_gp(asmjit::TypeId::kInt32) };
-        cc.xor_(tmp, tmp);
-
+        // Select correct predicate for the FP comparisons
+        asmjit::x86::VCmpImm imm { asmjit::x86::VCmpImm::kEQ_OQ };
         switch (op) {
         case OpCode::EQ: {
-          cc.sete(tmp.r8());
+          imm = asmjit::x86::VCmpImm::kEQ_OQ;
           break;
         }
         case OpCode::NE: {
-          cc.setne(tmp.r8());
+          imm = asmjit::x86::VCmpImm::kNEQ_OQ;
           break;
         }
         case OpCode::LT: {
-          cc.setb(tmp.r8());
+          imm = asmjit::x86::VCmpImm::kLT_OQ;
           break;
         }
         case OpCode::LE: {
-          cc.setbe(tmp.r8());
+          imm = asmjit::x86::VCmpImm::kLE_OQ;
           break;
         }
         case OpCode::GT: {
-          cc.seta(tmp.r8());
+          imm = asmjit::x86::VCmpImm::kGT_OQ;
           break;
         }
         case OpCode::GE: {
-          cc.setae(tmp.r8());
+          imm = asmjit::x86::VCmpImm::kGE_OQ;
           break;
         }
         }
 
-        asmjit::x86::Vec res_vec { res.as<asmjit::x86::Vec>() };
-
         if (type_id == asmjit::TypeId::kFloat32) {
-          cc.cvtsi2ss(res_vec, tmp);
+          // Produces mask in res
+          cc.vcmpss(res_vec, left_vec, right_vec, imm);
+          // Convert mask to 0 or 1 integer
+          cc.vpsrld(res_vec, res_vec, 31);
+
+          // Now reconvert to float
+          cc.vcvtdq2ps(res_vec, res_vec);
         } else {
-          cc.cvtsi2sd(res_vec, tmp);
+          asmjit::x86::Vec one_vec { load_constant(cc, Scalar(1.0), type_id).as<asmjit::x86::Vec>() };
+
+          // Produces mask in res
+          cc.vcmpsd(res_vec, left_vec, right_vec, imm);
+
+          // Run bitwise and (res = res & 1.0)
+          cc.vandpd(res_vec, res_vec, one_vec);
+        }
+
+      }
+    }
+
+    asmjit::Reg cast_register(asmjit::x86::Compiler& cc,
+                              asmjit::Reg src,
+                              asmjit::TypeId src_type,
+                              asmjit::TypeId dest_type) {
+      if (src_type == dest_type) {
+        return src;
+      }
+
+      asmjit::Reg dest { cc.new_reg<asmjit::Reg>(dest_type) };
+
+      bool src_is_float { asmjit::TypeUtils::is_float(src_type) };
+      bool dest_is_float { asmjit::TypeUtils::is_float(dest_type) };
+
+      std::uint32_t src_size { asmjit::TypeUtils::size_of(src_type) };
+      std::uint32_t dest_size { asmjit::TypeUtils::size_of(dest_type) };
+
+      if (src_is_float && dest_is_float) {
+        // Floating point width conversions (32 -> 64 and vice versa)
+        if (src_type == asmjit::TypeId::kFloat32 && dest_type == asmjit::TypeId::kFloat64) {
+          cc.cvtss2sd(dest.as<asmjit::x86::Vec>(), src.as<asmjit::x86::Vec>());
+        } else if (src_type == asmjit::TypeId::kFloat64 && dest_type == asmjit::TypeId::kFloat32) {
+          cc.cvtsd2ss(dest.as<asmjit::x86::Vec>(), src.as<asmjit::x86::Vec>());
+        }
+      } else if (src_is_float && !dest_is_float) {
+        // Convert floating point to integer
+        asmjit::x86::Gp tmp { cc.new_gp(asmjit::TypeId::kInt32) };
+        if (src_type == asmjit::TypeId::kFloat32) {
+          cc.cvttss2si(tmp, src.as<asmjit::x86::Vec>());
+        } else {
+          cc.cvttsd2si(tmp, src.as<asmjit::x86::Vec>());
+        }
+
+        // Truncate or extend the temporary into correct destination width
+        asmjit::x86::Gp dest_gp { dest.as<asmjit::x86::Gp>() };
+        if (dest_size == 1) {
+          cc.mov(dest_gp.r8(), tmp.r8());
+        } else if (dest_size == 2) {
+          cc.mov(dest_gp.r16(), tmp.r16());
+        } else if (dest_size == 4) {
+          cc.mov(dest_gp.r32(), tmp); // tmp is already 32 bit
+        } else {
+          // Extend 32-bit to 64-bit
+          cc.movsxd(dest_gp, tmp);
+        }
+      } else if (!src_is_float && dest_is_float) {
+        // Convert integer to floating point
+        asmjit::x86::Gp tmp { src.as<asmjit::x86::Gp>() };
+
+        if (src_size < 4) {
+          tmp = cc.new_gp(asmjit::TypeId::kInt32);
+
+          bool src_is_unsigned { false };
+          if (src_type == asmjit::TypeId::kUInt8  ||
+              src_type == asmjit::TypeId::kUInt16) {
+            src_is_unsigned = true;
+          }
+
+          if (src_is_unsigned) {
+            if (src_size == 1) {
+              cc.movzx(tmp, src.as<asmjit::x86::Gp>().r8());
+            } else {
+              cc.movzx(tmp, src.as<asmjit::x86::Gp>().r16());
+            }
+          } else {
+            if (src_size == 1) {
+              cc.movsx(tmp, src.as<asmjit::x86::Gp>().r8());
+            } else {
+              cc.movsx(tmp, src.as<asmjit::x86::Gp>().r16());
+            }
+          }
+        }
+        if (dest_type == asmjit::TypeId::kFloat32) {
+          cc.cvtsi2ss(dest.as<asmjit::x86::Vec>(), tmp);
+        } else {
+          cc.cvtsi2sd(dest.as<asmjit::x86::Vec>(), tmp);
+        }
+      } else {
+        // Convert integers to other integers
+        asmjit::x86::Gp src_gp { src.as<asmjit::x86::Gp>() };
+        asmjit::x86::Gp dest_gp { dest.as<asmjit::x86::Gp>() };
+
+        if (dest_size > src_size) {
+          bool src_is_unsigned { false };
+          if (src_type == asmjit::TypeId::kUInt8  ||
+              src_type == asmjit::TypeId::kUInt16 ||
+              src_type == asmjit::TypeId::kUInt32 ||
+              src_type == asmjit::TypeId::kUInt64) {
+            src_is_unsigned = true;
+          }
+
+          if (src_is_unsigned) {
+            if (src_size == 1) {
+              cc.movzx(dest_gp, src_gp.r8());
+            } else if (src_size == 2) {
+              cc.movzx(dest_gp, src_gp.r16());
+            } else {
+              // The zero-extension from 32-bit to 64-bit is implicit when using
+              // 32b sub-register
+              cc.mov(dest_gp.r32(), src_gp);
+            }
+          } else {
+            if (src_size == 1) {
+              cc.movsx(dest_gp, src_gp.r8());
+            } else if (src_size == 2) {
+              cc.movsx(dest_gp, src_gp.r16());
+            } else {
+              // 32-bit zero extension to 64
+              cc.movsxd(dest_gp, src_gp);
+            }
+          }
+        } else {
+          // Destination is <= source width - either simple move, or just truncate
+          if (dest_size == 1) {
+            cc.mov(dest_gp.r8(), src_gp.r8());
+          } else if (dest_size == 2) {
+            cc.mov(dest_gp.r16(), src_gp.r16());
+          } else if (dest_size == 4) {
+            cc.mov(dest_gp.r32(), src_gp.r32());
+          } else {
+            cc.mov(dest_gp, src_gp);
+          }
         }
       }
+
+      return dest;
     }
 
     asmjit::Reg load_constant(asmjit::x86::Compiler& cc,

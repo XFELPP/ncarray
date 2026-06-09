@@ -61,7 +61,6 @@ namespace ncarray {
      * @param[in] left The register for the left-side operand.
      * @param[in] right The register for the right-side operand.
      * @param[in] res The register for the result.
-     * @returns instr The correct arithmetic instruction to incorporate into the function.
      */
     NCA_JIT_API void binary_compare(asmjit::x86::Compiler& cc,
                                     OpCode op,
@@ -69,6 +68,20 @@ namespace ncarray {
                                     asmjit::Reg& left,
                                     asmjit::Reg& right,
                                     asmjit::Reg& res);
+
+    /**
+     * Convert a register of one type to another.
+     *
+     * @param[in] cc The compiler building the function.
+     * @param[in] src The register for the input source to be cast.
+     * @param[in] src_type The asmjit type of the source register.
+     * @param[in] dest_type The asmjit type of the requested destination register.
+     * @returns casted The casted register
+     */
+    NCA_JIT_API asmjit::Reg cast_register(asmjit::x86::Compiler& cc,
+                                          asmjit::Reg src,
+                                          asmjit::TypeId src_type,
+                                          asmjit::TypeId dest_type);
 
     /**
      * Emit the correct x86 load instruction for a scalar of the specified type.
