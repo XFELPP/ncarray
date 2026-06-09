@@ -437,8 +437,13 @@ namespace ncarray {
           //       - Logical (Binary)
           if (static_cast<int>(op) < static_cast<int>(OpCode::EQ)) {
             // Arithmetic
-            cc.emit(x86::get_move_inst(type_id), res, l);       // res = l
-            cc.emit(x86::get_binary_arithmetic_inst(op, type_id), res, r); // res = res op r
+            if (asmjit::TypeUtils::is_int(type_id) && (op == OpCode::DIV || op == OpCode::MOD)) {
+              // Integer division and modulo has to be done in specific-registers
+              x86::integer_div_mod(cc, op, type_id, l, r, res);
+            } else {
+              cc.emit(x86::get_move_inst(type_id), res, l);                  // res = l
+              cc.emit(x86::get_binary_arithmetic_inst(op, type_id), res, r); // res = res op r
+            }
           } else if (static_cast<int>(op) < static_cast<int>(OpCode::LAND)) {
             // Comparisons
             x86::binary_compare(cc, op, type_id, l, r, res);

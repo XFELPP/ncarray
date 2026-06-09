@@ -71,6 +71,111 @@ namespace ncarray {
       }
       default: {
         return asmjit::BaseInst::kIdNone;
+      }
+      }
+    }
+
+    void integer_div_mod(asmjit::x86::Compiler& cc,
+                         OpCode op,
+                         asmjit::TypeId type_id,
+                         asmjit::Reg& left,
+                         asmjit::Reg& right,
+                         asmjit::Reg& res) {
+      bool is_unsigned { false };
+      if (type_id == asmjit::TypeId::kUInt8  ||
+          type_id == asmjit::TypeId::kUInt16 ||
+          type_id == asmjit::TypeId::kUInt32 ||
+          type_id == asmjit::TypeId::kUInt64) {
+        is_unsigned = true;
+      }
+
+      std::uint32_t size { asmjit::TypeUtils::size_of(type_id) };
+
+      // Despite requiring the use of EAX, RAX etc. since we've been using all
+      // virtual register allocation we have to make sure to continue, otherwise
+      // the allocator in the Compiler won't know that we've selected physical
+      // registers and overwrite them. This can lead to corruption or all sorts
+      // of problems.
+      if (size == 1) {
+        // For 8-bit division must place dividend in AX
+        // Divisor can be in any register or memory
+        asmjit::x86::Gp ax_reg { cc.new_gp16("ax_reg") };
+
+        // Perform zero or sign extension to fill the 16-bits
+        if (is_unsigned) {
+          cc.movzx(ax_reg, left.as<asmjit::x86::Gp>());
+          cc.div(ax_reg, right.as<asmjit::x86::Gp>());
+        } else {
+          cc.movsx(ax_reg, left.as<asmjit::x86::Gp>());
+          cc.idiv(ax_reg, right.as<asmjit::x86::Gp>());
+        }
+
+        // Lower half will have the quotient, upper half the remainder
+        if (op == OpCode::DIV) {
+          cc.mov(res.as<asmjit::x86::Gp>(), ax_reg.r8_lo());
+        } else {
+          cc.mov(res.as<asmjit::x86::Gp>(), ax_reg.r8_hi());
+        }
+
+      } else if (size == 2) {
+        // For 16-bit division, the quotient ends up in DX, and the remainder in AX
+        asmjit::x86::Gp quot { cc.new_gp16("quot") };
+        asmjit::x86::Gp rem { cc.new_gp16("rem") };
+
+        cc.mov(quot, left.as<asmjit::x86::Gp>());
+        if (is_unsigned) {
+          cc.xor_(rem, rem);
+          cc.div(rem, quot, right.as<asmjit::x86::Gp>());
+        } else {
+          cc.cwd(rem, quot);
+          cc.idiv(rem, quot, right.as<asmjit::x86::Gp>());
+        }
+
+        // Quotient in DX, and remainder in AX
+        if (op == OpCode::DIV) {
+          cc.mov(res.as<asmjit::x86::Gp>(), quot);
+        } else {
+          cc.mov(res.as<asmjit::x86::Gp>(), rem);
+        }
+
+      } else if (size == 4) {
+        // For 32-bit division, the quotient ends up in EDX, and the remainder in EAX
+        asmjit::x86::Gp quot { cc.new_gp32("quot") };
+        asmjit::x86::Gp rem { cc.new_gp32("rem") };
+
+        cc.mov(quot, left.as<asmjit::x86::Gp>());
+        if (is_unsigned) {
+          cc.xor_(rem, rem);
+          cc.div(rem, quot, right.as<asmjit::x86::Gp>());
+        } else {
+          cc.cdq(rem, quot);
+          cc.idiv(rem, quot, right.as<asmjit::x86::Gp>());
+        }
+
+        if (op == OpCode::DIV) {
+          cc.mov(res.as<asmjit::x86::Gp>(), quot);
+        } else {
+          cc.mov(res.as<asmjit::x86::Gp>(), rem);
+        }
+
+      } else {
+        // For 64-bit division, the quotient ends up in RDX, and the remainder in RAX
+        asmjit::x86::Gp quot { cc.new_gp64("quot") };
+        asmjit::x86::Gp rem { cc.new_gp64("rem") };
+
+        cc.mov(quot, left.as<asmjit::x86::Gp>());
+        if (is_unsigned) {
+          cc.xor_(rem, rem);
+          cc.div(rem, quot, right.as<asmjit::x86::Gp>());
+        } else {
+          cc.cqo(rem, quot);
+          cc.idiv(rem, quot, right.as<asmjit::x86::Gp>());
+        }
+
+        if (op == OpCode::DIV) {
+          cc.mov(res.as<asmjit::x86::Gp>(), quot);
+        } else {
+          cc.mov(res.as<asmjit::x86::Gp>(), rem);
         }
       }
     }

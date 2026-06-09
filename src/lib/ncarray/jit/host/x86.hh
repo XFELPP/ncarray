@@ -50,6 +50,30 @@ namespace ncarray {
                                                           asmjit::TypeId type_id);
 
     /**
+     * Perform integer division or modulo/remainder operations.
+     *
+     * For x86 these are calculated simultaneously, but must be calculated in specific
+     * registers. Additionally, since the rest of the compiler setup has been setup
+     * using virtual register allocation via the Compiler class, the collisions between
+     * those virtual allocations and the references to the specific physical registers
+     * must be handled. This function does this for all widths of integers, and signed/
+     * unsigned handling.
+     *
+     * @param[in] cc The compiler building the function.
+     * @param[in] op The DIV or MOD OpCode to place the result of in res.
+     * @param[in] type_id The asmjit type being operated on (one of the integer types).
+     * @param[in] left The register for the left-side operand.
+     * @param[in] right The register for the right-side operand.
+     * @param[in] res The register for the result.
+     */
+    NCA_JIT_API void integer_div_mod(asmjit::x86::Compiler& cc,
+                                     OpCode op,
+                                     asmjit::TypeId type_id,
+                                     asmjit::Reg& left,
+                                     asmjit::Reg& right,
+                                     asmjit::Reg& res);
+
+    /**
      * Perform the appropriate binary comparison.
      *
      * This function will emit the correct set of instructions accounting for signed or
