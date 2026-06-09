@@ -131,46 +131,6 @@ namespace ncarray {
                                    bool expr_is_soarr = false);
 
       /**
-       * Determine the appropriate x86 binary instruction given the operation and working type.
-       *
-       * This function will provide the correct instruction to emit given the type under
-       * consideration. This accounts for signed/unsigned, width, and floating-point/integer
-       * differences.
-       *
-       * @param[in] op The OpCode to emit an instruction for (ADD, SUB, etc.)
-       * @param[in] type_id The asmjit type being operated on (kUInt8, kFloat32, etc.).
-       * @returns instr The correct instruction to incorporate into the function.
-       */
-      asmjit::InstId get_binary_x86_inst(OpCode op, asmjit::TypeId type_id);
-
-      /**
-       * Emit the correct x86 load instruction for a scalar of the specified type.
-       *
-       * This function will provide the correct instruction to emit given the type under
-       * consideration. This accounts for signed/unsigned, width, and floating-point/integer
-       * differences.
-       *
-       * @param[in] cc The compiler building the function.
-       * @param[in] scalar The scalar to load.
-       * @param[in] type_id The asmjit type being operated on (kUInt8, kFloat32, etc.).
-       * @returns reg The virtual register with the correct load instruction.
-       */
-      asmjit::Reg load_constant_x86(asmjit::x86::Compiler& cc,
-                                    Scalar scalar,
-                                    asmjit::TypeId type_id);
-
-      /**
-       * Emit the correct x86 move instruction for the specified type.
-       *
-       * This function will provide the correct instruction to emit for integers, or
-       * floating point types of different precision.
-       *
-       * @param[in] type_id The asmjit type being operated on (kUInt8, kFloat32, etc.).
-       * @returns inst The x86 move instruction appropriate for the operand type.
-       */
-      asmjit::InstId get_move_x86_inst(asmjit::TypeId type_id);
-
-      /**
        * In memory cache of compiled functions for expression evaluation.
        */
       std::unordered_map<std::string, ExprKernelFunc> m_kernel_cache;

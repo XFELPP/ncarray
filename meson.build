@@ -333,6 +333,7 @@ installed_expression_stencil_headers = [
 
 installed_host_jit_headers = [
     'src/lib/ncarray/jit/host/rtcompiler.hh',
+    'src/lib/ncarray/jit/host/x86.hh',
 ]
 
 installed_common_jit_headers = [
@@ -373,6 +374,7 @@ if build_core_opt
             [
                 # Host
                 'src/lib/ncarray/jit/host/rtcompiler.cc',
+                'src/lib/ncarray/jit/host/x86.cc',
                 # Common
                 'src/lib/ncarray/jit/jit_utils.cc',
                 'src/lib/ncarray/jit/path_utils.cc',
@@ -391,6 +393,7 @@ if build_core_opt
             [
                 # Host
                 'src/lib/ncarray/jit/host/rtcompiler.cc',
+                'src/lib/ncarray/jit/host/x86.cc',
                 # Common
                 'src/lib/ncarray/jit/jit_utils.cc',
                 'src/lib/ncarray/jit/path_utils.cc',
