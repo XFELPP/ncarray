@@ -233,6 +233,10 @@ namespace ncarray {
       func_sig.add_arg(asmjit::TypeId::kUIntPtr); // Destination pointer
 
       asmjit::FuncNode* func { cc.add_func(func_sig) };
+
+      func->frame().set_avx_enabled();
+      func->frame().set_avx512_enabled();
+
       asmjit::x86::Gp src_ptrs_reg { cc.new_gp_ptr("src_ptrs") };
       asmjit::x86::Gp dest_ptr_reg { cc.new_gp_ptr("dest_ptr") };
 
@@ -294,6 +298,9 @@ namespace ncarray {
 
         // Setup a nested loop: Outer Dim --> Inner Dim --> ... --> Innermost
         cc.xor_(loop_regs[dim], loop_regs[dim]);
+        if (dim == ndim - 1) {
+          cc.align(asmjit::AlignMode::kCode, 16);
+        }
         cc.bind(loop_labels[dim]);
         cc.cmp(loop_regs[dim], loop_limits[dim]);
         cc.jge(loop_ends[dim]);
@@ -381,6 +388,7 @@ namespace ncarray {
       // ---------------------------------------------------------
       std::vector<asmjit::Reg> reg_stack;
       asmjit::TypeId type_id { dtype_to_typeid(work_t) };
+      asmjit::TypeId src_type_id { dtype_to_typeid(src_t) };
       for (const auto& instr : instrs) {
         OpCode op { get_op(instr) };
         int idx { get_index(instr) };
@@ -403,11 +411,17 @@ namespace ncarray {
                                     v_reg,
                                     inner_dim,
                                     layouts[idx],
-                                    type_id,
+                                    src_type_id,
                                     /*addr_is_sink=*/false,
                                     expr_is_soarr);
+
+          // Load using the source type, but cast to our working type
+          asmjit::Reg casted_reg {
+            x86::cast_register(cc, v_reg, src_type_id, type_id)
+          };
+
           // Push to stack and advance
-          reg_stack.push_back(v_reg);
+          reg_stack.push_back(casted_reg);
         } else if (op == OpCode::LOAD_CONST) {
           asmjit::Reg s_reg { x86::load_constant(cc, scalars[idx], type_id) };
           reg_stack.push_back(s_reg);

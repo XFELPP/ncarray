@@ -100,7 +100,9 @@ namespace ncarray {
       };
       bool is_float { (type_id == asmjit::TypeId::kFloat32) };
       bool is_float_vec {
-        (type_id == asmjit::TypeId::kFloat32x2 || type_id == asmjit::TypeId::kFloat32x4)
+        (type_id == asmjit::TypeId::kFloat32x2 ||
+         type_id == asmjit::TypeId::kFloat32x4 ||
+         type_id == asmjit::TypeId::kFloat32x8)
       };
       switch (op) {
       case OpCode::ADD: {
@@ -577,7 +579,8 @@ namespace ncarray {
         return asmjit::x86::Inst::kIdMovsd;
       } else if (type_id == asmjit::TypeId::kFloat32x2) {
         return asmjit::x86::Inst::kIdMovq;
-      } else if (type_id == asmjit::TypeId::kFloat32x4) {
+      } else if (type_id == asmjit::TypeId::kFloat32x4 ||
+                 type_id == asmjit::TypeId::kFloat32x8) {
         return asmjit::x86::Inst::kIdMovups;
       } else if (type_id == asmjit::TypeId::kFloat64x2) {
         return asmjit::x86::Inst::kIdMovupd;
