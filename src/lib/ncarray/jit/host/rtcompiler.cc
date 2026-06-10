@@ -19,6 +19,16 @@
 #include <asmjit/core.h>
 #include <asmjit/x86.h>
 
+#ifdef _WIN32
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
+
+#ifdef __linux__
+#include <malloc.h> // For mallopt performance tuning
+#endif
+#endif
+
 #include <cstdlib>
 #include <iomanip>
 #include <filesystem>
@@ -106,6 +116,15 @@ namespace ncarray {
     RuntimeCompiler::RuntimeCompiler() {}
 
     RuntimeCompiler& RuntimeCompiler::instance() {
+#ifdef __linux__
+      // Help performance by avoiding page faults for free/allocate cycles
+      // On macOS, libsystem_malloc is more aggressive when reusing pages
+      // On Windows, the NT heap is totally different. Both macOS and Windows shouldn't
+      // need this change
+      mallopt(M_MMAP_MAX, 0);
+      mallopt(M_MMAP_THRESHOLD, 1024 * 1024 * 1024); // 1 GB
+      mallopt(M_TRIM_THRESHOLD, -1);
+#endif
       static RuntimeCompiler inst;
       return inst;
     }
