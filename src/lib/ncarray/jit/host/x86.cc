@@ -751,5 +751,5 @@ namespace ncarray {
         }
       }
     }
-  } // namespace host
+  } // namespace host::x86
 } // namespace ncarray

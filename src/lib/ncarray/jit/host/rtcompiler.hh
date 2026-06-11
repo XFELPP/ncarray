@@ -131,6 +131,35 @@ namespace ncarray {
                                    bool expr_is_soarr = false);
 
       /**
+       * Compile the function to evaluate an expression, for the a64 (ARM) architecture.
+       *
+       * After compiling, the function will be written to disk.
+       *
+       * @param[in] cache_path The path to write the compiled function to, for on-disk
+       *            storage.
+       * @param[in] dest_t The final output datatype.
+       * @param[in] src_t The input datatype of the arrays.
+       * @param[in] work_t The datatype to use for intermediate calculations. This may
+       *            or may not be equivalent to dest_t. E.g. a long expression may use
+       *            float/int64 while performing intermediate operations, while the
+       *            final result of the expression is a comparison returning bool.
+       * @param[in] dest_layout The destination/result Layout to write into.
+       * @param[in] instrs The instructions (packed index + OpCode) for the expression.
+       * @param[in] layouts The layouts of the arrays involved.
+       * @param[in] scalars Any scalar constants involved.
+       * @param[in] expr_is_soarr Whether the arrays are SOArray* or NCArray*.
+       */
+      void compile_a64_expr_kernel(fs::path cache_path,
+                                   DType dest_t,
+                                   DType src_t,
+                                   DType work_t,
+                                   const SOArrayPolicy& dest_layout,
+                                   const std::vector<Instruction>& instrs,
+                                   const std::vector<SOArrayPolicy>& layouts,
+                                   const std::vector<Scalar>& scalars,
+                                   bool expr_is_soarr = false);
+
+      /**
        * In memory cache of compiled functions for expression evaluation.
        */
       std::unordered_map<std::string, ExprKernelFunc> m_kernel_cache;
