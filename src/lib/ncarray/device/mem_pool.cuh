@@ -73,6 +73,14 @@ namespace ncarray {
       std::size_t idx { m_idx };
 
       m_idx = (m_idx + 1) % Capacity;
+
+      if (m_idx == 0) {
+#ifdef NCA_HAS_CUDA
+        // Synchronize on wrap to prevent overwriting memory from out-standing ops
+        cudaDeviceSynchronize();
+#endif
+      }
+
       return { &m_h_data[idx], &m_d_data[idx] };
     }
 
@@ -85,6 +93,10 @@ namespace ncarray {
       if (m_idx + aligned_items > Capacity) {
         // Wrap back to 0
         m_idx = 0;
+#ifdef NCA_HAS_CUDA
+        // Synchronize on wrap to prevent overwriting memory from out-standing ops
+        cudaDeviceSynchronize();
+#endif
       }
 
       std::size_t idx { m_idx };
