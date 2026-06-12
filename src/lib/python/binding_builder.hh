@@ -47,6 +47,7 @@ typedef SSIZE_T ssize_t;
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace py = pybind11;
@@ -112,14 +113,21 @@ namespace pyncarray {
   }
 
   template <typename MemType>
-  ncarray::NCOwnerFor<MemType> eval_python_expr(const py::object& pyexpr) {
+  py::object eval_python_expr(const py::object& pyexpr) {
     if (py::isinstance<ncarray::ExprMVNode<MemType>>(pyexpr)) {
-      return ncarray::NCOwnerFor<MemType>(pyexpr.cast<ncarray::ExprMVNode<MemType>>());
+      auto expr = pyexpr.cast<ncarray::ExprMVNode<MemType>>();
+      if (!expr.soarray) {
+        return py::cast(ncarray::NCOwnerFor<MemType>(expr));
+      }
+      return py::cast(ncarray::SOOwnerFor<MemType>(expr));
     } else {
       ncarray::ExprMVNode<MemType> expr;
       _build_node_helper<MemType>(expr, pyexpr);
 
-      return ncarray::NCOwnerFor<MemType>(expr);
+      if (!expr.soarray) {
+        return py::cast(ncarray::NCOwnerFor<MemType>(expr));
+      }
+      return py::cast(ncarray::SOOwnerFor<MemType>(expr));
     }
   }
 
@@ -163,7 +171,10 @@ namespace pyncarray {
                                      typename ArrayT::MemType>::View>& other) {                  \
       auto expr = self.view() OP other;                                                          \
       if (is_eager()) {                                                                          \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+        if (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) {           \
+          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
+        }                                                                                        \
+        return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -171,7 +182,10 @@ namespace pyncarray {
     .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {                    \
       auto expr = self.view() OP pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim()); \
       if (is_eager()) {                                                                          \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+        if (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) {           \
+          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
+        }                                                                                        \
+        return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -180,7 +194,10 @@ namespace pyncarray {
       auto view = pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim());                \
       auto expr = view OP self.view();                                                           \
       if (is_eager()) {                                                                          \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+        if (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) {           \
+          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
+        }                                                                                        \
+        return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -188,7 +205,10 @@ namespace pyncarray {
     .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) {              \
       auto expr = self.view() OP other;                                                          \
       if (is_eager()) {                                                                          \
-        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
+        if (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) {           \
+          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
+        }                                                                                        \
+        return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
