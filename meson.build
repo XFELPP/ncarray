@@ -761,7 +761,7 @@ if build_python_opt
     if nca_has_cuda and cpp.get_id() == 'msvc'
         py_mod_link_args += [
             '/DELAYLOAD:ncdevarray-1.dll',
-            '/DELAYLOAD:ncdevarrayjit-1.dll',
+            '/DELAYLOAD:ncarrayjit-1.dll',
             '/DELAYLOAD:cudart64_12.dll',
             '/DELAYLOAD:nvrtc64_12.dll',
             'delayimp.lib',
