@@ -374,6 +374,11 @@ namespace pyncarray {
           indices.push_back(ncarray::IndexItem(pyslice_to_slice(self.shape(axis),
                                                                 pyidx.cast<py::slice>())));
         } else if (py::isinstance<py::int_>(pyidx)) {
+          auto idx_val { pyidx.cast<ssize_t>() };
+          auto ax_shape { self.shape(axis) };
+          if (idx_val < -ax_shape || idx_val >= ax_shape) {
+            throw py::index_error("Index out of bounds!");
+          }
           indices.push_back(ncarray::IndexItem(pyidx.cast<ssize_t>()));
         } else {
           throw py::index_error("Unsupported index type!");
