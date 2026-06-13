@@ -94,6 +94,8 @@ namespace ncarray {
     public:
       static RuntimeCompiler& instance();
 
+      CUfunction get_dynamic_vm_kernel(DType dest_t, bool expr_is_soarr);
+
       CUfunction get_expr_kernel(DType dest_t,
                                  DType src_t,
                                  DType work_t,
@@ -166,6 +168,8 @@ namespace ncarray {
       }
 
       CUfunction to_sass(std::string cubin, const char* func_name);
+
+      std::string get_dynamic_vm_kernel_str(DType dest_t, bool expr_is_soarr);
 
       std::string get_expression_kernel_str(DType dest_t,
                                             DType src_t,

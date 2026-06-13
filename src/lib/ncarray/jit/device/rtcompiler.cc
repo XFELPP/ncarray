@@ -88,6 +88,33 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
+    CUfunction RuntimeCompiler::get_dynamic_vm_kernel(DType dest_t, bool expr_is_soarr) {
+      std::string arch_opt = get_arch_opt();
+      std::string kernel_str = get_dynamic_vm_kernel_str(dest_t, expr_is_soarr);
+      std::string k_id = hash_to_hex(kernel_str + arch_opt);
+
+      if (m_kernel_cache.count(k_id)) {
+        return m_kernel_cache[k_id];
+      }
+
+      fs::path cache_path = get_cache_dir() / (k_id + ".cubin");
+      std::string cubin;
+
+      if (fs::exists(cache_path)) {
+        cubin = read_file(cache_path);
+
+        CUfunction k_func = to_sass(cubin, "jit_dynamic_vm_kernel");
+        m_kernel_cache[k_id] = k_func;
+      } else {
+        cubin = compile_kernel(kernel_str, k_id, "jit_dynamic_vm_kernel");
+
+        write_file(cache_path, cubin);
+      }
+
+      return m_kernel_cache[k_id];
+    }
+
+
     CUfunction RuntimeCompiler::get_fill_kernel(DType dest_t, bool dest_is_so) {
       std::string arch_opt = get_arch_opt();
       std::string kernel_str = get_fill_kernel_str(dest_t, dest_is_so);
@@ -311,6 +338,27 @@ namespace ncarray {
       return wrapper;
     }
 
+    std::string RuntimeCompiler::get_dynamic_vm_kernel_str(DType dest_t, bool expr_is_soarr) {
+      auto get_dtype_name = [&] <typename T> () {
+        return get_name_for_type<T>();
+      };
+
+      std::string dest_t_name = dispatch(dest_t, get_dtype_name);
+      std::string dest_view_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
+      if (expr_is_soarr) {
+        dest_view_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
+      }
+      std::string wrapper =
+        "extern \"C\" __global__ void jit_dynamic_vm_kernel(ncarray::DynamicExprMVNode<ncarray::DevTag> vm, " +
+                                                            dest_view_type + " result) {\n"
+        "  unsigned b_idx = blockIdx.x * blockDim.x + threadIdx.x;\n"
+        "  if (b_idx < result.size()) {\n"
+        "    ncarray::execute_expression_d<" + dest_t_name + ">(vm, result);\n"
+        "  }\n"
+        "}\n";
+      return wrapper;
+    }
+
     std::string RuntimeCompiler::get_fill_kernel_str(DType dest_t, bool dest_is_so) {
       auto get_dtype_name = [&] <typename T> () {
         return get_name_for_type<T>();
@@ -413,6 +461,7 @@ namespace ncarray {
 
       std::vector<const char*> opts = {
         "--std=c++20",
+        "-default-device",
         arch_opt.c_str(),
         nca_opt.c_str(), // Normal ncarray headers
         jit_opt.c_str()  // Bundled CCCl headers for JIT
@@ -421,6 +470,7 @@ namespace ncarray {
       std::string source =
         "#include \"ncarray/array_impl.hh\"\n"
         "#include \"ncarray/device/kernels.cuh\"\n"
+        "#include \"ncarray/expression/dynamicmvnode.hh\"\n"
         "#include \"ncarray/expression/staticmvnode.hh\"\n\n" +
         kernel_str;
       nvrtcProgram prog;

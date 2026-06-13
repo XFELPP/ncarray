@@ -11,9 +11,7 @@
 
 #include "ncarray/custom_types.hh"
 #ifdef __CUDACC__
-#ifndef __CUDACC_RTC__
 #include "ncarray/device/casts.cuh"
-#endif
 #endif
 #include "ncarray/dtype.hh"
 #include "ncarray/expression/interface.hh"
@@ -261,7 +259,7 @@ namespace ncarray {
         return op_traits<WorkT>::template cast<DestT>(stack[0]);
       };
 
-      if constexpr (std::is_same_v<DestT, bool>) {
+      if constexpr (is_same_v<DestT, bool>) {
         return dispatch(this->work_dtype, eval_op);
       } else {
         return dispatch(dtype_traits<DestT>::value, eval_op);

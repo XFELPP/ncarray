@@ -174,7 +174,26 @@ namespace ncarray {
           MemEntry ptrs { mem_pool.get_block(total_bytes) };
           auto vm = get_dynamic_mv_node(expr, ptrs.h_ptr, ptrs.d_ptr);
 
-          execute_expression_kernel<DestT><<<blocks, TPB>>>(vm, result.view());
+          // NOTE: Trying to use JIT version instead of AOT for now. Can always revert
+          // execute_expression_kernel<DestT><<<blocks, TPB>>>(vm, result.view());
+
+          auto kernel =
+            device::RuntimeCompiler::instance().get_dynamic_vm_kernel(result.dtype(),
+                                                                      expr.soarray);
+
+          std::vector<void*> args;
+          args.push_back(reinterpret_cast<void*>(&vm));
+
+          auto view = result.view();
+          args.push_back(reinterpret_cast<void*>(&view));
+
+          CUresult launch_res = cuLaunchKernel(kernel,
+                                               blocks, 1, 1, // Grid dims  (x, y, z)
+                                               TPB, 1, 1,    // Block dims (x, y, z)
+                                               0,            // Shmem in bytes
+                                               0,            // Stream
+                                               args.data(),  // Kernel args
+                                               NULL);
         }
       }
 
