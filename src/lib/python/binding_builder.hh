@@ -262,8 +262,6 @@ namespace pyncarray {
     using HostViewType = ncarray::ArrayImpl<LayoutPolicy, ncarray::ViewPolicy>;
     using ViewType = typename ArrayT::ViewType;
 
-    using ViewOrScalar = std::variant<ncarray::Scalar,ViewType>;
-
     arr_cl.def("__repr__", &ArrayT::repr, py::is_operator())
     .def_property_readonly("shape", [](const ArrayT& self) -> py::tuple {
       auto* shape = self.shape();
@@ -323,7 +321,7 @@ namespace pyncarray {
          &ArrayT::view,
          "Convert the array to a *View type for use in view-only APIs (like kernels).")
     .def("__getitem__",
-         [](const ArrayT& self, py::object idx) -> ViewOrScalar {
+         [](const ArrayT& self, py::object idx) -> py::object {
            // NOTE: The Python bindings diverge from the C++ library on scalars.
            //       For simplicity, in Python, scalars are returned as scalars.
            //       In C++, they remain as an object tied to the array class.
@@ -360,19 +358,30 @@ namespace pyncarray {
            using MemType = typename std::decay_t<ArrayT>::MemType;
            if constexpr (!std::is_same_v<MemType, ncarray::DevTag>) {
              if (view.ndim() == 0) {
-               return view.get_scalar(view.data());
+               // If a scalar, do the cast here preemptively
+               return py::cast(view.get_scalar(view.data()));
              }
            }
-           return view;
+
+           // NOTE: If a view, must create a keep_alive link to keep the parent alive
+           //       in the event that a temporary is sliced. I cannot think of a
+           //       better option atm.
+           //       E.g., this will ensure that you don't get garbage when doing:
+           //       result_dev_arr: nca.NCDevArray = some_function();
+           //       print(result_dev_arr.to_host()[0,0,0])
+           // NOTE: This is done here, dipping into the internals, because we can't
+           //       just apply it on the method binding as whole as
+           //       py::keep_alive<0,1>(). It creates weak-references to implement
+           //       the keep-alive, and primitives like an int don't support that.
+           //       So, we only add it dynamically to the method path that returns
+           //       a view, and not above for the scalar path.
+           py::object py_view { py::cast(view) };
+           py::detail::keep_alive_impl(py_view, py::cast(self));
+           return py_view;
          },
          py::is_operator(),
-         py::return_value_policy::reference_internal,
-         // NOTE: We must apply this here to keep a parent alive in the event that
-         //       a temporary is sliced. I cannot think of a better option atm.
-         //       E.g., this will ensure that you don't get garbage when doing:
-         //       result_dev_arr: nca.NCDevArray = some_function();
-         //       print(result_dev_arr.to_host()[0,0,0])
-         py::keep_alive<0, 1>())
+         // Do NOT put py::keep_alive<0, 1>() here -- breaks scalar path! (See above)
+         py::return_value_policy::reference_internal)
     .def("__setitem__",
          [](const ArrayT& self, py::object idx, py::object val) {
            ssize_t num_indices { 0 };
