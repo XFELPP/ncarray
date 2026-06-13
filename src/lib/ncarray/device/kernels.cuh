@@ -51,7 +51,7 @@ namespace ncarray {
     const unsigned size { static_cast<unsigned>(result.size()) };
     unsigned b_idx { blockIdx.x * blockDim.x + threadIdx.x };
 
-    if (b_idx > size) {
+    if (b_idx >= size) {
       return;
     }
 

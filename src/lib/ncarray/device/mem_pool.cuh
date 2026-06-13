@@ -90,7 +90,7 @@ namespace ncarray {
         return { nullptr, nullptr };
       }
 
-      if (m_idx + aligned_items > Capacity) {
+      if (m_idx + aligned_items >= Capacity) {
         // Wrap back to 0
         m_idx = 0;
 #ifdef NCA_HAS_CUDA
