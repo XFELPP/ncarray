@@ -460,8 +460,8 @@ namespace ncarray {
                                                    forward<Visitor>(visitor));
     }
     if (type == DType::complex256) {
-      return list_dispatcher<base_types>:::dispatch(DType::complex128,
-                                                    forward<Visitor>(visitor));
+      return list_dispatcher<base_types>::dispatch(DType::complex128,
+                                                   forward<Visitor>(visitor));
     }
 #else
     return list_dispatcher<base_types>::dispatch(type, forward<Visitor>(visitor));

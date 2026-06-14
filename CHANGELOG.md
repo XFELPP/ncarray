@@ -5,10 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] - 2026-06-XYZ
+## [0.6.0] - 2026-06-13
 
 ### Added
-- Similar runtime JIT compilation strategy for host-side expressions. Provide a rudimentary compilation phase and using `asmjit` output functions for linearizable expression tapes.
+- Similar runtime JIT compilation strategy for host-side expressions. Provide a rudimentary compilation phase and using `asmjit` output functions for linearizable expression tapes. Includes x86 and AArch64 (ARM) backends. Other ISAs not currently supported. Fallback to slow VM path remains.
 
 ### Changed
 - Switch to using JIT compiler for the dynamic VM in device code.
