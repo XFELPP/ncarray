@@ -17,17 +17,26 @@
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
 
+#ifdef __CUDACC__
+// Silence warning: reduction in alignment ignored
+#pragma nv_diag_suppress 1286
+#endif
+
 #include <asmjit/a64.h>
 #include <asmjit/core.h>
 #include <asmjit/x86.h>
+
+#ifdef __CUDACC__
+#pragma nv_diag_default 1286
+#endif
 
 #ifdef _WIN32
 typedef SSIZE_T ssize_t;
 #else
 #include <sys/types.h>
 
-#ifdef __linux__
-#include <malloc.h> // For mallopt performance tuning
+#if defined(__linux__) && defined(__GLIBC__)
+#include <malloc.h> // For mallopt performance tuning (glibc only, not musl)
 #endif
 #endif
 
@@ -118,7 +127,8 @@ namespace ncarray {
     RuntimeCompiler::RuntimeCompiler() {}
 
     RuntimeCompiler& RuntimeCompiler::instance() {
-#ifdef __linux__
+#if defined(__linux__) && defined(__GLIBC__)
+      // NOTE: glibc only, not musl!
       // Help performance by avoiding page faults for free/allocate cycles
       // On macOS, libsystem_malloc is more aggressive when reusing pages
       // On Windows, the NT heap is totally different. Both macOS and Windows shouldn't

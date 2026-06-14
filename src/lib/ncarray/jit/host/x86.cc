@@ -13,8 +13,17 @@
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
 
+#ifdef __CUDACC__
+// Silence warning: reduction in alignment ignored
+#pragma nv_diag_suppress 1286
+#endif
+
 #include <asmjit/core.h>
 #include <asmjit/x86.h>
+
+#ifdef __CUDACC__
+#pragma nv_diag_default 1286
+#endif
 
 #ifdef _WIN32
 #include <BaseTsd.h>

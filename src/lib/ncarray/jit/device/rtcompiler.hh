@@ -384,7 +384,14 @@ namespace ncarray {
 
       std::string compile_kernel(std::string kernel_str, std::string k_id, const char* func_name);
 
+#ifdef __CUDACC__
+      // Silence warning: class template instantiation without DLL interface (Windows)
+      #pragma nv_diag_suppress 1394
+#endif
       std::unordered_map<std::string, CUfunction> m_kernel_cache;
+#ifdef __CUDACC__
+      #pragma nv_diag_default 1394
+#endif
     };
   } // namespace device
 } // namespace ncarray

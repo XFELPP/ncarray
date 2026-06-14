@@ -114,6 +114,17 @@ nca_cuda_args = [
     '-Xcudafe', '--diag_suppress=445',
     # silence warning: long double treated as double
     '-Xcudafe', '--diag_suppress=20208',
+    # silence warning: float overflow in CUDA cmath header (Windows)
+    # TODO: Try to limit this to includes/callsites eventually
+    '-Xcudafe', '--diag_suppress=221',
+    # silence warning: field of class type without a DLL interface (Windows)
+    # TODO: Try to limit this to includes/callsites eventually (tried a bit already)
+    '-Xcudafe', '--diag_suppress=1394',
+    # silence warning: __host__ called from __host__ __device__ (Linux - use of dispatch in GPUEngine)
+    # TODO: Try to limit this to includes/callsites eventually (tried a bit already)
+    '-Xcudafe', '--diag_suppress=20011',
+    # silence warning: unrecognized GCC pragma (Linux)
+    '-Xcudafe', '--diag_suppress=1675',
 ]
 if nca_has_cuda
     if cuda_version.version_compare('>=12.8')

@@ -158,13 +158,7 @@ namespace ncarray {
             }
           };
 
-#ifdef __CUDACC__
-          #pragma nv_diag_suppress 20014
-#endif
           dispatch(work_dtype, launch_op);
-#ifdef __CUDACC__
-          #pragma nv_diag_default 20014
-#endif
           cuCtxSynchronize();
         } else {
           auto total_bytes = bytes_for_dynamic_vm(expr);

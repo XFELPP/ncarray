@@ -25,7 +25,9 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # windows-latest was updated to MSVC 19.51 which is outside of our supported
+        # compiler matrix so pinned to windows-2022 for now
+        os: [ubuntu-latest, windows-2022, macos-latest]
 
     steps:
       - name: Free Unused Disk Space

@@ -56,7 +56,7 @@ build-frontend = { name = "pip", args = ["--no-build-isolation"] }
 
 before-build = [
     "python -m pip install -U pip",
-    "python -m pip install \"meson>=1.10.1\" meson-python ninja \"pybind11[global]\" setuptools cmake",
+    "python -m pip install \"meson>=1.10.1\" meson-python ninja \"pybind11[global]\" setuptools cmake delvewheel",
 ]
 
 # For C++23 need a newer GCC coming from manylinux_2_28 (GCC 13) and later
@@ -116,6 +116,7 @@ before-all = [
     "meson compile -j 2 -C builddir",
     "meson install -C builddir"
 ]
+repair-wheel-command = "python utilities/repair_wheel_win.py {dest_dir} {wheel} --no-exclude-core"
 
 [tool.cibuildwheel.linux.environment]
 CC = "ccache gcc"

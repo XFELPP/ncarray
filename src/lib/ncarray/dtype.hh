@@ -417,6 +417,12 @@ namespace ncarray {
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wunqualified-std-cast-call"
 #endif
+
+#ifdef __CUDACC__
+  // Silence warning: Calling __host__ __device__ from host code (dispatch called in GPUEngine)
+  #pragma nv_diag_suppress 20014
+#endif
+
   template <typename T, typename... Ts>
   struct list_dispatcher<type_list<T, Ts...>> {
     template <typename Visitor>
@@ -467,6 +473,10 @@ namespace ncarray {
     return list_dispatcher<base_types>::dispatch(type, forward<Visitor>(visitor));
 #endif
   }
+
+#ifdef __CUDACC__
+  #pragma nv_diag_default 20014
+#endif
 
 #if defined(__clang__)
   #pragma clang diagnostic pop
