@@ -16,10 +16,12 @@
 #include "ncarray/expression/dynamicmvnode.hh"
 #include "ncarray/expression/interface.hh"
 #include "ncarray/expression/mvnode.hh"
+#include "ncarray/expression/staticmvnode.hh"
 #include "ncarray/host/allocator.hh"
 #include "ncarray/host/elementwise.hh"
 #include "ncarray/host/reductions.hh"
 #include "ncarray/indexing.hh"
+#include "ncarray/jit/host/rtcompiler.hh"
 #include "ncarray/layout.hh"
 #include "ncarray/op_traits.hh"
 #include "ncarray/reductions.hh"
@@ -52,75 +54,95 @@ namespace ncarray {
     template <typename DestT, class Expr, OwningArrayLike Result>
     static void execute_binary_expression(const Expr& expr, Result& result) {
       if constexpr (is_exprmv_node_v<Expr>) {
-        ssize_t size { result.size() };
+        if (can_linearize(expr)) {
+          DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
+          DType work_dtype { expr.work_dtype };
 
-        bool use_32bit { (size < (1LL << 31)) };
+          const SOArrayPolicy& dest_layout =
+            reinterpret_cast<const SOArrayPolicy&>(result);
 
-        // total_bytes will be aligned. Default arg is 16 bytes
-        // Vector doesn't guarantee alignment, so use custom allocator. GPU-side has
-        // alignment guarantees via its custom mempool allocations.
-        auto total_bytes = bytes_for_dynamic_vm(expr);
-        std::vector<std::uint8_t, host::impl::AlignedAllocator<std::uint8_t>> h_buf(total_bytes);
-        auto vm = get_dynamic_mv_node(expr, h_buf.data());
+          auto kernel =
+            host::RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
+                                                              src_dtype,
+                                                              work_dtype,
+                                                              dest_layout,
+                                                              expr.instrs,
+                                                              expr.layouts,
+                                                              expr.scalars,
+                                                              expr.soarray);
 
-        auto launch_recursive = [&](auto rank) {
-          constexpr int NDim = decltype(rank)::value;
+          kernel(const_cast<const void**>(expr.data.data()), result.data());
+        } else {
+          ssize_t size { result.size() };
 
-          constexpr ssize_t starting_axis { 1 };
+          bool use_32bit { (size < (1LL << 31)) };
 
-          const ssize_t limit { result.shape(0) };
+          // total_bytes will be aligned. Default arg is 16 bytes
+          // Vector doesn't guarantee alignment, so use custom allocator. GPU-side has
+          // alignment guarantees via its custom mempool allocations.
+          auto total_bytes = bytes_for_dynamic_vm(expr);
+          std::vector<std::uint8_t, host::impl::AlignedAllocator<std::uint8_t>> h_buf(total_bytes);
+          auto vm = get_dynamic_mv_node(expr, h_buf.data());
 
-          if (use_32bit) {
-            using CoordsT = StaticCoords<NDim, std::uint32_t>;
+          auto launch_recursive = [&](auto rank) {
+            constexpr int NDim = decltype(rank)::value;
 
-  #ifdef NCA_HAS_OPENMP
-            #pragma omp parallel for schedule(static)
-  #endif
-            for (ssize_t i = 0; i < limit; ++i) {
-              CoordsT coords;
-              coords[0] = i;
+            constexpr ssize_t starting_axis { 1 };
 
-              if constexpr (NDim > 1) {
-                host::execute_expression_recursive<DestT, CoordsT>(vm,
-                                                                   result,
-                                                                   coords,
-                                                                   starting_axis);
-              } else {
-                result[coords] = vm.template eval<DestT>(coords);
+            const ssize_t limit { result.shape(0) };
+
+            if (use_32bit) {
+              using CoordsT = StaticCoords<NDim, std::uint32_t>;
+
+    #ifdef NCA_HAS_OPENMP
+              #pragma omp parallel for schedule(static)
+    #endif
+              for (ssize_t i = 0; i < limit; ++i) {
+                CoordsT coords;
+                coords[0] = i;
+
+                if constexpr (NDim > 1) {
+                  host::execute_expression_recursive<DestT, CoordsT>(vm,
+                                                                     result,
+                                                                     coords,
+                                                                     starting_axis);
+                } else {
+                  result[coords] = vm.template eval<DestT>(coords);
+                }
+              }
+            } else {
+              using CoordsT = StaticCoords<NDim, ssize_t>;
+
+    #ifdef NCA_HAS_OPENMP
+              #pragma omp parallel for schedule(static)
+    #endif
+              for (ssize_t i = 0; i < limit; ++i) {
+                CoordsT coords;
+                coords[0] = i;
+                if constexpr (NDim > 1) {
+                  host::execute_expression_recursive<DestT, CoordsT>(vm,
+                                                                     result,
+                                                                     coords,
+                                                                     starting_axis);
+                } else {
+                  result[coords] = vm.template eval<DestT>(coords);
+                }
               }
             }
-          } else {
-            using CoordsT = StaticCoords<NDim, ssize_t>;
+          };
 
-  #ifdef NCA_HAS_OPENMP
-            #pragma omp parallel for schedule(static)
-  #endif
-            for (ssize_t i = 0; i < limit; ++i) {
-              CoordsT coords;
-              coords[0] = i;
-              if constexpr (NDim > 1) {
-                host::execute_expression_recursive<DestT, CoordsT>(vm,
-                                                                   result,
-                                                                   coords,
-                                                                   starting_axis);
-              } else {
-                result[coords] = vm.template eval<DestT>(coords);
-              }
-            }
+          switch (result.ndim()) {
+          case 1:  launch_recursive(std::integral_constant<int, 1>  {});  break;
+          case 2:  launch_recursive(std::integral_constant<int, 2>  {});  break;
+          case 3:  launch_recursive(std::integral_constant<int, 3>  {});  break;
+          case 4:  launch_recursive(std::integral_constant<int, 4>  {});  break;
+          case 5:  launch_recursive(std::integral_constant<int, 5>  {});  break;
+          case 6:  launch_recursive(std::integral_constant<int, 6>  {});  break;
+          case 7:  launch_recursive(std::integral_constant<int, 7>  {});  break;
+          case 8:  launch_recursive(std::integral_constant<int, 8>  {});  break;
+          case 9:  launch_recursive(std::integral_constant<int, 9>  {});  break;
+          case 10: launch_recursive(std::integral_constant<int, 10> {});  break;
           }
-        };
-
-        switch (result.ndim()) {
-        case 1:  launch_recursive(std::integral_constant<int, 1>  {});  break;
-        case 2:  launch_recursive(std::integral_constant<int, 2>  {});  break;
-        case 3:  launch_recursive(std::integral_constant<int, 3>  {});  break;
-        case 4:  launch_recursive(std::integral_constant<int, 4>  {});  break;
-        case 5:  launch_recursive(std::integral_constant<int, 5>  {});  break;
-        case 6:  launch_recursive(std::integral_constant<int, 6>  {});  break;
-        case 7:  launch_recursive(std::integral_constant<int, 7>  {});  break;
-        case 8:  launch_recursive(std::integral_constant<int, 8>  {});  break;
-        case 9:  launch_recursive(std::integral_constant<int, 9>  {});  break;
-        case 10: launch_recursive(std::integral_constant<int, 10> {});  break;
         }
       }
     }

@@ -532,11 +532,13 @@ typedef SSIZE_T ssize_t;
           const ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>&, double);
 
 #define INSTANTIATE_DEV_VM_OPS(T, L)                                                               \
+  /* *** Will test with JIT compiling the VM for now ... ***                                       \
   template __global__ void execute_expression_kernel<T,                                            \
     ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                   \
     ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                       \
     ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                   \
     ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>);                                       \
+     ***         So we comment out this portion          *** */                                    \
   template void ncarray::GPUEngine::execute_binary_expression<                                     \
       T, ncarray::DynamicExprMVNode<ncarray::DevTag>,                                              \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
@@ -566,11 +568,13 @@ typedef SSIZE_T ssize_t;
   INSTANTIATE_DEV_VM_FULL_REDUCE(T, L, AnyTraits)
 
 #define EXTERN_DEV_VM_OPS(T, L)                                                                    \
+  /* *** Will test with JIT compiling the VM for now ... ***                                       \
   extern template __global__ void execute_expression_kernel<T,                                     \
       ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                 \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \
       ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                 \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>);                                     \
+     ***         So we comment out this portion          *** */                                    \
   extern template void ncarray::GPUEngine::execute_binary_expression<T,                            \
       ncarray::DynamicExprMVNode<ncarray::DevTag>,                                                 \
       ncarray::ArrayImpl<ncarray::L, ncarray::DevViewPolicy>>(                                     \

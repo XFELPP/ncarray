@@ -1,7 +1,7 @@
 #include "ncarray/ncarrays.hh"
 #include "ncarray/ncdevarrays.cuh"
 
-#include "ncarray/jit/rtcompiler.hh"
+#include "ncarray/jit/device/rtcompiler.hh"
 
 #include "ncarray/expression/stencil.hh"
 
@@ -170,15 +170,15 @@ void test_fused_generic_add_bin_decomposed(ncarray::NCDevArrayView data,
       auto n_scalars { expr.scalars.size() };
       ncarray::DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
       ncarray::DType work_dtype { expr.work_dtype };
-      auto kernel = ncarray::RuntimeCompiler::instance().get_expr_kernel(res.dtype(),
-                                                                         src_dtype,
-                                                                         work_dtype,
-                                                                         n_views,
-                                                                         n_scalars,
-                                                                         expr.ndim(),
-                                                                         expr.shape(),
-                                                                         expr.instrs,
-                                                                         expr.soarray);
+      auto kernel = ncarray::device::RuntimeCompiler::instance().get_expr_kernel(res.dtype(),
+                                                                                src_dtype,
+                                                                                work_dtype,
+                                                                                n_views,
+                                                                                n_scalars,
+                                                                                expr.ndim(),
+                                                                                expr.shape(),
+                                                                                expr.instrs,
+                                                                                expr.soarray);
       auto launch_op = [&] <typename WorkT> () {
         // Sadly prep is missing the lambda dispatch time
         auto prep_start = std::chrono::high_resolution_clock::now();

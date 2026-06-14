@@ -24,7 +24,7 @@
 #include "ncarray/expression/mvnode.hh"
 #include "ncarray/expression/staticmvnode.hh"
 #include "ncarray/indexing.hh"
-#include "ncarray/jit/rtcompiler.hh"
+#include "ncarray/jit/device/rtcompiler.hh"
 #include "ncarray/layout.hh"
 #include "ncarray/op_traits.hh"
 #include "ncarray/reductions.hh"
@@ -105,15 +105,15 @@ namespace ncarray {
           DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
           DType work_dtype { expr.work_dtype };
           auto kernel =
-            RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
-                                                        src_dtype,
-                                                        work_dtype,
-                                                        n_views,
-                                                        n_scalars,
-                                                        expr.ndim(),
-                                                        expr.shape(),
-                                                        expr.instrs,
-                                                        expr.soarray);
+            device::RuntimeCompiler::instance().get_expr_kernel(result.dtype(),
+                                                                src_dtype,
+                                                                work_dtype,
+                                                                n_views,
+                                                                n_scalars,
+                                                                expr.ndim(),
+                                                                expr.shape(),
+                                                                expr.instrs,
+                                                                expr.soarray);
 
           auto launch_op = [&] <typename WorkT> () {
             // NOTE: I would just use a normal vector<DestT> ... but vector<bool> problems...
@@ -174,7 +174,26 @@ namespace ncarray {
           MemEntry ptrs { mem_pool.get_block(total_bytes) };
           auto vm = get_dynamic_mv_node(expr, ptrs.h_ptr, ptrs.d_ptr);
 
-          execute_expression_kernel<DestT><<<blocks, TPB>>>(vm, result.view());
+          // NOTE: Trying to use JIT version instead of AOT for now. Can always revert
+          // execute_expression_kernel<DestT><<<blocks, TPB>>>(vm, result.view());
+
+          auto kernel =
+            device::RuntimeCompiler::instance().get_dynamic_vm_kernel(result.dtype(),
+                                                                      expr.soarray);
+
+          std::vector<void*> args;
+          args.push_back(reinterpret_cast<void*>(&vm));
+
+          auto view = result.view();
+          args.push_back(reinterpret_cast<void*>(&view));
+
+          CUresult launch_res = cuLaunchKernel(kernel,
+                                               blocks, 1, 1, // Grid dims  (x, y, z)
+                                               TPB, 1, 1,    // Block dims (x, y, z)
+                                               0,            // Shmem in bytes
+                                               0,            // Stream
+                                               args.data(),  // Kernel args
+                                               NULL);
         }
       }
 
@@ -337,7 +356,8 @@ namespace ncarray {
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
       auto kernel =
-        RuntimeCompiler::instance().get_fill_kernel(arr.dtype(), dest_is_soarr);
+        device::RuntimeCompiler::instance().get_fill_kernel(arr.dtype(),
+                                                            dest_is_soarr);
 
       auto view = arr.view();
 
@@ -403,9 +423,10 @@ namespace ncarray {
         int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
         if (dest_is_dev && src_is_dev) {
           // Casting copy from device to device
-          auto kernel = RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
-                                                                    arr.dtype(),
-                                                                    src_is_soarr);
+          auto kernel =
+            device::RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
+                                                                arr.dtype(),
+                                                                src_is_soarr);
           auto view = arr.view();
 
           std::vector<void*> args;
@@ -431,9 +452,10 @@ namespace ncarray {
           DestT* d_tmp { nullptr };
           CHECK_CUDA_ERROR(cudaMalloc(&d_tmp, arr.size() * sizeof(DestT)));
 
-          auto kernel = RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
-                                                                    arr.dtype(),
-                                                                    src_is_soarr);
+          auto kernel =
+            device::RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
+                                                                arr.dtype(),
+                                                                src_is_soarr);
           auto view = arr.view();
 
           std::vector<void*> args;
@@ -518,10 +540,10 @@ namespace ncarray {
         if constexpr (src_is_dev) {
           // Device to device
           auto kernel =
-            RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                       src.dtype(),
-                                                                       dest_is_soarr,
-                                                                       src_is_soarr);
+            device::RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
+                                                                               src.dtype(),
+                                                                               dest_is_soarr,
+                                                                               src_is_soarr);
           auto dest_view = dest.view();
           auto src_view = src.view();
 
@@ -555,10 +577,10 @@ namespace ncarray {
           // NOTE: Since we are using tmp, it now has dest's DType, and it is always
           //       an NCOffsets-style Array -- so the last argument must be false.
           auto kernel =
-            RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                       dest.dtype(),
-                                                                       dest_is_soarr,
-                                                                       false);
+            device::RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
+                                                                               dest.dtype(),
+                                                                               dest_is_soarr,
+                                                                               false);
           auto dest_view = dest.view();
           auto src_view = tmp.view();
 
@@ -588,10 +610,10 @@ namespace ncarray {
         // NOTE: Since we are using tmp, it now has dest's DType, and it is always
         //       an NCOffsets-style Array -- so the last argument must be false.
         auto kernel =
-          RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                     src.dtype(),
-                                                                     false,
-                                                                     src_is_soarr);
+          device::RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
+                                                                             src.dtype(),
+                                                                             false,
+                                                                             src_is_soarr);
         auto dest_view = tmp_view;
         auto src_view = src.view();
 

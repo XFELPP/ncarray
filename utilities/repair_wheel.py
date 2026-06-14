@@ -31,7 +31,7 @@ def main():
                 "--exclude",
                 "libncdevarray.so.1",
                 "--exclude",
-                "libncdevarrayjit.so.1",
+                "libncarrayjit.so.1",
             ]
         )
     cmd.extend(

@@ -7,14 +7,14 @@ This project should be considered to be in an early alpha stage. The project is 
 The library is still lacking documentation, and while the tests cover the basics, their coverage is rather sparse.
 
 ## Installation
-### From PyPI
-Built versions from `PyPI` are currently available up to v0.4.0. Builds are available for Mac, Linux and Windows. The CUDA compatibility is included in Linux and Windows builds. Due to size limits and the added CUDA functionality v0.5.0+ is not yet available, pending storage-quota-increase request approval.
+The library contains two halves, the core `libncarray` (C++) and the Python bindings in `ncarray`. This dual arrangement can be built and shipped in a variety of formats.
 
-```bash
-> pip install ncarray
-```
+1. A split-wheel with the shared libraries added afterwards (e.g. `auditwheel`).
+2. A fully self-contained wheel where the shared libraries are incuded in a `libs` sub-directory of the Python `ncarray` package.
+3. In a separated form as `libncarray` and Python bindings in `ncarray`, as with a conda install.
 
-The necessary headers and shared libraries are also included in the wheels, if working in C++ or building new extensions. Two utility functions are provided at the top of the `ncarray` package to assist in locating the correct binaries and files:
+Regardless of the distribution style, the necessary headers and shared libraries can always be found from Python if needed (e.g. from build scripts). Two utility functions are provided at the top of the `ncarray` package to assist in locating the correct binaries and files:
+
 ```py
 import ncarray
 
@@ -25,9 +25,27 @@ path_to_headers: str = ncarray.get_include()
 path_to_libs: str = ncarray.get_lib_dir()
 ```
 
-The above can be incorporated into your build system as needed.
+### Wheels from GitHub
 
-**NOTE:** In the C++ headers, many operator overloads have a corresponding named alternative. E.g. `operator+()` and `add()` both exist and have the same functionality. The distributed shared libraries do NOT have template specializations for the latter named variants. This helps keep the size of the files down (and helps reduce compile time a bit). The Python bindings only use the `operator+` style calls. This is just to keep it in mind should you prefer using them - they will need to be compiled from scratch.
+Wheels are provided using the split-wheel approach as part of every release on GitHub. These are built for common platforms:
+- Linux (glibc)
+- Linux (musl)
+- macOS
+- Windows
+
+The split-wheels are built for the 4 platforms above for Python 3.8 - 3.13.
+
+You can download the appropriate archive and install it with pip.
+
+```bash
+> wget <URL for GitHub archive>
+> pip install ncarray-<version..>.whl
+```
+
+### From PyPI
+PyPI wheels use the self-contained approach, with deployments for all the same platforms and Python versions as those on the GitHub release.
+
+**NOTE:** Wheels are currently only available for version `v0.4.0` and earlier on PyPI. The CUDA builds are currently much larger than allowed by storage quotas, and so pending request approval for additional space, it is not recommended to install directly from PyPI.
 
 ### Building from source
 #### Using meson directly
@@ -63,10 +81,6 @@ This should build with `gcc 13+` and `clang 15+`. Meson `1.10.1` or greater is r
 
 GPU support is tested with `CUDA 12.8` - the entire `12.x` series will likely be work, and `13.x` is likely okay as well.
 
-### Wheels from GitHub
-
-The wheels and associated assets are also provided in the GitHub releases if not using `pip`.
-
 ## Overview
 
 `ncarray` provides a number of C++ array classes, compatible with NumPy, for working with non-contiguous data that cannot be described exclusively by strides. Specifically, these classes deal with data described by pointer-to-pointer setups/tables (double pointers, i.e. suboffsets in the Python world).
@@ -83,7 +97,8 @@ NumPy is extraordinarily powerful and flexible; however, it is designed for deal
 
 - Lazy evaluation via a backend expression engine inspired by numexpr.
   - Python bindings by default will use eager evaluation. This can be toggled globally on/off, or managed via context manager.
-- JIT compilation and Stencil support for CUDA GPU-enabled installs.
+- JIT compilation for both host and device code for evaluation of the expressions. Host-based JIT uses `asmjit` to emit machine code. NVRTC is used for CUDA device code.
+  - Additional strategies include use of Stencils, which can further improve performance, where applicable.
 - Pointer axis support - zero-copy on disjoint sets of arrays
 - Type and concept system with various traits allowing for automatic type promotion (small int to wide int) when accumulating, or implementations of comparison operators for types like `std::complex<T>`.
 - Multi-dimensional array indexing using integers, slices or placeholder axes (ellipsis in Python).

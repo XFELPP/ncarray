@@ -1,0 +1,5 @@
+[wrap-git]
+directory = asmjit
+url = https://github.com/asmjit/asmjit.git
+revision = head
+depth = 1

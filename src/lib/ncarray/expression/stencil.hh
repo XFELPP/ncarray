@@ -13,7 +13,7 @@
 #include "ncarray/expression/interface.hh"
 #include "ncarray/expression/mvnode.hh"
 #include "ncarray/indexing.hh"
-#include "ncarray/jit/rtcompiler.hh"
+#include "ncarray/jit/device/rtcompiler.hh"
 
 #include <cstdint>
 #include <optional>
@@ -137,14 +137,15 @@ namespace ncarray {
       s.m_constants_buf.resize(scalar_off);
 
       // Build the single kernel to be reused by the stencil going forward.
-      s.m_kernel = RuntimeCompiler::instance().get_stencil_expr_kernel<NDIM>(s.m_expr_dtype,
-                                                                             dtype_traits<SrcT>::value,
-                                                                             s.m_work_dtype,
-                                                                             s.m_offsets,
-                                                                             s.m_instrs,
-                                                                             expr.scalars,
-                                                                             is_pointer_axis,
-                                                                             is_soarr);
+      s.m_kernel =
+        device::RuntimeCompiler::instance().get_stencil_expr_kernel<NDIM>(s.m_expr_dtype,
+                                                                          dtype_traits<SrcT>::value,
+                                                                          s.m_work_dtype,
+                                                                          s.m_offsets,
+                                                                          s.m_instrs,
+                                                                          expr.scalars,
+                                                                          is_pointer_axis,
+                                                                          is_soarr);
 
       return s;
     }

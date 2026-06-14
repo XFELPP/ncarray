@@ -36,10 +36,10 @@ namespace {
         py::isinstance<ncarray::ExprMVNode<ncarray::DevTag>>(expr)) {
 #ifdef NCA_HAS_CUDA
       if (needs_device_vm(expr)) {
-        return py::cast(pyncarray::eval_python_expr<ncarray::DevTag>(expr));
+        return pyncarray::eval_python_expr<ncarray::DevTag>(expr);
       }
 #endif
-      return py::cast(pyncarray::eval_python_expr<ncarray::HostTag>(expr));
+      return pyncarray::eval_python_expr<ncarray::HostTag>(expr);
     }
     // If not an expression just pass through, essentially a no-op
     return expr;

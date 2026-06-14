@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.5.1',
+    version: '0.6.0',
     default_options: [
         'cpp_std=c++23,c++latest',
         'cuda_std=c++20',
@@ -195,6 +195,16 @@ if build_python_opt
     pybind11_dep = dependency('pybind11', required: true)
 endif
 
+cmake = import('cmake')
+asmjit_opts = cmake.subproject_options()
+asmjit_opts.add_cmake_defines({
+    'ASMJIT_STATIC': true,
+    'ASMJIT_NO_INSTALL': true,
+    'CMAKE_POSITION_INDEPENDENT_CODE': true,
+})
+asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
+asmjit_dep = asmjit_proj.dependency('asmjit')
+
 #### Main Python Setup ####
 ###########################
 
@@ -321,11 +331,22 @@ installed_expression_stencil_headers = [
     'src/lib/ncarray/expression/stencil.hh',
 ]
 
-installed_jit_headers = [
-    'src/lib/ncarray/jit/path_utils.hh',
-    'src/lib/ncarray/jit/jit_utils.hh',
-    'src/lib/ncarray/jit/rtcompiler.hh',
+installed_host_jit_headers = [
+    'src/lib/ncarray/jit/host/a64.hh',
+    'src/lib/ncarray/jit/host/rtcompiler.hh',
+    'src/lib/ncarray/jit/host/x86.hh',
 ]
+
+installed_common_jit_headers = [
+    'src/lib/ncarray/jit/jit_utils.hh',
+    'src/lib/ncarray/jit/path_utils.hh',
+]
+
+if nca_has_cuda
+    installed_device_jit_headers = [
+        'src/lib/ncarray/jit/device/rtcompiler.hh',
+    ]
+endif # nca_has_cuda
 
 # The following headers are for integration with device code on host side
 installed_device_compat_headers = [
@@ -346,6 +367,65 @@ installed_device_headers = [
 ]
 
 if build_core_opt
+    deps_for_ncarrayjit = []
+    if not nca_has_cuda
+        deps_for_ncarrayjit = deps_for_ncarray + [asmjit_dep]
+        libncarrayjit = shared_library(
+            'ncarrayjit',
+            [
+                # Host
+                'src/lib/ncarray/jit/host/a64.cc',
+                'src/lib/ncarray/jit/host/rtcompiler.cc',
+                'src/lib/ncarray/jit/host/x86.cc',
+                # Common
+                'src/lib/ncarray/jit/jit_utils.cc',
+                'src/lib/ncarray/jit/path_utils.cc',
+            ],
+            cpp_args: ['-DNCA_BUILD_JIT_API'],
+            dependencies: deps_for_ncarrayjit,
+            include_directories: ncarray_headers,
+            install: true,
+            install_dir: libncarray_install_dir,
+            install_rpath: lib_install_rpath,
+        )
+    else
+        deps_for_ncarrayjit = deps_for_ncarray + [asmjit_dep, cuda_dep, dl_dep] + dbghelp_dep
+        libncarrayjit = shared_library(
+            'ncarrayjit',
+            [
+                # Host
+                'src/lib/ncarray/jit/host/a64.cc',
+                'src/lib/ncarray/jit/host/rtcompiler.cc',
+                'src/lib/ncarray/jit/host/x86.cc',
+                # Common
+                'src/lib/ncarray/jit/jit_utils.cc',
+                'src/lib/ncarray/jit/path_utils.cc',
+                # Device
+                'src/lib/ncarray/jit/device/rtcompiler.cc',
+            ],
+            cpp_args: ['-DNCA_BUILD_JIT_API'],
+            cuda_args: nca_cuda_args,
+            # dbghelp_dep is for Windows - otherwise, its an empty list
+            dependencies: deps_for_ncarrayjit,
+            include_directories: ncarray_headers,
+            install: true,
+            install_dir: libncarray_install_dir,
+            install_rpath: lib_install_rpath,
+            version: '1',
+            soversion: '1',
+        )
+    endif # nca_has_cuda
+
+    ncarrayjit_dep = declare_dependency(
+        link_with: [
+            libncarrayjit,
+        ],
+        dependencies: deps_for_ncarrayjit,
+        include_directories: ncarray_headers,
+    )
+
+    deps_for_ncarray += [asmjit_dep, ncarrayjit_dep]
+
     host_src_dir = meson.current_source_dir() / 'src/lib/ncarray/tus/host'
 
     # Create the translation units if they don't already exist.
@@ -414,40 +494,19 @@ if build_core_opt
             installed_expression_headers,
             install_dir: header_install_dir / 'ncarray/expression',
         )
+
+        install_headers(
+            installed_host_jit_headers,
+            install_dir: header_install_dir / 'ncarray/jit/host',
+        )
+
+        install_headers(
+            installed_common_jit_headers,
+            install_dir: header_install_dir / 'ncarray/jit',
+        )
     endif # not nca_as_wheel_opt
 
     if nca_has_cuda
-        libncdevarrayjit = shared_library(
-            'ncdevarrayjit',
-            [
-                'src/lib/ncarray/jit/path_utils.cc',
-                'src/lib/ncarray/jit/jit_utils.cc',
-                'src/lib/ncarray/jit/rtcompiler.cc',
-            ],
-            cpp_args: ['-DNCA_BUILD_JIT_API'],
-            cuda_args: nca_cuda_args,
-            # dbghelp_dep is for Windows - otherwise, its an empty list
-            dependencies: [cuda_dep, dl_dep] + dbghelp_dep,
-            include_directories: ncarray_headers,
-            install: true,
-            install_dir: libncarray_install_dir,
-            install_rpath: lib_install_rpath,
-            version: '1',
-            soversion: '1',
-
-            # Force C++ compiler linkage (no RDC so fine)
-            link_language: 'cpp',
-            override_options: ['cpp_std=c++20', 'cuda_std=c++20'],
-        )
-
-        ncdevarrayjit_dep = declare_dependency(
-            link_with: [
-                libncdevarrayjit,
-            ],
-            dependencies: [cuda_dep, dl_dep],
-            include_directories: ncarray_headers,
-        )
-
         if not nca_as_wheel_opt
             install_headers(
                 installed_gpu_engine_headers,
@@ -460,8 +519,8 @@ if build_core_opt
             )
 
             install_headers(
-                installed_jit_headers,
-                install_dir: header_install_dir / 'ncarray/jit',
+                installed_device_jit_headers,
+                install_dir: header_install_dir / 'ncarray/jit/device',
             )
         endif # not nca_as_wheel_opt
 
@@ -523,7 +582,7 @@ if build_core_opt
             cpp_args: ['-DNCA_BUILD_NCARRAY_API'],
             cuda_args: nca_cuda_args + ['-DNCA_BUILD_NCARRAY_API'],
             include_directories: ncarray_headers,
-            dependencies: [ncdevarrayjit_dep, ncarray_dep],
+            dependencies: [asmjit_dep, ncarrayjit_dep, ncarray_dep],
             install: true,
             install_dir: libncarray_install_dir,
             install_rpath: lib_install_rpath,
@@ -538,7 +597,6 @@ if build_core_opt
         ncdevarray_dep = declare_dependency(
             link_with: [
                 libncdevarray,
-                libncdevarrayjit,
             ],
             dependencies: cuda_dep,
             include_directories: ncarray_headers,
@@ -566,19 +624,14 @@ else
         include_directories: ncarray_headers,
     )
 
+    libncarrayjit = cpp.find_library('ncarrayjit', required: true)
+
     if nca_has_cuda
         libncdevarray = cpp.find_library('ncdevarray', required: true)
-        libncdevarrayjit = cpp.find_library('ncdevarrayjit', required: true)
-        ncdevarrayjit_dep = declare_dependency(
-            dependencies: deps_for_ncarray + [
-                libncdevarrayjit,
-            ],
-            include_directories: ncarray_headers,
-        )
+
         ncdevarray_dep = declare_dependency(
             dependencies: deps_for_ncarray + [
                 ncarray_dep,
-                ncdevarrayjit_dep,
                 libncdevarray,
             ],
             include_directories: ncarray_headers,
@@ -588,7 +641,7 @@ endif # end build_core_opt
 
 if build_python_opt
     # Figure out dependencies
-    deps_for_py_mod = [ncarray_dep, pybind11_dep, py3_dep]
+    deps_for_py_mod = [asmjit_dep, ncarray_dep, ncarrayjit_dep, pybind11_dep, py3_dep]
 
     if nca_has_cuda
         deps_for_py_mod += cuda_dep
@@ -620,6 +673,16 @@ if build_python_opt
             pure: false,
             subdir: 'ncarray/include/ncarray/expression',
         )
+        py3.install_sources(
+            installed_host_jit_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/jit/host',
+        )
+        py3.install_sources(
+            installed_common_jit_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/jit',
+        )
 
         if nca_has_cuda
             # Core GPU/CUDA headers
@@ -636,9 +699,9 @@ if build_python_opt
             )
 
             py3.install_sources(
-                installed_jit_headers,
+                installed_device_jit_headers,
                 pure: false,
-                subdir: 'ncarray/include/ncarray/jit',
+                subdir: 'ncarray/include/ncarray/jit/device',
             )
 
             #### Install CCCL Headers for JIT ####
@@ -698,7 +761,7 @@ if build_python_opt
     if nca_has_cuda and cpp.get_id() == 'msvc'
         py_mod_link_args += [
             '/DELAYLOAD:ncdevarray-1.dll',
-            '/DELAYLOAD:ncdevarrayjit-1.dll',
+            '/DELAYLOAD:ncarrayjit-1.dll',
             '/DELAYLOAD:cudart64_12.dll',
             '/DELAYLOAD:nvrtc64_12.dll',
             'delayimp.lib',
@@ -863,11 +926,10 @@ if build_core_opt
         gtest_dep = gtest_proj.get_variable('gtest_main_dep')
     endif
 
-    deps_for_tests = [gtest_dep, ncarray_dep]
+    deps_for_tests = [asmjit_dep, gtest_dep, ncarray_dep, ncarrayjit_dep]
     if nca_has_cuda
         deps_for_tests += cuda_dep
         deps_for_tests += ncdevarray_dep
-        deps_for_tests += ncdevarrayjit_dep
     endif
 
     test_index = executable(
@@ -1027,7 +1089,7 @@ if build_core_opt
     ##########################
     if build_examples_opt
         if nca_has_cuda
-            pixel_binning = executable(
+            pixel_binning_device = executable(
                 'benchmark_pixel_binning',
                 [
                     'examples/benchmark_binning.cu',
@@ -1042,5 +1104,15 @@ if build_core_opt
                 override_options: ['cpp_std=c++20', 'cuda_std=c++20'],
             )
         endif # Has CUDA
+
+        pixel_binning_host = executable(
+            'benchmark_pixel_binning_host',
+            [
+                'examples/benchmark_binning.cc',
+            ],
+            dependencies: deps_for_tests,
+            install: true,
+            include_directories: ncarray_headers,
+        )
     endif # build_examples_opt
 endif # build_core_opt

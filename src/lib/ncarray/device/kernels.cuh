@@ -51,6 +51,10 @@ namespace ncarray {
     const unsigned size { static_cast<unsigned>(result.size()) };
     unsigned b_idx { blockIdx.x * blockDim.x + threadIdx.x };
 
+    if (b_idx >= size) {
+      return;
+    }
+
     // NOTE: By pulling the reference out first, you avoid a type dispatch inside
     //       The proxy's operator=. I.e. result[coords] = ... will cause a type-safe
     //       check on the datatype. Using operator T& bypasses. This is safe because
