@@ -195,15 +195,25 @@ if build_python_opt
     pybind11_dep = dependency('pybind11', required: true)
 endif
 
-cmake = import('cmake')
-asmjit_opts = cmake.subproject_options()
-asmjit_opts.add_cmake_defines({
-    'ASMJIT_STATIC': true,
-    'ASMJIT_NO_INSTALL': true,
-    'CMAKE_POSITION_INDEPENDENT_CODE': true,
-})
-asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
-asmjit_dep = asmjit_proj.dependency('asmjit')
+if build_core_opt
+    cmake = import('cmake')
+    asmjit_opts = cmake.subproject_options()
+    asmjit_opts.add_cmake_defines({
+        'ASMJIT_STATIC': true,
+        'ASMJIT_NO_INSTALL': true,
+        'CMAKE_POSITION_INDEPENDENT_CODE': true,
+    })
+    asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
+    asmjit_dep = asmjit_proj.dependency('asmjit')
+else
+    # I have no idea what happens in macOS cibuildwheel. But despite cmake being available
+    # cmake being pip installed, brew installed, and cmake being used to BUILD libncarray
+    # it is incapable of finding cmake during the actual wheel phase on GitHub runner.
+    # Gave up. Hopefully since its statically linked to the libncarray etc it's fine to
+    # just make this empty.
+    asmjit_inc = include_directories('subprojects/asmjit')
+    asmjit_dep = declare_dependency(include_directories: asmjit_inc)
+endif
 
 #### Main Python Setup ####
 ###########################
@@ -625,6 +635,12 @@ else
     )
 
     libncarrayjit = cpp.find_library('ncarrayjit', required: true)
+    ncarrayjit_dep = declare_dependency(
+        dependencies: deps_for_ncarray + [
+            libncarrayjit,
+        ],
+        include_directories: ncarray_headers,
+    )
 
     if nca_has_cuda
         libncdevarray = cpp.find_library('ncdevarray', required: true)

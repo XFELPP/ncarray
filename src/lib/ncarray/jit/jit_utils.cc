@@ -8,7 +8,9 @@
 
 #include "ncarray/jit/jit_utils.hh"
 
+#ifdef NCA_HAS_CUDA
 #include <cuda.h>
+#endif
 
 #include <iomanip>
 #include <sstream>
@@ -24,6 +26,7 @@ namespace ncarray {
   }
 
   std::string get_arch_opt() {
+#ifdef NCA_HAS_CUDA
     int major_v;
     int minor_v;
     CUdevice dev;
@@ -36,5 +39,9 @@ namespace ncarray {
     };
 
     return arch_opt;
+#else
+    std::string arch_opt { "" };
+    return arch_opt;
+#endif
   }
 } // namespace ncarray

@@ -161,8 +161,6 @@ namespace ncarray {
 
       #pragma unroll NViews
       for (int i = 0; i < NViews; ++i) {
-        short map_val = op_map[i];
-
         if (data[i] == nullptr) {
           // Null data is considered a virtual load, e.g. for IDX/IOTA
           values[i] = this->md_to_lin<ScalarT>(coords);
