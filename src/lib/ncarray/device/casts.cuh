@@ -86,7 +86,12 @@ namespace ncarray {
         return vm_cast_logic<DestT, double>(ptr);
       }
       case DType::float128: {
+#ifdef __CUDACC_RTC__
+        // No long double in device code (nvcc maps automatically, NVRTC does not)
+        return vm_cast_logic<DestT, double>(ptr);
+#else
         return vm_cast_logic<DestT, long double>(ptr);
+#endif
       }
 
       case DType::complex64: {
@@ -96,7 +101,12 @@ namespace ncarray {
         return vm_cast_logic<DestT, complex<double>>(ptr);
       }
       case DType::complex256: {
+#ifdef __CUDACC_RTC__
+        // No long double in device code (nvcc maps automatically, NVRTC does not)
+        return vm_cast_logic<DestT, complex<double>>(ptr);
+#else
         return vm_cast_logic<DestT, complex<long double>>(ptr);
+#endif
       }
 
       case DType::vfloat2: {

@@ -76,6 +76,8 @@ using std::uint32_t;
 using std::uint64_t;
 
 using std::decay_t;
+
+using std::trunc;
 #endif
 
 #ifndef NCA_HD
@@ -197,6 +199,8 @@ namespace ncarray {
 
     NCA_HD static T mod(const T& a, const T& b) {
       using U = decay_t<T>;
+      // NOTE: See below about long double. If a long double vec type
+      //       added in the future, must handle that here as well.
       if constexpr (Vector2DType<U>) {
         using V = decay_t<decltype(a.x)>;
         if constexpr (is_integral_v<V>) {
@@ -233,7 +237,17 @@ namespace ncarray {
       } else if constexpr (is_integral_v<U>) {
         return a % b;
       } else if constexpr (is_floating_point_v<U>) {
-        return fmod(a, b);
+        if constexpr (is_same_v<U, long double>) {
+#ifdef __CUDACC_RTC__
+          // NOTE: No quad-precision long double supported in device code
+          return
+            static_cast<long double>(fmod(static_cast<double>(a), static_cast<double>(b)));
+#else
+          return fmod(a, b);
+#endif
+        } else {
+          return fmod(a, b);
+        }
       } else {
         return a;
       }
@@ -337,7 +351,38 @@ namespace ncarray {
     }
 
     NCA_HD static complex<T> mod(const complex<T>& a, const complex<T>& b) {
-      return a;
+      if (b.real() == 0 && b.imag() == 0) {
+        if constexpr (is_same_v<T, long double>) {
+#ifdef __CUDACC_RTC__
+          // NOTE: No quad-precision long double supported in device code
+          return { numeric_limits<double>::quiet_NaN(), numeric_limits<double>::quiet_NaN() };
+#else
+          return { numeric_limits<T>::quiet_NaN(), numeric_limits<T>::quiet_NaN() };
+#endif
+        } else {
+          return { numeric_limits<T>::quiet_NaN(), numeric_limits<T>::quiet_NaN() };
+        }
+      }
+
+      if constexpr (is_same_v<T, long double>) {
+#ifdef __CUDACC_RTC__
+        // NOTE: No quad-precision long double supported in device code
+        using U = double;
+#else
+        using U = T;
+#endif
+        complex<U> q { a / b };
+        U real { trunc(q.real()) };
+        U imag { trunc(q.imag()) };
+
+        return complex<U>(a) - complex<U>(b) * complex<U>(real, imag);
+      } else {
+        complex<T> q { a / b };
+        T real { trunc(q.real()) };
+        T imag { trunc(q.imag()) };
+
+        return a - b * complex<T>(real, imag);
+      }
     }
   };
 

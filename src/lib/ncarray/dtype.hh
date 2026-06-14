@@ -164,11 +164,28 @@ namespace ncarray {
     case DType::float64:
     case DType::complex64:
       return 8;
-    case DType::float128:
+    case DType::float128: {
+#ifdef __CUDACC_RTC__
+      // For NVRTC must use double (double), not quad precision (long double)
+      // This should hopefully have aready been mapped to DType::float64
+      // but in case it made it through, make sure to return correct size
+      return 8;
+#else
+      return 16;
+#endif
+    }
     case DType::complex128:
       return 16;
-    case DType::complex256:
+    case DType::complex256: {
+#ifdef __CUDACC_RTC__
+      // For NVRTC must use double (complex<double>), not quad precision (complex<long double>)
+      // This should hopefully have aready been mapped to DType::complex128
+      // but in case it made it through, make sure to return correct size
+      return 16;
+#else
       return 32;
+#endif
+    }
     case DType::vfloat2:
       return 8;
     case DType::vfloat3:
@@ -306,6 +323,18 @@ namespace ncarray {
    *
    * This includes basic C++ types, complex numbers and vector types.
    */
+#ifdef __CUDACC_RTC__
+  // For NVRTC (and really device code, generally) long double does not work
+  // nvcc generally maps this automatically to double, but must exclude both
+  // long double, and complex<long double> from NVRTC code
+  using base_types = type_list<
+    bool, char,
+    uint8_t, uint16_t, uint32_t, uint64_t,
+    int8_t, int16_t, int32_t, int64_t,
+    float, double, // No long double
+    complex<float>, complex<double>, // No complex<long double>
+    Float2, Float3,  Float4, Double2, Double3, Double4>;
+#else
   using base_types = type_list<
     bool, char,
     uint8_t, uint16_t, uint32_t, uint64_t,
@@ -313,6 +342,7 @@ namespace ncarray {
     float, double, long double,
     complex<float>, complex<double>, complex<long double>,
     Float2, Float3, Float4, Double2, Double3, Double4>;
+#endif
 
   /**
    * A struct for concatenating type_lists together.
@@ -417,10 +447,25 @@ namespace ncarray {
    * explosion to some degree). In certain places, broader dispatching may be
    * desired. In that case, using list_dispatcher directly with specialized
    * type lists can be done instead.
+   *
+   * NOTE: In device code, long double is not supported. nvcc generally maps this to
+   *       double automatically. NVRTC does not. We explicitly map long double to double
+   *       and complex<long double> to complex<double> for NVRTC compiled code.
    */
   template <typename Visitor>
   NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
+#ifdef __CUDACC_RTC__
+    if (type == DType::float128) {
+      return list_dispatcher<base_types>::dispatch(DType::float64,
+                                                   forward<Visitor>(visitor));
+    }
+    if (type == DType::complex256) {
+      return list_dispatcher<base_types>:::dispatch(DType::complex128,
+                                                    forward<Visitor>(visitor));
+    }
+#else
     return list_dispatcher<base_types>::dispatch(type, forward<Visitor>(visitor));
+#endif
   }
 
 #if defined(__clang__)

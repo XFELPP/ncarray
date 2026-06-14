@@ -340,7 +340,13 @@ namespace ncarray {
 
     std::string RuntimeCompiler::get_dynamic_vm_kernel_str(DType dest_t, bool expr_is_soarr) {
       auto get_dtype_name = [&] <typename T> () {
-        return get_name_for_type<T>();
+        if constexpr (std::is_same_v<T, long double>) {
+          return get_name_for_type<double>();
+        } else if constexpr (std::is_same_v<T, std::complex<long double>>) {
+          return get_name_for_type<std::complex<double>>();
+        } else {
+          return get_name_for_type<T>();
+        }
       };
 
       std::string dest_t_name = dispatch(dest_t, get_dtype_name);

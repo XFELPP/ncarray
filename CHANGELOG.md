@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Similar runtime JIT compilation strategy for host-side expressions. Provide a rudimentary compilation phase and using `asmjit` output functions for linearizable expression tapes.
 
+### Changed
+- Switch to using JIT compiler for the dynamic VM in device code.
+- Additional index checks for out-of-bounds indexing in Python bindings.
+- Map long double to double for device code. Map complex<long double> to complex<double> for device code.
+
+### Fixed
+- Fixed improper behaviour when slicing (indexing) a temporary view in Python bindings.
+- Broken long double in device code.
+- Fixed modulo for quad precision issues and complex numbers.
+
+
 ## [0.5.1] - 2026-06-03
 
 ### Changed
