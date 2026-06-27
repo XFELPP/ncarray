@@ -9,7 +9,7 @@ PROJECT_NUMBER         =
 PROJECT_BRIEF          = "Non-contiguous array support for C++ and Python."
 PROJECT_LOGO           =
 PROJECT_ICON           =
-OUTPUT_DIRECTORY       = docs
+OUTPUT_DIRECTORY       = docs/api
 CREATE_SUBDIRS         = NO
 CREATE_SUBDIRS_LEVEL   = 8
 ALLOW_UNICODE_NAMES    = NO
@@ -220,7 +220,7 @@ IGNORE_PREFIX          =
 #---------------------------------------------------------------------------
 # Configuration options related to the HTML output
 #---------------------------------------------------------------------------
-GENERATE_HTML          = YES
+GENERATE_HTML          = NO
 HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
 HTML_HEADER            =
@@ -335,7 +335,7 @@ XML_NS_MEMB_FILE_SCOPE = NO
 #---------------------------------------------------------------------------
 # Configuration options related to the DOCBOOK output
 #---------------------------------------------------------------------------
-GENERATE_DOCBOOK       = YES
+GENERATE_DOCBOOK       = NO
 DOCBOOK_OUTPUT         = docbook
 #---------------------------------------------------------------------------
 # Configuration options for the AutoGen Definitions output
