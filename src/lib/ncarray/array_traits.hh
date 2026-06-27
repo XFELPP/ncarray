@@ -52,11 +52,8 @@ using std::same_as;
 #endif
 
 namespace ncarray {
-  namespace impl {
-    template <typename T = void> struct default_owner;
-  } // namespace impl
   /**
-   * The following concepts enforce the interface for the generic algorithms.
+   * Determines an object that has dimensionality and defined shape for each axis.
    */
   template <typename T>
   concept Shaped = requires(const T arr) {
@@ -64,37 +61,60 @@ namespace ncarray {
     { arr.shape() } -> convertible_to<const ssize_t*>;
   };
 
+  /**
+   * Determines an object that provides strides in bytes per axis.
+   */
   template <typename T>
   concept Strided = requires(const T arr) {
     { arr.strides() } -> convertible_to<const ssize_t*>;
   };
 
+  /**
+   * Determines an object that has exists over some data.
+   */
   template <typename T>
   concept HasData = requires(const T arr) {
     { arr.data() } -> convertible_to<const void*>;
   };
 
+  /**
+   * Determines an object that has a known data type for its elements.
+   */
   template <typename T>
   concept HasDType = requires(const T arr) {
     { arr.dtype() } -> same_as<ncarray::DType>;
   };
 
+  /**
+   * Determines an object as meeting an the necessary requirements to be an array.
+   */
   template <typename T>
   concept ArrayLike = Shaped<T> && Strided<T> && HasData<T> && HasDType<T>;
 
-  // Mutable/writable arrays can get data that is not just const void*
+  /**
+   * Determines an array that is mutable.
+   *
+   * @deprecated The array mutability is now accessed via a `read only` bool flag.
+   * @todo Update concepts for correct mutability checks.
+   */
   template <typename T>
   concept MutableArrayLike = ArrayLike<T> && requires(T arr) {
     { arr.data() } -> same_as<void*>;
   };
 
+  /**
+   * Determines an array that is a light-weight, non-owning, view of the data.
+   */
   template <class T>
   concept ViewArrayLike = ArrayLike<T> &&
     is_base_of_v<ViewTag, typename remove_cvref_t<T>::StoragePolicy>;
 
 #ifndef __CUDACC_RTC__
-  // ArrayLikes that own the data should be constructable from just the shape and type
-  // This indicates they can control data buffer
+  /**
+   * Determines an array that owns (i.e., allocated space for) the data it describes.
+   *
+   * @note This concept is not applicable to device code. It is not usable in device code.
+   */
   template <typename T>
   concept OwningArrayLike = ArrayLike<T> && requires(std::vector<ssize_t> shape, DType dtype) {
     T(shape, dtype);
