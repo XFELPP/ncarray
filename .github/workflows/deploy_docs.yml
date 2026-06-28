@@ -34,7 +34,7 @@ jobs:
       - name: Generate Markdown
         run: |
           npm install -g moxygen
-          npm install -g fast-xml-parser
+          npm install fast-xml-parser
           doxygen Doxyfile
           moxygen --frontmatter --pages --classes --html-anchors --output docs/api/md/api-%s.md docs/api/xml
           # Script runs inplace in the docs/md folder
