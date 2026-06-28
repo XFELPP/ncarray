@@ -72,6 +72,9 @@ namespace ncarray {
    * A small struct for holding a key and value.
    *
    * Used, for instance, in GPU-based key/value reductions.
+   *
+   * @tparam KeyT The underlying type of the key used for lookup.
+   * @tparam ValT The underlying type of the value being stored.
    */
   template <typename KeyT, typename ValT>
   struct KeyValPair {
@@ -93,6 +96,13 @@ namespace ncarray {
     }
   };
 
+  /**
+   * A struct to define mapping requirements when performing axis-aware reductions.
+   *
+   * The fields of this struct are used to simplify traversal of input arrays and their
+   * mapping (after applying the reducing operation) to the output array when performing
+   * reductions along specific axes. This is not used for full reductions to scalars.
+   */
   struct ReductionParams {
     ssize_t shape[NCARRAY_MAX_NDIM];
     ssize_t strides[NCARRAY_MAX_NDIM];
@@ -100,12 +110,15 @@ namespace ncarray {
     int shifts[NCARRAY_MAX_NDIM];
     ssize_t masks[NCARRAY_MAX_NDIM];
     ssize_t ndim;
-    double ddof { 0.0 }; // Degrees of freedom, used only for variance and stdev
+    double ddof { 0.0 }; ///< Delta degrees of freedom, used only for variance and stdev
   };
 
 #ifndef __CUDACC_RTC__
   /**
    * Setup a small struct with strides, offsets and masks for reducing axes.
+   *
+   * @note This function is NOT compatible with device code.
+   *       This is a host only function.
    *
    * @param[in] axes The user-requested axes that willbe reduced.
    * @param[in] arr_ndim The number of dimensions (axes) in the array currently.
@@ -113,6 +126,8 @@ namespace ncarray {
    * @param[in] in_strides The strides of the axes in the array in ELEMENTS (not bytes).
    * @param[out] new_shape The new shape for the array following reduction.
    * @param[out] new_ndim The number of dimensions after reduction.
+   * @param[in] itemsize The size in bytes of the array elements data type.
+   * @param[in] ddof The delta degrees of freedom -- only passed through to var/std reductions.
    * @returns params The reduction parameter table.
    */
   inline ReductionParams build_reduction_params(const std::vector<ssize_t>& axes,
@@ -162,6 +177,9 @@ namespace ncarray {
   }
 #endif
 
+  /**
+   * An accumulator used for the calculation of variance and standard deviation.
+   */
   template <typename VarT>
   struct VarAccumulator {
     double count;
@@ -194,7 +212,10 @@ namespace ncarray {
     }
   };
 
-
+/**
+ * @def DEFINE_VECTOR_PRE_UNARY_OPS(VECDTYPE, ...)
+ * @brief A helper for creating prefix unary op function definitions for vector data types.
+ */
 #define DEFINE_VECTOR_PRE_UNARY_OPS(VECDTYPE, ...)                   \
   NCA_HD constexpr VECDTYPE operator+() const {                      \
     return { __VA_ARGS__(+) };                                       \
@@ -203,6 +224,10 @@ namespace ncarray {
     return { __VA_ARGS__(-) };                                       \
   }
 
+/**
+ * @def DEFINE_VECTOR_INC_DEC_OPS(VECDTYPE, ...)
+ * @brief A helper for creating increment/decrement function definitions for vector data types.
+ */
 #define DEFINE_VECTOR_INC_DEC_OPS(VECDTYPE, ...)                     \
   NCA_HD constexpr VECDTYPE& operator++() {                          \
     __VA_ARGS__(++)                                                  \
@@ -223,6 +248,10 @@ namespace ncarray {
     return tmp;                                                      \
   }
 
+/**
+ * @def DEFINE_VECTOR_OPS(VECDTYPE, ...)
+ * @brief A helper for function definitions for inplace and binary operations between vector data types.
+ */
 #define DEFINE_VECTOR_OPS(VECDTYPE, ...)                             \
   NCA_HD constexpr VECDTYPE operator+(const VECDTYPE& other) const { \
     return { __VA_ARGS__(+) };                                       \
@@ -253,9 +282,17 @@ namespace ncarray {
     return *this;                                                    \
   }
 
+  /**
+   * An aliased concept for the the is_arithmetic type trait value.
+   */
   template <typename T>
   concept Numeric = is_arithmetic<T>::value;
 
+/**
+ * @def DEFINE_SCALAR_OPS(VECDTYPE, ...)
+ * @brief A helper for function definitions for inplace and binary operations between
+ *        vector data types and scalars (handling broadcasting as needed).
+ */
 #define DEFINE_SCALAR_OPS(VECDTYPE, ...)                               \
   template <Numeric T>                                                 \
   NCA_HD friend constexpr VECDTYPE operator+(const VECDTYPE& v, T s) { \
@@ -290,6 +327,11 @@ namespace ncarray {
     return { __VA_ARGS__(v, s, /) };                                   \
   }
 
+/**
+ * @def DEFINE_VECTOR_OPS(VECDTYPE, ...)
+ * @brief A helper for function definitions for comparison operations
+ *        between vector data types.
+ */
 #define DEFINE_VECTOR_COMPARISONS(VECDTYPE, ...)                        \
   friend NCA_HD bool operator==(const VECDTYPE& a, const VECDTYPE& b) { \
     return __VA_ARGS__(a, b, ==);                                       \
@@ -310,48 +352,122 @@ namespace ncarray {
     return __VA_ARGS__(a, b, >=);                                       \
   }
 
+/**
+ * @def PRUNARYOPS2(OP)
+ * @brief Create the prefix unary ops for a 2-scalar vector type.
+ */
 #define PREUNARYOPS2(OP) OP x, OP y
+/**
+ * @def PRUNARYOPS3(OP)
+ * @brief Create the prefix unary ops for a 3-scalar vector type.
+ */
 #define PREUNARYOPS3(OP) OP x, OP y, OP z
+/**
+ * @def PRUNARYOPS4(OP)
+ * @brief Create the prefix unary ops for a 4-scalar vector type.
+ */
 #define PREUNARYOPS4(OP) OP x, OP y, OP z, OP w
 
+/**
+ * @def INCDECOPS2(OP)
+ * @brief Create the increment/decrement ops for a 2-scalar vector type.
+ */
 #define INCDECOPS2(OP) OP x; OP y;
+/**
+ * @def INCDECOPS3(OP)
+ * @brief Create the increment/decrement ops for a 3-scalar vector type.
+ */
 #define INCDECOPS3(OP) OP x; OP y; OP z;
+/**
+ * @def INCDECOPS4(OP)
+ * @brief Create the increment/decrement ops for a 4-scalar vector type.
+ */
 #define INCDECOPS4(OP) OP x; OP y; OP z; OP w;
 
+/**
+ * @def BINOPS2(OP)
+ * @brief Create the binary ops for a 2-scalar vector type.
+ */
 #define BINOPS2(OP) x OP other.x, y OP other.y
+/**
+ * @def BINOPS3(OP)
+ * @brief Create the binary ops for a 3-scalar vector type.
+ */
 #define BINOPS3(OP) x OP other.x, y OP other.y, z OP other.z
+/**
+ * @def BINOPS4(OP)
+ * @brief Create the binary ops for a 4-scalar vector type.
+ */
 #define BINOPS4(OP) x OP other.x, y OP other.y, z OP other.z, w OP other.w
 
+/**
+ * @def SCALAROPS2(OP)
+ * @brief Create the op definitions for a 2-scalar vector type and a scalar.
+ */
 #define SCALAROPS2(v, s, OP) static_cast<decltype(v.x)>(v.x OP s), static_cast<decltype(v.y)>(v.y OP s)
+/**
+ * @def SCALAROPS3(OP)
+ * @brief Create the op definitions for a 3-scalar vector type and a scalar.
+ */
 #define SCALAROPS3(v, s, OP)            \
   static_cast<decltype(v.x)>(v.x OP s), \
   static_cast<decltype(v.y)>(v.y OP s), \
   static_cast<decltype(v.z)>(v.z OP s)
+/**
+ * @def SCALAROPS4(OP)
+ * @brief Create the op definitions for a 4-scalar vector type and a scalar.
+ */
 #define SCALAROPS4(v, s, OP)            \
   static_cast<decltype(v.x)>(v.x OP s), \
   static_cast<decltype(v.y)>(v.y OP s), \
   static_cast<decltype(v.z)>(v.z OP s), \
   static_cast<decltype(v.w)>(v.w OP s)
 
+/**
+ * @def COMPOPS2(OP)
+ * @brief Create the comparison ops for a 2-scalar vector type.
+ */
 #define COMPOPS2(a, b, OP) a.x OP b.x && a.y OP b.y
+/**
+ * @def COMPOPS3(OP)
+ * @brief Create the comparison ops for a 3-scalar vector type.
+ */
 #define COMPOPS3(a, b, OP) a.x OP b.x && a.y OP b.y && a.z OP b.z
+/**
+ * @def COMPOPS4(OP)
+ * @brief Create the comparison ops for a 4-scalar vector type.
+ */
 #define COMPOPS4(a, b, OP) a.x OP b.x && a.y OP b.y && a.z OP b.z && a.w OP b.w
 
+  /**
+   * Determines an object that has two scalar values x and y.
+   */
   template <typename T>
   concept Vector2DType = requires(T v) {
     v.x;
     v.y;
   };
+  /**
+   * Determines an object that has three scalar values x, y, and z.
+   */
   template <typename T>
   concept Vector3DType = Vector2DType<T> && requires(T v) {
     v.z;
   };
+  /**
+   * Determines an object that has four scalar values x, y, z, and w.
+   */
   template <typename T>
   concept Vector4DType = Vector3DType<T> && requires(T v) {
     v.w;
   };
 
 #pragma pack(push, 8)
+  /**
+   * A 2-float (single precision) vector data type.
+   *
+   * @note This is analogous to, and layout compatible with, CUDA's float2.
+   */
   struct Float2 {
     float x { 0.0f };
     float y { 0.0f };
@@ -395,6 +511,11 @@ namespace ncarray {
 #pragma pack(pop)
 
 #pragma pack(push, 4)
+  /**
+   * A 3-float (single precision) vector data type.
+   *
+   * @note This is analogous to, and layout compatible with, CUDA's float3.
+   */
   struct Float3 {
     float x { 0.0f };
     float y { 0.0f };
@@ -445,6 +566,11 @@ namespace ncarray {
 #pragma pack(pop)
 
 #pragma pack(push, 8)
+  /**
+   * A 4-float (single precision) vector data type.
+   *
+   * @note This is analogous to, and layout compatible with, CUDA's float4.
+   */
   struct Float4 {
     float x { 0.0f };
     float y { 0.0f };
@@ -501,6 +627,11 @@ namespace ncarray {
 #pragma pack(pop)
 
 #pragma pack(push, 16)
+  /**
+   * A 2-double (double precision) vector data type.
+   *
+   * @note This is analogous to, and layout compatible with, CUDA's double2.
+   */
   struct Double2 {
     double x { 0.0 };
     double y { 0.0 };
@@ -544,6 +675,11 @@ namespace ncarray {
 #pragma pack(pop)
 
 #pragma pack(push, 8)
+  /**
+   * A 3-double (double precision) vector data type.
+   *
+   * @note This is analogous to, and layout compatible with, CUDA's double3.
+   */
   struct Double3 {
     double x { 0.0 };
     double y { 0.0 };
@@ -594,6 +730,12 @@ namespace ncarray {
 #pragma pack(pop)
 
 #pragma pack(push, 16)
+  /**
+   * A 4-double (double precision) vector data type.
+   *
+   * @note This is analogous to, and layout compatible with, CUDA's double4.
+   * @note The double4 is deprected in CUDA 13+. This type is not however.
+   */
   struct Double4 {
     double x { 0.0 };
     double y { 0.0 };
@@ -671,6 +813,16 @@ namespace ncarray {
 #undef DEFINE_VECTOR_COMPARISONS
 
 #ifndef __CUDACC_RTC__
+  /**
+   * A formatting helper for printing vector datatypes.
+   *
+   * @note This function is NOT compatible with device code.
+   *       This is a host only function.
+   *
+   * @tparam T The input datatype, requires at least Vector2DType.
+   * @param[out] oss The stream to write the contents to.
+   * @param[in] vec The vector data type to print to the stream.
+   */
   template <Vector2DType T>
   std::ostream& operator<<(std::ostream& oss, const T& vec) {
     oss << "{" << vec.x << ", " << vec.y;
@@ -685,6 +837,14 @@ namespace ncarray {
   }
 #endif
 
+  /**
+   * A helper for setting up square roots on various types.
+   *
+   * @note The warning suppression is to silence otherwise extremely verbose output.
+   *
+   * @tparam T The datatype of the value to take the square root of.
+   * @param[in] val The value to take the square root of.
+   */
   template <typename T>
 #ifdef __CUDACC__
   #pragma nv_diag_suppress 20011, 20014
@@ -696,6 +856,12 @@ namespace ncarray {
   #pragma nv_diag_default 20011, 20014
 #endif
 
+  /**
+   * The square root overload for handling the elementwise square-root of vector types.
+   *
+   * @tparam T The datatype of the value to take the square root of, requires at least Vector2DType.
+   * @param[in] val The vector value to take the elementwise square root of.
+   */
   template <Vector2DType T>
   NCA_HD inline T nca_sqrt(const T& v) {
     if constexpr (Vector4DType<T>) {

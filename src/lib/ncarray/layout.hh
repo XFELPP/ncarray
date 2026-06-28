@@ -85,6 +85,9 @@ namespace ncarray {
    * the above metadata. It has a data member (which will be the shape data, e.g.)
    * and also holds its dimensionality in `ndim`. This struct is templated so the
    * underlying type for the metadata arrays can be changed.
+   *
+   * @tparam T The type of the underlying metadata being held.
+   * @tparam MaxNDim The maximum array dimensionality.
    */
   template <typename T, ssize_t MaxNDim = NCARRAY_MAX_NDIM>
   struct FixedMetadata {
@@ -129,6 +132,8 @@ namespace ncarray {
    *
    * All subclasses must implement the `advance` function which is the *key*
    * mechanism dictating how the array's layout can be traversed.
+   *
+   * @tparam Derived CRTP-template parameter.
    */
   template <typename Derived>
   struct LayoutPolicy {
@@ -172,22 +177,57 @@ namespace ncarray {
       return static_cast<const Derived*>(this)->advance(data, axis, index);
     }
 
+    /**
+     * The advance function takes a pointer to the current position in the array
+     * as well as an axis and index. Using this information, and the knowledge
+     * of the array layout it will move the pointer forward one data unit,
+     * accounting for strides, offsets, pointer jumps and so on.
+     *
+     * This is the const overload.
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] index The current index along the traversed axis.
+     * @returns The const pointer to the next item in the array.
+     */
     NCA_HD inline const void* advance(const void* data, ssize_t axis, ssize_t index) const {
       return static_cast<const Derived*>(this)->advance(data, axis, index);
     }
 
+    /**
+     * The advance function overload takes a pointer to the current position in
+     * the array as well as a Coords (StaticCoords) object. The coords object
+     * provides multiple indices for multiple axes to traverse at once.
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
+     * @returns The pointer to the specified item in the array.
+     */
     template <typename Coords>
     NCA_HD inline void* advance(void* data, const Coords& coords) const {
       return static_cast<const Derived*>(this)->advance(data, coords);
     }
 
+    /**
+     * The advance function overload takes a pointer to the current position in
+     * the array as well as a Coords (StaticCoords) object. The coords object
+     * provides multiple indices for multiple axes to traverse at once.
+     *
+     * This is the const overload.
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
+     * @returns The const pointer to the specified item in the array.
+     */
     template <typename Coords>
     NCA_HD inline const void* advance(const void* data, const Coords& coords) const {
       return static_cast<const Derived*>(this)->advance(data, coords);
     }
 
     /**
-     * @returns shape The pointer to the underlying shape metadata.
+     * The pointer to the underlying shape metadata.
+     *
+     * @returns The pointer to the underlying shape metadata.
      */
     NCA_HD inline const ssize_t* shape() const {
       return m_shape.data;
@@ -195,6 +235,8 @@ namespace ncarray {
 
     // TODO: Bounds check?
     /**
+     * The shape of a given axis of an array.
+     *
      * @param[in] dim A dimension to check the shape of.
      * @returns The shape of that dimension.
      */
@@ -203,6 +245,8 @@ namespace ncarray {
     }
 
     /**
+     * The total number of dimensions.
+     *
      * @returns The total number of dimensions.
      */
     NCA_HD inline ssize_t ndim() const {
@@ -210,6 +254,8 @@ namespace ncarray {
     }
 
     /**
+     * The total number of elements in the array.
+     *
      * @returns The total number of elements in the array.
      */
     NCA_HD inline ssize_t size() const {
@@ -221,6 +267,8 @@ namespace ncarray {
     }
 
     /**
+     * The pointer to the underlying strides metadata.
+     *
      * @returns The pointer to the underlying strides metadata.
      */
     NCA_HD inline const ssize_t* strides() const {
@@ -229,6 +277,8 @@ namespace ncarray {
 
     // TODO: Bounds check?
     /**
+     * The strides along a given axis of an array.
+     *
      * @param[in] dim A dimension to check the stride for.
      * @returns The stride along that dimension.
      */
@@ -237,8 +287,10 @@ namespace ncarray {
     }
 
     /**
-     * The repr functions return a string to identify the storage policy when
+     * The repr functions return a string to identify the layout policy when
      * writing out string representations of the array.
+     *
+     * @returns A C-style string for representing the Layout type.
      */
     NCA_HD inline const char* layout_repr() const {
       return static_cast<Derived*>(this)->layout_repr();
@@ -360,6 +412,15 @@ namespace ncarray {
       }
     }
 
+    /**
+     * The offset/suboffset along a given axis of an array.
+     *
+     * This function can be used to retrieve offsets or suboffsets without knowledge
+     * of which one is implemented by the Derived layout type.
+     *
+     * @param[in] dim A dimension to check the stride for.
+     * @returns The offset/suboffset along that dimension.
+     */
     NCA_HD inline Metadata::value_type get_offset(ssize_t axis) const {
       return static_cast<const Derived*>(this)->get_offset_impl(axis);
     }
@@ -369,6 +430,12 @@ namespace ncarray {
      *
      * When layout's match perfectly, then certain optimizations can be done during
      * expression evaluation.
+     *
+     * @note By definition, the Layouts do not match when the LayoutPolicy differs.
+     *       This function only accepts Layouts of the same Policy.
+     *
+     * @param[in] other The other array Layout.
+     * @returns Whether the Layout matches.
      */
     NCA_HD inline bool layout_matches(const LayoutPolicy<Derived>& other) const {
       if (static_cast<const Derived*>(this)->ndim() != other.ndim()) {
@@ -408,9 +475,19 @@ namespace ncarray {
   struct NCOffsetsPolicy : public LayoutPolicy<NCOffsetsPolicy> {
   public:
     /**
+     * The advance function takes a pointer to the current position in the array
+     * as well as an axis and index. Using this information, and the knowledge
+     * of the array layout it will move the pointer forward one data unit,
+     * accounting for strides, offsets, pointer jumps and so on.
+     *
      * For NCArray* type arrays, if the current axis is a pointer axis, then
      * traversal requires interpreting the data as a double pointer and indexing
      * appropriately (with an offset, if slicing has selected a sub-view).
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] index The current index along the traversed axis.
+     * @returns The pointer to the next item in the array.
      */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
       if (axis == this->m_pointer_axis) {
@@ -422,6 +499,21 @@ namespace ncarray {
         index * this->m_strides[axis] + this->m_offsets[axis];
     }
 
+    /**
+     * The advance function takes a pointer to the current position in the array
+     * as well as an axis and index. Using this information, and the knowledge
+     * of the array layout it will move the pointer forward one data unit,
+     * accounting for strides, offsets, pointer jumps and so on.
+     *
+     * For NCArray* type arrays, if the current axis is a pointer axis, then
+     * traversal requires interpreting the data as a double pointer and indexing
+     * appropriately (with an offset, if slicing has selected a sub-view).
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] index The current index along the traversed axis.
+     * @returns The const pointer to the next item in the array.
+     */
     NCA_HD inline const void* advance(const void* data,
                                       ssize_t axis,
                                       ssize_t index) const {
@@ -435,6 +527,19 @@ namespace ncarray {
         index * this->m_strides[axis] + this->m_offsets[axis];
     }
 
+    /**
+     * The advance function overload takes a pointer to the current position in
+     * the array as well as a Coords (StaticCoords) object. The coords object
+     * provides multiple indices for multiple axes to traverse at once.
+     *
+     * For NCArray* type arrays, if the current axis is a pointer axis, then
+     * traversal requires interpreting the data as a double pointer and indexing
+     * appropriately (with an offset, if slicing has selected a sub-view).
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
+     * @returns The pointer to the specified item in the array.
+     */
     template <typename Coords>
     NCA_HD inline void* advance(void* data, const Coords& coords) const {
       void* data_p { data };
@@ -453,6 +558,19 @@ namespace ncarray {
       return data_p;
     }
 
+    /**
+     * The advance function overload takes a pointer to the current position in
+     * the array as well as a Coords (StaticCoords) object. The coords object
+     * provides multiple indices for multiple axes to traverse at once.
+     *
+     * For NCArray* type arrays, if the current axis is a pointer axis, then
+     * traversal requires interpreting the data as a double pointer and indexing
+     * appropriately (with an offset, if slicing has selected a sub-view).
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
+     * @returns The const pointer to the specified item in the array.
+     */
     template <typename Coords>
     NCA_HD inline const void* advance(const void* data,
                                       const Coords& coords) const {
@@ -473,23 +591,62 @@ namespace ncarray {
       return data_p;
     }
 
+    /**
+     * The pointer to the underlying offsets metadata.
+     *
+     * @returns The pointer to the underlying offsets metadata.
+     */
     NCA_HD inline const ssize_t* offsets() const {
       return this->m_offsets.data;
     }
+    /**
+     * The offset of a given axis of an array.
+     *
+     * @param[in] dim A dimension to check the shape of.
+     * @returns The offset of that dimension.
+     */
     NCA_HD inline ssize_t offset(ssize_t dim) const {
       return this->m_offsets[dim];
     }
 
+    /**
+     * Returns whether a given axis is a pointer axis.
+     *
+     * @note For NCOffsetsPolicy this checks the m_pointer_axis flag.
+     *
+     * @param[in] The axis to check if its a pointer axis.
+     * @returns Whether that axis is a pointer axis.
+     */
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
       return axis == this->m_pointer_axis;
     }
 
+    /**
+     * The offset getter called by the generic version of the base class.
+     *
+     * @param[in] axis The axis to return the offset for.
+     * @returns The offset of that axis.
+     */
     NCA_HD inline Metadata::value_type get_offset_impl(ssize_t axis) const {
       return this->m_offsets[axis];
     }
 
+    /**
+     * Returns the string representation of this Layout policy.
+     *
+     * @returns The string representation of this Layout policy.
+     */
     NCA_HD inline const char* layout_repr() const { return "NCArray"; }
 
+    /**
+     * Determines whether the layout is contiguous by checking for pointer axes.
+     *
+     * @note This does NOT check for gaps due to strides. Only that there are no
+     *       pointer axes. This is intended to be incorporated into a broader
+     *       contiguity checking routine.
+     *
+     * @returns Whether there are no pointer axes.
+     */
     NCA_HD inline bool is_contiguous_impl() const {
       for (ssize_t i = 0; i < this->ndim(); ++i) {
         if (this->m_offsets[i] != 0) {
@@ -526,10 +683,20 @@ namespace ncarray {
     SOArrayPolicy& operator=(SOArrayPolicy&& other) = default;
 
     /**
+     * The advance function takes a pointer to the current position in the array
+     * as well as an axis and index. Using this information, and the knowledge
+     * of the array layout it will move the pointer forward one data unit,
+     * accounting for strides, offsets, pointer jumps and so on.
+     *
      * Via the revised buffer protocol specification in PEP3118, a "suboffset"
      * greater than or equal to 0 indicates that the value on that axis is a pointer.
      * The specific value dictates how many bytes to add to it AFTER dereferencing.
      * Negative suboffsets mean no-pointer axis, and no special dereferencing
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] index The current index along the traversed axis.
+     * @returns The pointer to the next item in the array.
      */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
       uint8_t* next =
@@ -540,6 +707,22 @@ namespace ncarray {
       return reinterpret_cast<void*>(next);
     }
 
+    /**
+     * The advance function takes a pointer to the current position in the array
+     * as well as an axis and index. Using this information, and the knowledge
+     * of the array layout it will move the pointer forward one data unit,
+     * accounting for strides, offsets, pointer jumps and so on.
+     *
+     * Via the revised buffer protocol specification in PEP3118, a "suboffset"
+     * greater than or equal to 0 indicates that the value on that axis is a pointer.
+     * The specific value dictates how many bytes to add to it AFTER dereferencing.
+     * Negative suboffsets mean no-pointer axis, and no special dereferencing
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] axis The current axis being traversed.
+     * @param[in] index The current index along the traversed axis.
+     * @returns The const pointer to the next item in the array.
+     */
     NCA_HD inline const void* advance(const void* data,
                                       ssize_t axis,
                                       ssize_t index) const {
@@ -553,6 +736,20 @@ namespace ncarray {
       return reinterpret_cast<const void*>(next);
     }
 
+    /**
+     * The advance function overload takes a pointer to the current position in
+     * the array as well as a Coords (StaticCoords) object. The coords object
+     * provides multiple indices for multiple axes to traverse at once.
+     *
+     * Via the revised buffer protocol specification in PEP3118, a "suboffset"
+     * greater than or equal to 0 indicates that the value on that axis is a pointer.
+     * The specific value dictates how many bytes to add to it AFTER dereferencing.
+     * Negative suboffsets mean no-pointer axis, and no special dereferencing
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
+     * @returns The pointer to the specified item in the array.
+     */
     template <typename Coords>
     NCA_HD inline void* advance(void* data, const Coords& coords) const {
       void* data_p { data };
@@ -570,6 +767,20 @@ namespace ncarray {
       return data_p;
     }
 
+    /**
+     * The advance function overload takes a pointer to the current position in
+     * the array as well as a Coords (StaticCoords) object. The coords object
+     * provides multiple indices for multiple axes to traverse at once.
+     *
+     * Via the revised buffer protocol specification in PEP3118, a "suboffset"
+     * greater than or equal to 0 indicates that the value on that axis is a pointer.
+     * The specific value dictates how many bytes to add to it AFTER dereferencing.
+     * Negative suboffsets mean no-pointer axis, and no special dereferencing
+     *
+     * @param[in] data The pointer to the current position in the array.
+     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
+     * @returns The pointer to the specified item in the array.
+     */
     template <typename Coords>
     NCA_HD inline const void* advance(const void* data,
                                       const Coords& coords) const {
@@ -590,25 +801,63 @@ namespace ncarray {
       return data_p;
     }
 
-
+    /**
+     * The pointer to the underlying suboffsets metadata.
+     *
+     * @returns The pointer to the underlying suboffsets metadata.
+     */
     NCA_HD inline const ssize_t* suboffsets() const {
       return this->m_suboffsets.data;
     }
 
+    /**
+     * The suboffset of a given axis of an array.
+     *
+     * @param[in] dim A dimension to check the shape of.
+     * @returns The suboffset of that dimension.
+     */
     NCA_HD inline ssize_t suboffset(ssize_t dim) const {
       return this->m_suboffsets[dim];
     }
 
+    /**
+     * Returns whether a given axis is a pointer axis.
+     *
+     * @note For SOArrayPolicy this checks the value of the suboffset of the axis.
+     *
+     * @param[in] The axis to check if its a pointer axis.
+     * @returns Whether that axis is a pointer axis.
+     */
     NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
       return this->m_suboffsets[axis] >= 0;
     }
 
+    /**
+     * The offset getter called by the generic version of the base class.
+     *
+     * @param[in] axis The axis to return the offset for.
+     * @returns The offset of that axis.
+     */
     NCA_HD inline Metadata::value_type get_offset_impl(ssize_t axis) const {
       return this->m_suboffsets[axis];
     }
 
+    /**
+     * Returns the string representation of this Layout policy.
+     *
+     * @returns the string representation of this Layout policy.
+     */
     NCA_HD inline const char* layout_repr() const { return "SOArray"; }
 
+    /**
+     * Determines whether the layout is contiguous by checking for pointer axes.
+     *
+     * @note This does NOT check for gaps due to strides. Only that there are no
+     *       pointer axes. This is intended to be incorporated into a broader
+     *       contiguity checking routine.
+     *
+     * @returns Whether there are no pointer axes.
+     */
     NCA_HD inline bool is_contiguous_impl() const {
       for (ssize_t i = 0; i < this->ndim(); ++i) {
         if (this->m_suboffsets[i] >= 0) {
@@ -624,33 +873,63 @@ namespace ncarray {
 
   // --- End Layout Policies --- //
 
+  /**
+   * Determines whether an object is a LayoutPolicy that can define array traversal.
+   */
   template <class L, class D>
   concept IsLayoutPolicy = is_base_of_v<LayoutPolicy<D>, L>;
 
+  /**
+   * Type-trait style struct for the IsLayoutPolicy concept default falsey specialization.
+   */
   template <class L>
   struct is_layout_policy : false_type {};
 
+  /**
+   * Type-trait style struct for the IsLayoutPolicy concept true specialization.
+   */
   template <class D>
   struct is_layout_policy<LayoutPolicy<D>> : true_type {};
 
+  /**
+   * Underlying trait to check for layout policy descendence.
+   */
   template <class L>
   constexpr bool is_layout_policy_v = is_layout_policy<L>::value;
 
+  /**
+   * Type-trait style struct for whether NCOffsetsPolicy default false specialization.
+   */
   template <class L>
   struct is_ncoffsets_policy : false_type {};
 
+  /**
+   * Type-trait style struct for whether NCOffsetsPolicy true specialization.
+   */
   template <>
   struct is_ncoffsets_policy<NCOffsetsPolicy> : true_type {};
 
+  /**
+   * Type-trait style struct for whether SOArrayPolicy default false specialization.
+   */
   template <class L>
   struct is_soarray_policy : false_type {};
 
+  /**
+   * Type-trait style struct for whether SOArrayPolicy true specialization.
+   */
   template <>
   struct is_soarray_policy<SOArrayPolicy> : true_type {};
 
+  /**
+   * Underlying trait to check for if NCOffsetsPolicy.
+   */
   template <class L>
   constexpr bool is_ncoffsets_policy_v = is_ncoffsets_policy<L>::value;
 
+  /**
+   * Underlying trait to check for if SOArrayPolicy.
+   */
   template <class L>
   constexpr bool is_soarray_policy_v = is_soarray_policy<L>::value;
 } // namespace ncarray

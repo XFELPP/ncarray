@@ -1,0 +1,42 @@
+---
+title: ncarray
+description: Non-contiguous arrays for C++ and Python.
+hero:
+  tagline: High performance non-contiguous array implementations for C++ and Python.
+  #image:
+  #  #file: ../../assets/logo.webp
+  #  file: ../../assets/
+  actions:
+    - text: XFELPP
+      link: https://www.xfelpp.org
+      icon: external
+      #icon: right-arrow
+---
+
+import { Aside, Card, CardGrid, Icon, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  This website and associated infrastructure is still under construction. Please bear with us as we bring everything online.
+</Aside>
+
+## Overview
+
+`ncarray` provides a number of C++ array classes, compatible with NumPy, for working with non-contiguous data that cannot be described exclusively by strides. Specifically, these classes deal with data described by pointer-to-pointer setups/tables (double pointers, i.e. suboffsets in the Python world).
+
+The library provides views for views of data on the CPU and GPU (Linux/Windows only). When working on the device, array objects can be passed directly into kernels and device functions - if they are views. Owner-type arrays must be worked with from the host, but a view can be created using the `.view()` function.
+
+## Features
+
+`ncarray` is a C++20/23 (GPU/CPU) generic library. Python bindings are provided by `pybind11`, although the C++ library can be used standalone, or wrapped using other techniques. The current set of features are:
+
+- Lazy evaluation via a backend expression engine inspired by numexpr.
+  - Python bindings by default will use eager evaluation. This can be toggled globally on/off, or managed via context manager.
+- JIT compilation for both host and device code for evaluation of the expressions. Host-based JIT uses `asmjit` to emit machine code. NVRTC is used for CUDA device code.
+  - Additional strategies include use of Stencils, which can further improve performance, where applicable.
+- Pointer axis support - zero-copy on disjoint sets of arrays
+- Type and concept system with various traits allowing for automatic type promotion (small int to wide int) when accumulating, or implementations of comparison operators for types like `std::complex<T>`.
+- Multi-dimensional array indexing using integers, slices or placeholder axes (ellipsis in Python).
+- NumPy-compatible Python bindings - implements interface methods like `__array__` and `__array_ufunc__` (**Note:** These operations may incur copies! The initial views are copy free, but not all operations thereafter)
+- Views of GPU memory using `NCDev*` or `SODev*` prefixed arrays.
+
+NOTE: The type and trait system will automatically promote small integers to larger ones. For subtraction, it will convert unsigned to signed. This behaviour may be different than what is done in NumPy.

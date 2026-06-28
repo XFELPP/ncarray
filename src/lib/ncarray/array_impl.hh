@@ -80,6 +80,15 @@ namespace ncarray {
 
   // --- Helper Functions For Metadata --- //
 
+  /**
+   * Calculate the strides for a standard C-order (row-major) contiguous array of given shape.
+   *
+   * @note Strides are always calculated and stored as bytes.
+   *
+   * @param[in] shape The shape to calculate strides for.
+   * @param[in] itemsize The size in bytes of a single element of the array.
+   * @returns The C-order calculated strides.
+   */
   inline std::vector<ssize_t> calculate_c_order_strides(const std::vector<ssize_t>& shape,
                                                         const ssize_t itemsize) {
     size_t ndim { shape.size() };
@@ -90,6 +99,16 @@ namespace ncarray {
     return strides;
   }
 
+  /**
+   * Calculate the strides for a standard C-order (row-major) contiguous array of given shape.
+   *
+   * @note Strides are always calculated and stored as bytes.
+   *
+   * @param[in] The number of dimensions in the array.
+   * @param[in] shape The shape to calculate strides for (pointer to first element).
+   * @param[in] itemsize The size in bytes of a single element of the array.
+   * @returns The C-order calculated strides.
+   */
   inline std::vector<ssize_t> calculate_c_order_strides(const ssize_t ndim,
                                                         const ssize_t* shape,
                                                         const ssize_t itemsize) {
@@ -100,6 +119,16 @@ namespace ncarray {
     return strides;
   }
 
+  /**
+   * Calculate the strides for a standard C-order (row-major) contiguous array of given shape.
+   *
+   * @note Strides are always calculated and stored as bytes.
+   *
+   * @param[in] The number of dimensions in the array.
+   * @param[in] shape The shape to calculate strides for (pointer to first element).
+   * @param[in] itemsize The size in bytes of a single element of the array.
+   * @param[out] strides The C-order calculated strides will be output in this pointer.
+   */
   NCA_HD inline void calculate_c_order_strides(const ssize_t ndim,
                                                const ssize_t* shape,
                                                const ssize_t itemsize,
@@ -143,14 +172,23 @@ namespace ncarray {
     ArrayImpl() = default;
 
     // Standard copy and move semantics - views are shallow copies, owners deep
-    // NOTE: Copys can only be done for Owner types on the host.
-    // NOTE: The Storage(Storage&) constructor cannot be used since some
+    // @note Copys can only be done for Owner types on the host.
+    // @note The Storage(Storage&) constructor cannot be used since some
     // policies (e.g. Owner) have no default - it cannot be defined since
     // knowing how much memory to allocate relies on information from Layout
     // This means that these constructors MUST be correct and initialize everything
 
     // --- Host-only copy constructor for owner types --- //
 #ifndef __CUDACC_RTC__
+    /**
+     * Copy constructor for owner type arrays.
+     *
+     * Unlike the constructors that follow, this is a deep copy. The actual data
+     * will be copied!
+     *
+     * @note This constructor is NOT compatible with device code.
+     *       This is a host-only constructor.
+     */
     ArrayImpl(const ArrayImpl& other)
       requires std::is_base_of_v<OwnerTag, Storage>
       : Layout(static_cast<const Layout&>(other))
@@ -163,6 +201,12 @@ namespace ncarray {
       this->m_data = reinterpret_cast<void*>(this->m_storage.get());
     }
 
+    /**
+     * Move constructor for owner type arrays.
+     *
+     * @note This constructor is NOT compatible with device code.
+     *       This is a host-only constructor.
+     */
     ArrayImpl(ArrayImpl&& other) noexcept
       requires std::is_base_of_v<OwnerTag, Storage>
       : Layout(std::move(static_cast<Layout&>(other)))
@@ -173,6 +217,14 @@ namespace ncarray {
     }
 #endif
     // --- View/Ref copy/move can be done on host or device --- //
+    /**
+     * Copy constructor for view/reference type interconversion.
+     *
+     * @note If copying a reference type, the underlying data is not copied; however,
+     * the hosted reference pointers are.
+     *
+     * @note This constructor is compatible with device code.
+     */
     NCA_HD ArrayImpl(const ArrayImpl& other)
       requires (!is_base_of_v<OwnerTag, Storage>)
       : Layout(static_cast<const Layout&>(other))
@@ -191,6 +243,11 @@ namespace ncarray {
       }
     }
 
+    /**
+     * Move constructor for view/reference type interconversion.
+     *
+     * @note This constructor is compatible with device code.
+     */
     NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
       requires (!is_base_of_v<OwnerTag, Storage>)
       : Layout(move(static_cast<Layout&>(other)))
@@ -205,6 +262,16 @@ namespace ncarray {
     }
 
     // Universal interconversion - any storage type can become a view
+    /**
+     * Universal copy to view constructor.
+     *
+     * All array's can be copy constructed as their corresponding view.
+     *
+     * @note As the destination is a constructed view, this constructor does NOT
+     *       copy the underlying data. Only the array metadata.
+     *
+     * @note This constructor is compatible with device code.
+     */
     template <class OtherStorage>
     requires is_base_of_v<ViewTag, Storage>
     NCA_HD ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
@@ -216,6 +283,13 @@ namespace ncarray {
       this->m_read_only = other.read_only();
     }
 
+    /**
+     * Universal move to view constructor.
+     *
+     * All array's can be move constructed as their corresponding view.
+     *
+     * @note This constructor is compatible with device code.
+     */
     template <class OtherStorage>
     requires is_base_of_v<ViewTag, Storage>
     NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
@@ -231,6 +305,12 @@ namespace ncarray {
 
     // --- Host only move/copy assignment for owner types --- //
 
+    /**
+     * Copy constructor for Owner type arrays.
+     *
+     * @note This constructor is NOT compatible with device code.
+     *       This is a host-only constructor.
+     */
     ArrayImpl& operator=(const ArrayImpl& other)
       requires is_base_of_v<OwnerTag, Storage>
     {
@@ -240,6 +320,12 @@ namespace ncarray {
       return *this;
     }
 
+    /**
+     * Move constructor for Owner type arrays.
+     *
+     * @note This constructor is NOT compatible with device code.
+     *       This is a host-only constructor.
+     */
     ArrayImpl& operator=(ArrayImpl&& other) noexcept
       requires is_base_of_v<OwnerTag, Storage>
     {
@@ -256,6 +342,11 @@ namespace ncarray {
 #endif
 
     // --- View/Ref copy/move assignment can be done on host or device --- //
+    /**
+     * Copy constructor for non-Owner type arrays.
+     *
+     * @note This constructor is compatible with device code.
+     */
     NCA_HD ArrayImpl& operator=(const ArrayImpl& other)
       requires (!is_base_of_v<OwnerTag, Storage>)
     {
@@ -266,6 +357,11 @@ namespace ncarray {
       return *this;
     }
 
+    /**
+     * Move constructor for non-Owner type arrays.
+     *
+     * @note This constructor is compatible with device code.
+     */
     NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept
       requires (!is_base_of_v<OwnerTag, Storage>)
     {
@@ -284,6 +380,21 @@ namespace ncarray {
       return *this;
     }
 
+    /**
+     * Construct a new array (generally view type). This constructor allows passing
+     * explicit offsets/suboffsets.
+     *
+     * @note This constructor is compatible with device code.
+     *
+     * @param[in] data_ The underlying array data.
+     * @param[in] ndim The number of dimensions in the array.
+     * @param[in] shape_ A pointer to the shape. Should be valid through `ndim` derefernces.
+     * @param[in] strides_ A pointer to the strides. Should be valid through `ndim` derefernces.
+     * @param[in] offsets_ A pointer to the offsets. Should be valid through `ndim` derefernces.
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     * @param[in] pointer_axis_ Which if any axis is a pointer axis.
+     * @param[in] read_only_ Whether the underlying data is read-only.
+     */
     NCA_HD ArrayImpl(void* data_,
                      const Metadata shape_,
                      const Metadata strides_,
@@ -310,6 +421,19 @@ namespace ncarray {
       this->m_read_only = read_only_;
     }
 
+    /**
+     * Construct a new array (generally view type).
+     *
+     * @note This constructor is compatible with device code.
+     *
+     * @param[in] data_ The underlying array data.
+     * @param[in] ndim The number of dimensions in the array.
+     * @param[in] shape_ A pointer to the shape. Should be valid through `ndim` derefernces.
+     * @param[in] strides_ A pointer to the strides. Should be valid through `ndim` derefernces.
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     * @param[in] pointer_axis_ Which if any axis is a pointer axis.
+     * @param[in] read_only_ Whether the underlying data is read-only.
+     */
     NCA_HD ArrayImpl(void* data_,
                      const Metadata::value_type ndim,
                      const Metadata::value_type* shape_,
@@ -338,6 +462,18 @@ namespace ncarray {
 
     // --- Ref classes.... --- //
 
+    /**
+     * Construct a new reference-style array given a shape and datatype.
+     *
+     * @note This constructor CANNOT be called from device code.
+     *
+     * @param[in] data_ptrs A vector of data pointers that makeup the array.
+     * @param[in] shape_ The shape of the new ref array (using a std::vector).
+     * @param[in] strides_ The strides of the new ref array (using a std::vector).
+     * @param[in] dtype_ The datatype of the elements of the new array.
+     * @param[in] pointer_axis_ Which if any axis is a pointer axis.
+     * @param[in] read_only_ Whether the underlying data is read-only.
+     */
     NCA_HD ArrayImpl(const std::vector<void*>& data_ptrs,
                      const std::vector<ssize_t>& shape_,
                      const std::vector<ssize_t>& strides_,
@@ -379,7 +515,7 @@ namespace ncarray {
      * Construct a new array given a shape and datatype. This will generally be
      * used for Owner type arrays.
      *
-     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * @note At least for the foreseeable future, this constructor cannot be
      * called from device code! A storage policy may allocate device memory for an
      * owner-type array; however, it must be constructed host-side, using host APIs.
      * This avoids complications with managing concurrent allocation in device code,
@@ -424,7 +560,7 @@ namespace ncarray {
      * Construct a new array given a shape and datatype. This will generally be
      * used for Owner type arrays.
      *
-     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * @note At least for the foreseeable future, this constructor cannot be
      * called from device code! A storage policy may allocate device memory for an
      * owner-type array; however, it must be constructed host-side, using host APIs.
      * This avoids complications with managing concurrent allocation in device code,
@@ -470,7 +606,7 @@ namespace ncarray {
      * Construct a new array given a shape and datatype. This will generally be
      * used for Owner type arrays.
      *
-     * NOTE: At least for the foreseeable future, this constructor cannot be
+     * @note At least for the foreseeable future, this constructor cannot be
      * called from device code! A storage policy may allocate device memory for an
      * owner-type array; however, it must be constructed host-side, using host APIs.
      * This avoids complications with managing concurrent allocation in device code,
@@ -512,6 +648,18 @@ namespace ncarray {
       }
     }
 
+    /**
+     * Expression-materializing constructor.
+     *
+     * An array constructed via an expression object will have shape, and metadata
+     * determined by the expression. The expression will be evaluated into the array.
+     *
+     * @note This constructor is NOT compatible with device code.
+     *       This is a host only constructor as it implies allocation.
+     *
+     * @tparam Expr The type of the expression to be evaluated.
+     * @param expr The expression to be evaluated.
+     */
     template <Expression Expr>
     ArrayImpl(const Expr& expr)
       : ArrayImpl(expr.ndim(), expr.shape(), expr.dtype())
@@ -519,6 +667,11 @@ namespace ncarray {
       *this = expr;
     }
 
+    /**
+     * The total number of bytes contained in the array (shape * itemsize).
+     *
+     * @returns The number of bytes.
+     */
     NCA_HD ssize_t nbytes() const {
       return this->size() * this->itemsize();
     }
@@ -527,6 +680,19 @@ namespace ncarray {
 
 #if __cplusplus > 202002L
 
+    /**
+     * Variadic, multi-element operator[] for indexing to an array view.
+     *
+     * @note This overload requires C++23 multi-argument operator[] support and is
+     *       thus currently host-only.
+     *
+     * Index arguments must be either:
+     * - Integers
+     * - Slice elements
+     * - Ellipsis place holders.
+     *
+     * @returns The subview array determined by the provided indices.
+     */
     template <typename... Args>
     requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
     NCA_HD ViewType operator[](Args&&... idx_args) const {
@@ -544,6 +710,18 @@ namespace ncarray {
 
 #endif
 
+    /**
+     * Variadic, multi-element operator() for indexing to an array view.
+     *
+     * @note This overload is supported in both host and device code.
+     *
+     * Index arguments must be either:
+     * - Integers
+     * - Slice elements
+     * - Ellipsis place holders.
+     *
+     * @returns The subview array determined by the provided indices.
+     */
     template <typename... Args>
     requires(sizeof...(Args) >= 0 && (IndexArg<Args> && ...))
     NCA_HD ViewType operator()(Args&&... idx_args) const {
@@ -609,7 +787,7 @@ namespace ncarray {
     /**
      * Convert a linearized ravel index into a multi-dimensional coords struct.
      *
-     * NOTE: The coords object must be correctly sized for the array! Dimensionality
+     * @note The coords object must be correctly sized for the array! Dimensionality
      * is not checked in this function, as this allows for efficient compiler optimizations
      * in hot loops.
      *
@@ -640,7 +818,7 @@ namespace ncarray {
     /**
      * Convert a multi-dimensional coords struct to a linearized index.
      *
-     * NOTE: The coords object must be correctly sized for the array! Dimensionality
+     * @note The coords object must be correctly sized for the array! Dimensionality
      * is not checked in this function, as this allows for efficient compiler optimizations
      * in hot loops.
      *
@@ -661,6 +839,18 @@ namespace ncarray {
       return lin_idx;
     }
 
+    /**
+     * A single Coords struct operator[] overload to index to proxy reference.
+     *
+     * @note This overload is supported in both host and device code.
+     *
+     * The StaticCoords object should be the correct dimensionality to match the array's
+     * dimensionality. This is NOT checked in this function for performance reasons!
+     *
+     * @tparam Coords The type of the StaticCoords object (templated on dimension and integer width.)
+     * @param coords The coords to use to index to proxy reference.
+     * @returns The proxy reference pointed to by the provided coords.
+     */
     template <typename Coords>
     NCA_HD ArrayElementProxy operator[](const Coords& coords) {
       void* out_data = const_cast<void*>(this->data());
@@ -673,6 +863,18 @@ namespace ncarray {
       return { out_data, this->dtype() };
     }
 
+    /**
+     * A single Coords struct operator[] overload to index to proxy reference.
+     *
+     * @note This overload is supported in both host and device code.
+     *
+     * The StaticCoords object should be the correct dimensionality to match the array's
+     * dimensionality. This is NOT checked in this function for performance reasons!
+     *
+     * @tparam Coords The type of the StaticCoords object (templated on dimension and integer width.)
+     * @param coords The coords to use to index to proxy reference.
+     * @returns The const proxy reference pointed to by the provided coords.
+     */
     template <typename Coords>
     NCA_HD const ArrayElementProxy operator[](const Coords& coords) const {
       const void* out_data = this->data();
@@ -686,9 +888,15 @@ namespace ncarray {
     }
 
     /**
-     * The initializer list overloader are for indexing down to a single point reference.
-     * For semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
+     * The initializer list overloader are for indexing down to a proxy reference.
+     *
+     * @note This overload is supported in both host and device code.
+     *
+     * For view semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
      * C++20, code, the variadic operator().
+     *
+     * @param coords The coords to use to index to proxy reference.
+     * @returns The proxy reference pointed to by the provided coords.
      */
     NCA_HD ArrayElementProxy operator[](initializer_list<uint64_t> coords) {
       assert(coords.size() == static_cast<size_t>(this->ndim()));
@@ -703,9 +911,15 @@ namespace ncarray {
     }
 
     /**
-     * The initializer list overloader are for indexing down to a single point reference.
-     * For semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
+     * The initializer list overloader are for indexing down to a proxy reference.
+     *
+     * @note This overload is supported in both host and device code.
+     *
+     * For view semantics, you can make use of the variadic operator[] (C++23) or for NVCC,
      * C++20, code, the variadic operator().
+     *
+     * @param coords The coords to use to index to proxy reference.
+     * @returns The proxy reference pointed to by the provided coords.
      */
     NCA_HD const ArrayElementProxy operator[](initializer_list<uint64_t> coords) const {
       assert(coords.size() == static_cast<size_t>(this->ndim()));
@@ -750,6 +964,7 @@ namespace ncarray {
      *
      * Using the view_from_indices function is more user friendly.
      *
+     * @tparam VT The type of the array view.
      * @param[in] data_ptr The data to traverse.
      * @param[in] axes The specification for each axis in the new view.
      * @returns The new view of the data.
@@ -768,7 +983,7 @@ namespace ncarray {
       ssize_t pointer_axis { -1 };
       ssize_t shift_ptr_axis { -1 }; // Track the most recent ptr axis for shift accumulation
 
-      // NOTE: Passing a length 1 slice does NOT collapse/remove the axis.
+      // @note Passing a length 1 slice does NOT collapse/remove the axis.
       // E.g. A 3-D NCArray* ncarr indexed as ncarr[:1] will have shape (1, ...)
       // The `squeeze` function can be used to remove this extra length 1 axis.
       for (ssize_t i = 0; i < total_dim; ++i) {
@@ -793,7 +1008,7 @@ namespace ncarray {
 
           n_dim++;
         } else {
-          // NOTE: This call is critical! It makes that correct dereferncing and
+          // @note This call is critical! It makes that correct dereferncing and
           // offset accumulation occurs, regardless of subtype
           if (d.is_pointer) {
             data_ptr = this->advance(data_ptr, i, d.offset);
@@ -837,6 +1052,8 @@ namespace ncarray {
      * @code{.cpp}
      * gpu_kernel<<<blocks, TPB>>>(my_array.view());
      * @endcode
+     *
+     * @returns The view of the array.
      */
     NCA_HD ViewType view() const { return ViewType(*this); }
 
@@ -861,8 +1078,16 @@ namespace ncarray {
     template <typename OutT>
     void copy_into_astype(OutT* dest_buffer) const;
 
-    // TODO: Perhaps this should have some smarter logic to avoid a copy if already
-    //       contiguous?
+    /**
+     * Convert an array to a new contiguous array.
+     *
+     * @note This function currently ALWAYS implies a copy, and is thus inefficient if
+     *       the array is already contiguous.
+     *
+     * @todo Consider the logic in this function to avoid a copy if the array is contiguous.
+     *
+     * @returns A new contiguous array with the same data.
+     */
     OwnerType to_contiguous() const;
 
     /**
@@ -890,12 +1115,45 @@ namespace ncarray {
       return this->is_contiguous_impl();
     }
 
+    /**
+     * Convert an array to an array of a new DType.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] dtype_out The DType to convert the array to.
+     * @returns A new contiguous array with the same data.
+     */
     OwnerType astype(DType& dtype_out) const;
 
+    /**
+     * Fill all elements of an array with the provided value. The array must not be read-only.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] val The value to assign to the array elements.
+     */
     void fill(Scalar val);
 
+    /**
+     * Fill all elements of an array with the elements of the input array.
+     *
+     * @note This function currently only supports arrays of equal shape.
+     *       No broadcasting is performed.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] arr The array to use for assignment.
+     */
     void assign(const ArrayLike auto& arr);
 
+    /**
+     * Return a new array view with axes of size 1 "squeezed" (removed).
+     *
+     * @returns The squeezed output array view.
+     */
     ViewType squeeze() const {
       void* new_data = this->m_data;
 
@@ -930,7 +1188,7 @@ namespace ncarray {
      *
      * @param[in] new_shape The new shape that is requested.
      * @param[in] ndim The number of dimensions in the new shape.
-     * @returns new_view The reshaped view.
+     * @returns The reshaped view.
      */
     NCA_HD ViewType reshape(const ssize_t* new_shape, ssize_t ndim) const {
       ssize_t new_strides[NCARRAY_MAX_NDIM] { 0 };
@@ -969,7 +1227,7 @@ namespace ncarray {
      *
      * @param[in] new_shape The new shape that is requested.
      * @param[in] ndim The number of dimensions in the new shape.
-     * @returns new_owner A new contiguous owning array of the specified shape.
+     * @returns A new contiguous owning array of the specified shape.
      */
     OwnerType copy_as_shape(const ssize_t* new_shape, ssize_t ndim) const {
       ssize_t new_size {
@@ -988,38 +1246,226 @@ namespace ncarray {
 
     // --- Axis-Aware Reductions --- //
 
+    /**
+     * Perform a sum along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to sum along.
+     * @returns An owning type array with the per-axis sums.
+     */
     OwnerType sum(const std::vector<ssize_t>& axes) const;
 
+    /**
+     * Calculate the maximum along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the maximum along.
+     * @returns An owning type array with the per-axis maxima.
+     */
     OwnerType max(const std::vector<ssize_t>& axes) const;
+    /**
+     * Determine the index of the maximum along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the index of the maximum along.
+     * @returns An owning type array with the indices of the per-axis maxima.
+     */
     OwnerType argmax(const std::vector<ssize_t>& axes) const;
 
+    /**
+     * Calculate the minimum along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the minimum along.
+     * @returns An owning type array with the per-axis maxima.
+     */
     OwnerType min(const std::vector<ssize_t>& axes) const;
+    /**
+     * Determine the index of the minima along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the index of the minimum along.
+     * @returns An owning type array with the indices of the per-axis minima.
+     */
     OwnerType argmin(const std::vector<ssize_t>& axes) const;
 
+    /**
+     * Calculate the mean along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the mean along.
+     * @returns An owning type array with the indices of the per-axis means.
+     */
     OwnerType mean(const std::vector<ssize_t>& axes) const;
+    /**
+     * Calculate the variance along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the variance along.
+     * @param[in] ddof The delta degrees of freedom. Divisor in the calculation is N-ddof.
+     * @returns An owning type array with the indices of the per-axis variance.
+     */
     OwnerType var(const std::vector<ssize_t>& axes, ssize_t ddof = 0) const;
+    /**
+     * Calculate the standard deviation along the set of provided axes.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to find the standard deviation along.
+     * @param[in] ddof The delta degrees of freedom. Divisor in the calculation is N-ddof.
+     * @returns An owning type array with the indices of the per-axis standard deviation.
+     */
     OwnerType std(const std::vector<ssize_t>& axes, ssize_t ddof = 0) const;
 
+    /**
+     * Return true along the provided axes if all values are "truthy."
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes to determine truthiness along.
+     * @returns An owning type array with a truthy value if all values were truthy.
+     */
     OwnerType all(const std::vector<ssize_t>& axes) const;
+    /**
+     * Return true along the provided axes if any value is "truthy."
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] axes The axes along which to determine if any value is "truthy."
+     * @returns An owning type array with a truthy value if any value was truthy.
+     */
     OwnerType any(const std::vector<ssize_t>& axes) const;
 
     // --- Full Reductions (To Scalar) --- //
 
+    /**
+     * Perform a sum of all array elements.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The full sum of the array.
+     */
     Scalar sum() const;
 
+    /**
+     * Find the maximum of all array elements.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The maximum of the array.
+     */
     Scalar max() const;
+    /**
+     * Find the index of the maximum of all array elements.
+     *
+     * @note This function returns a linearized ravel index.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The linearized ravel index for the maximum of the array.
+     */
     Scalar argmax() const;
 
+    /**
+     * Find the minimum of all array elements.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The minimum of the array.
+     */
     Scalar min() const;
+    /**
+     * Find the index of the minimum of all array elements.
+     *
+     * @note This function returns a linearized ravel index.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The linearized ravel index for the minimum of the array.
+     */
     Scalar argmin() const;
 
+    /**
+     * Find the mean of all array elements.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The mean of the array.
+     */
     Scalar mean() const;
+
+    /**
+     * Find the variance of all array elements.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] ddof The delta degrees of freedom. Divisor in the calculation is N-ddof.
+     * @returns The variance of the array.
+     */
     Scalar var(ssize_t ddof = 0) const;
+    /**
+     * Find the standard deviation of all array elements.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] ddof The delta degrees of freedom. Divisor in the calculation is N-ddof.
+     * @returns The standard deviation of the array.
+     */
     Scalar std(ssize_t ddof = 0) const;
 
+    /**
+     * Return truthy if all elements of the array are truthy.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns Truthy if all elements are truthy, otherwise falsey.
+     */
     Scalar all() const;
+    /**
+     * Return truthy if any element of the array is truthy.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns Truthy if any element of the array is truthy, otherwise falsey.
+     */
     Scalar any() const;
 
+    /**
+     * Return the underlying pointer to an array element as a Scalar variant.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] ptr The pointer to an element of the array.
+     * @returns A scalar for the provided array element.
+     */
     Scalar get_scalar(void* ptr) const {
       auto reduce = [&]<typename T>() -> Scalar {
         return Scalar { *reinterpret_cast<T*>(ptr) };
@@ -1028,6 +1474,14 @@ namespace ncarray {
       return dispatch(this->m_dtype, reduce);
     }
 
+    /**
+     * Evaluate an expression object into the array.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @param[in] The expression to evaluate into the array.
+     */
     template <Expression Expr>
     ArrayImpl& operator=(const Expr& expr);
 
@@ -1040,12 +1494,24 @@ namespace ncarray {
      *
      * Use the ravel index to populate the values of the array based on the shape
      * of the instance it is called on.
+     *
+     * @returns An expression to be evaluated which will create the ravel index array.
      */
     ExprResult iota() const;
 
 #ifndef __CUDACC_RTC__
     /**
-     * Create a new array of specified shape populated by the ravel index.
+     * Generate an array of the specified type using the APL-style index generator.
+     *
+     * Use the ravel index to populate the values of the array based on the shape
+     * of the instance it is called on.
+     *
+     * @note This function is NOT compatible with device code. (It requires allocation).
+     *       This is a host only function.
+     *
+     * @param shape The shape of the array to construct.
+     * @param dtype The datatype for the final array.
+     * @returns An array with elements populated by the index generator.
      */
     static OwnerType iota(const std::vector<ssize_t>& shape, DType dtype = DType::int64) {
       OwnerType res(shape, dtype);
@@ -1056,61 +1522,240 @@ namespace ncarray {
 
     // --- Unary operations --- //
 
+    /**
+     * Return an expression for the negation of the array.
+     *
+     * @returns An expression for the negation of the array.
+     */
     ExprResult operator-() const;
+    /**
+     * Inplace increment each element of the array.
+     */
     ArrayImpl& operator++();
+    /**
+     * Inplace decrement each element of the array.
+     */
     ArrayImpl& operator--();
+    /**
+     * Return an expression for the logical not of the array.
+     *
+     * @returns An expression for the logical not of the array.
+     */
     ExprResult operator!() const;
 
     // --- Binary operations --- //
 
+    /**
+     * Return an expression for the sum of the array and the provided expression.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to sum with the array.
+     * @returns An expression for the sum of the array and the provided expression.
+     */
     ExprResult operator+(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the difference of an expression from the array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to subtract from the array.
+     * @returns An expression for the difference of the provided expression from the array.
+     */
     ExprResult operator-(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the product of the array and the provided expression.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to multiply with the array.
+     * @returns An expression for the product of the array and the provided expression.
+     */
     ExprResult operator*(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the quotient of array over the provided expression.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression that will be the denominator.
+     * @returns An expression for the quotient of array and expression.
+     */
     ExprResult operator/(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the remainder (modulo) of array over the provided expression.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression that will be the denominator.
+     * @returns An expression for the remainder (modulo) of array and expression.
+     */
     ExprResult operator%(const ExprResult& right) const;
 
     // --- Binary Inplace Operations --- //
 
+    /**
+     * Add an expression into an array inplace.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to sum with the array.
+     */
     ArrayImpl& operator+=(const ExprResult& right);
 
+    /**
+     * Subtract an expression from an array inplace.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to subtract from the array.
+     */
     ArrayImpl& operator-=(const ExprResult& right);
 
+    /**
+     * Calculate the product of an expression into an array inplace.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to multiply with the array.
+     */
     ArrayImpl& operator*=(const ExprResult& right);
 
+    /**
+     * Divide an expression into an array inplace.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to divide the array by.
+     */
     ArrayImpl& operator/=(const ExprResult& right);
 
     // --- Comparisons --- //
 
+    /**
+     * Return an expression for the elementwise equality test between the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to compare with the array.
+     * @returns An expression for the elementwise equality comparison.
+     */
     ExprResult operator==(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the elementwise inequality test between the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to compare with the array.
+     * @returns An expression for the elementwise inequality comparison.
+     */
     ExprResult operator!=(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the elementwise less than test between the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to compare with the array.
+     * @returns An expression for the elementwise less than comparison.
+     */
     ExprResult operator<(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the elementwise less than or equal test between the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to compare with the array.
+     * @returns An expression for the elementwise less than or equal comparison.
+     */
     ExprResult operator<=(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the elementwise greater than test between the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to compare with the array.
+     * @returns An expression for the elementwise greater than comparison.
+     */
     ExprResult operator>(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the elementwise greater than or equal test between the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to compare with the array.
+     * @returns An expression for the elementwise greater than or equal comparison.
+     */
     ExprResult operator>=(const ExprResult& right) const;
 
     // --- Logical Operations --- //
 
+    /**
+     * Return an expression for the logical AND of the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to calculate the logical AND of with the array.
+     * @returns An expression for the logical AND.
+     */
     ExprResult operator&&(const ExprResult& right) const;
 
+    /**
+     * Return an expression for the logical OR of the expression and array.
+     *
+     * @note This is performed elementwise.
+     *
+     * @param right The expression to calculate the logical OR of with the array.
+     * @returns An expression for the logical OR.
+     */
     ExprResult operator||(const ExprResult& right) const;
 
     // --- Logical Inplace Operations --- //
 
+    /**
+     * Calculate the logical AND of an expression and array in place.
+     *
+     * @note This is performed elementwise.
+     * @note This requires datatypes convertible to bool.
+     *
+     * @param right The expression to calculate the logical AND of with the array.
+     */
     ArrayImpl& operator&=(const ExprResult& right);
 
+    /**
+     * Calculate the logical OR of an expression and array in place.
+     *
+     * @note This is performed elementwise.
+     * @note This requires datatypes convertible to bool.
+     *
+     * @param right The expression to calculate the logical OR of with the array.
+     */
     ArrayImpl& operator|=(const ExprResult& right);
 
     // -- Iterators --- //
 
+    /**
+     * An value-based iterator for traversing an array along the first dimension.
+     *
+     * This iterator is in some respects atypical by standard C++ standards. However,
+     * it provides a simplified API for a common operation on multi-dimensional arrays,
+     * namely, iterating along an axis -- in particular, it iterates the FIRST axis.
+     *
+     * This iterator implementation generates sub-views by value on the fly. The
+     * ArrayImpl class is rather light-weight and the views are non-owning, so this
+     * strategy is appropriate. The complexity of managing a true pointer/reference
+     * based iterator for array's with varying layouts of suboffsets (pointer axes)
+     * outweighs the benefits in reducing the subview construction by value cost.
+     *
+     * @tparam VT The ArrayImpl view type.
+     */
     template <class VT>
     class IteratorImpl {
     public:
@@ -1157,12 +1802,50 @@ namespace ncarray {
     using Iterator = IteratorImpl<ViewType>;
     using ConstIterator = IteratorImpl<const ViewType>;
 
+    /**
+     * Construct a non-const Iterator pointing to the first subview of the array.
+     *
+     * @returns A non-const iterator pointing to the first subview of the array.
+     */
     Iterator begin();
+    /**
+     * Construct a non-const Iterator pointing to the past the last subview of the array.
+     *
+     * @returns A non-const iterator pointing past the last subview of the array.
+     */
     Iterator end();
 
+    /**
+     * Construct a const Iterator pointing to the first subview of the array.
+     *
+     * @returns A const iterator pointing to the first subview of the array.
+     */
     ConstIterator begin() const;
+    /**
+     * Construct a const Iterator pointing to the past the last subview of the array.
+     *
+     * @returns A const iterator pointing past the last subview of the array.
+     */
     ConstIterator end() const;
 
+    /**
+     * Return a string representation of the data elements of the array.
+     *
+     * This routine returns a string of data elements of the array, formatted
+     * in a manner very similar to how NumPy prints its NDArrays. If there are
+     * too many elements, the first 3 and last 3 are shown with the truncated
+     * elements replaced by an elipsis on all axes this has occurred.
+     *
+     * @note If the data is resident on GPU, it will NOT be copied over to the
+     *       host just for the purposes of string representation. Instead, the
+     *       representation will read `[<...(on device)...>]` followed by the
+     *       shape and datatype as normal.
+     *
+     * @note This function is NOT compatible with device code.
+     *       This is a host only function.
+     *
+     * @returns The string representation.
+     */
     std::string repr() const {
       if constexpr (std::is_same_v<MemType, DevTag>) {
         std::ostringstream oss;
@@ -1197,12 +1880,28 @@ namespace ncarray {
     }
 
   protected:
+    /**
+     * Return a class name primarily for the repr routine.
+     *
+     * This provides a unique name for the class that combines the layout and storage
+     * specifications for easy identification when printing to console.
+     *
+     * @returns The class name.
+     */
     std::string class_name() const {
       return std::string(this->layout_repr()) + std::string(this->storage_repr());
     }
 
     /**
-     * Recursive helper for repr() that handles arbitrary dimensions.
+     * Dispatcher for the recursive helper for repr() that handles arbitrary dimensions.
+     *
+     * This function only dispatches the true recurser based on the datatype.
+     *
+     * @param[out] oss The stream to write the array representation to.
+     * @param[in] current_data A pointer to the current data element of the array.
+     * @param[in] axis The current array axis being traversed.
+     * @param[in] indent The current indentation level to add to the string representation.
+     * @param[in] edge_items The current number of items to be shown when truncating for length.
      */
     void repr_recursive(std::ostringstream& oss,
                         void* current_data,
@@ -1216,6 +1915,16 @@ namespace ncarray {
       dispatch(this->m_dtype, internal);
     }
 
+    /**
+     * Recursive helper for repr() that handles arbitrary dimensions.
+     *
+     * @tparam T The type of the array elements.
+     * @param[out] oss The stream to write the array representation to.
+     * @param[in] current_data A pointer to the current data element of the array.
+     * @param[in] axis The current array axis being traversed.
+     * @param[in] indent The current indentation level to add to the string representation.
+     * @param[in] edge_items The current number of items to be shown when truncating for length.
+     */
     template <class T>
     void repr_recursive_dispatched(std::ostringstream& oss,
                                    void* current_data,
@@ -1308,6 +2017,10 @@ namespace ncarray {
    *
    * For convenience the function will consume all offsets in the NCOffsetsArray.
    * All suboffsets should then be -1 or 0.
+   *
+   * @tparam MemTag The tag indicating whether array is host- or device-resident.
+   * @param[in] nc The NCArray* to be converted to SOArray*.
+   * @returns The SOArray* equivalent to the input `nc` array.
    */
   template <typename MemTag>
   auto promote_to_so(const ArrayImpl<NCOffsetsPolicy,
@@ -1374,6 +2087,25 @@ namespace ncarray {
 
   // --- Indexing Helpers --- //
 
+  /**
+   * Given a linearized index and array, construct a StaticCoords object to index.
+   *
+   * Because the StaticCoords object has a constexpr size, using it for indexing
+   * as opposed to linearized indices can have major performance benefits, particularly
+   * for device code applications. E.g., the constexpr size generally allows loops
+   * to be fully unrolled, and stack spilling to be avoided in compiled kernels.
+   *
+   * This routine simply converts the linearized ravel index to a StaticCoords object
+   * of the correct dimensionality of the array, using a switch dispatch.
+   *
+   * @note That as a result of this switch, code using the function will get much
+   *       larger.
+   *
+   * @tparam Array The type of the input array.
+   * @param[in] arr The input array.
+   * @param[in] idx The linearized ravel index.
+   * @returns The ArrayElementProxy to the requested data element.
+   */
   template <class Array>
   NCA_HD inline ArrayElementProxy static_index(Array arr, unsigned idx) {
     switch (arr.ndim()) {
