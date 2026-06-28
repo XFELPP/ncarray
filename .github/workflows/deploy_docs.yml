@@ -9,6 +9,8 @@ on:
       - 'src/**'
       - 'docs/**'
 
+  # Allow manual builds.
+  workflow_dispatch:
 jobs:
   build-docs:
     runs-on: ubuntu-latest
