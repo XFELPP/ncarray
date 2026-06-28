@@ -42,8 +42,20 @@ using std::same_as;
 #endif
 
 namespace ncarray {
+  /**
+   * An empty struct indicating skipped axes when indexing an array.
+   *
+   * This struct serves the same purpose as an ellipsis (...) does when indexing
+   * a NumPy array in Python.
+   */
   struct Ellipsis {};
 
+  /**
+   * A struct representing a slice for indexing by a step between a start and stop index.
+   *
+   * The Slice represents the indexing parameters used to index the array, not the
+   * resultant sub-view produced from the indexing operation.
+   */
   struct Slice {
     NCA_HD Slice(ssize_t start_, ssize_t stop_)
       : start(start_)
@@ -63,13 +75,22 @@ namespace ncarray {
   };
 
   // Indexing is allowed by integer, slice or ellipsis
+  /**
+   * Determines whether an object as an allowable argument to array indexing functions.
+   */
   template <typename IdxT>
   concept IndexArg = integral<decay_t<IdxT>> ||
     same_as<decay_t<IdxT>, Slice> ||
     same_as<decay_t<IdxT>, Ellipsis>;
 
+  /**
+   * A tag identifier for the type of indexing argument when constructing lists of args.
+   */
   enum class IndexType { Integer, Slice, Ellipsis };
 
+  /**
+   * A generic indexing argument with a tag indicating the type to be used.
+   */
   struct IndexItem {
     IndexType type;
     ssize_t idx;
@@ -109,6 +130,9 @@ namespace ncarray {
    *
    * The constexpr size makes it far easier for the compiler to unroll loops and
    * optimize certain hot paths.
+   *
+   * @tparam NDIM The dimensionality of the coords object, and by proxy the array itself.
+   * @tparam IndexT The indexing type. Can, e.g., change the width of the integer.
    */
   template <int NDim = 1, typename IndexT = ssize_t>
   struct StaticCoords {

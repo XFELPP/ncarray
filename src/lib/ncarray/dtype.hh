@@ -82,33 +82,44 @@ namespace ncarray {
   };
 #endif
 
+  /**
+   * The main identifier for the ncarray type system. The DType determines array element type.
+   */
   enum class DType {
-    bool_,
-    char_,
+    bool_,      ///< Boolean type
+    char_,      ///< `char` type (signed 8-bit)
     //uchar, // Stuck cause of uint8_t
-    uint8,
-    uint16,
-    uint32,
-    uint64,
-    int8,
-    int16,
-    int32,
-    int64,
-    float32,
-    float64,
-    float128,
-    complex64,
-    complex128,
-    complex256,
-    vfloat2,
-    vfloat3,
-    vfloat4,
-    vdouble2,
-    vdouble3,
-    vdouble4
+    uint8,      ///< 8-bit unsigned integer
+    uint16,     ///< 16-bit unsigned integer
+    uint32,     ///< 32-bit unsigned integer
+    uint64,     ///< 64-bit unsigned integer
+    int8,       ///< 8-bit signed integer
+    int16,      ///< 16-bit signed integer
+    int32,      ///< 32-bit signed integer
+    int64,      ///< 64-bit signed integer
+    float32,    ///< single precision float
+    float64,    ///< double precision float
+    float128,   ///< equivalent to long double
+    complex64,  ///< complex<float>
+    complex128, ///< complex<double>
+    complex256, ///< complex<long double>
+    vfloat2,    ///< 2-float vector type (Float2)
+    vfloat3,    ///< 3-float vector type (Float3)
+    vfloat4,    ///< 4-float vector type (Float4)
+    vdouble2,   ///< 2-double vector type (Double2)
+    vdouble3,   ///< 3-double vector tyep (Double3)
+    vdouble4    ///< 4-double vector type (Double4)
   };
 
+  /**
+   * A small struct that maps a type to the DType enumerator via the `value` member.
+   */
   template <typename T> struct dtype_traits;
+
+  /**
+   * @def REGISTER_NCARRAY_DTYPE(TYPE, ENUM_VAL)
+   * @brief Macro to create dtype_traits specializations.
+   */
 #define REGISTER_NCARRAY_DTYPE(TYPE, ENUM_VAL)      \
   template <> struct dtype_traits<TYPE> {           \
     static constexpr DType value = DType::ENUM_VAL; \
@@ -145,6 +156,20 @@ namespace ncarray {
   REGISTER_NCARRAY_DTYPE(Double4, vdouble4)
 #undef REGISTER_NCARRAY_DTYPE
 
+  /**
+   * Returns the size in bytes of the provided DType.
+   *
+   * @note In the case of NVRTC JIT compiled code, quad precision is converted to
+   *       double as it is not-supported. This exceptional case is preprocessor protected.
+   *
+   * @todo Formally enforce these guarantees. This *should* be correct in all currently
+   *       supported use cases -- but its not guaranteed. The fixed sizes listed here
+   *       need to be handled (via whatever types required) in the event they are not
+   *       satisfied in a particular case/on a particular platform.
+   *
+   * @param[in] type The input DType.
+   * @returns The size in bytes.
+   */
   NCA_HD inline size_t itemsize(DType type) {
     switch (type) {
     case DType::bool_:
@@ -204,6 +229,15 @@ namespace ncarray {
   }
 
 #ifndef __CUDACC_RTC__
+  /**
+   * Returns the string representation of the DType for printing.
+   *
+   * @note This function is NOT compatible with device code.
+   *       This is a host only function.
+   *
+   * @param[in] type The input DType.
+   * @returns The string representation of the data type.
+   */
   inline std::string to_string(DType type) {
     switch (type) {
     case DType::bool_:
@@ -255,6 +289,11 @@ namespace ncarray {
     }
   }
 
+  /**
+   * The set of scalar types used by ncarray - one for each DType.
+   * @note This function is NOT compatible with device code.
+   *       This is a host only function.
+   */
   using Scalar = std::variant<
     // Cannot use unsigned char, identical to std::uint8_t
     bool, char,
@@ -265,6 +304,16 @@ namespace ncarray {
     Float2, Float3, Float4, Double2, Double3, Double4
   >;
 
+  /**
+   * Convert a pointer to an array element to a Scalar.
+   *
+   * @note This function is NOT compatible with device code.
+   *       This is a host only function.
+   *
+   * @tparam T The underlying type of the array element.
+   * @param[in] ptr The pointer to the array element.
+   * @returns The Scalar wrapper.
+   */
   template <typename T>
   Scalar to_scalar(const void* ptr) {
     return Scalar(*reinterpret_cast<const T*>(ptr));
@@ -305,6 +354,9 @@ namespace ncarray {
 
   /**
    * Struct for testing presence of a type in a type_list.
+   *
+   * @tparam T The object under test.
+   * @tparam List The list to check for the inclusion of T.
    */
   template <typename T, typename List>
   struct is_in_list;
@@ -314,6 +366,9 @@ namespace ncarray {
 
   /**
    * Whether a requested type is in the specified type_list.
+   *
+   * @tparam T The object under test.
+   * @tparam List The list to check for the inclusion of T.
    */
   template <typename T, typename List>
   constexpr bool is_in_type_list_v = is_in_list<T, List>::value;
@@ -322,6 +377,12 @@ namespace ncarray {
    * All supported base datatypes in ncarray.
    *
    * This includes basic C++ types, complex numbers and vector types.
+   *
+   * @note Due to quad precision not being supported, long double is not included
+   *       when compiling with NVRTC, and neither is complex<long double>. nvcc
+   *       seemingly transparently converts these to double; however, NVRTC does not
+   *       and this results in compilation errors, or hard to track down crashes if
+   *       not explicitly removed.
    */
 #ifdef __CUDACC_RTC__
   // For NVRTC (and really device code, generally) long double does not work
@@ -346,6 +407,8 @@ namespace ncarray {
 
   /**
    * A struct for concatenating type_lists together.
+   *
+   * @tparam Lists The type lists to concatenate.
    */
   template <typename... Lists>
   struct concat;
@@ -454,9 +517,14 @@ namespace ncarray {
    * desired. In that case, using list_dispatcher directly with specialized
    * type lists can be done instead.
    *
-   * NOTE: In device code, long double is not supported. nvcc generally maps this to
+   * @note In device code, long double is not supported. nvcc generally maps this to
    *       double automatically. NVRTC does not. We explicitly map long double to double
    *       and complex<long double> to complex<double> for NVRTC compiled code.
+   *
+   * @tparam Visitor The type of the visitor to be dispatched based on DType.
+   * @param[in] type The DType to use for dispatching.
+   * @param[in] visitor The lambda visitor.
+   * @returns Whatever is returned by the visitor.
    */
   template <typename Visitor>
   NCA_HD inline auto dispatch(DType type, Visitor&& visitor) {
