@@ -357,10 +357,10 @@ title: API Reference
 `;
 
 for (const f of rootFolders) {
-    root += `- [${f}](./${f}/)\n`;
+    root += `- [${f}](./${f.toLowerCase()}/)\n`;
 }
 
-root += `- [Concepts](./Concepts/)\n`; /// The Concepts wasnt in the initial tree
+root += `- [Concepts](./concepts/)\n`; /// The Concepts wasnt in the initial tree
 
 await fs.writeFile(path.join(MD_DIR, "index.md"), root);
 
