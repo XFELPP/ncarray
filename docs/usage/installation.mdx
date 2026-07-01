@@ -1,0 +1,72 @@
+---
+title: Installation
+description: Non-contiguous arrays for C++ and Python.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `ncarray` package is written predominantly in C++; however, it does contain two halves:
+  - The core `libncarray` library
+  - The `ncarray` Python package.
+
+Like all XFELPP projects, these can be built in a variety of formats, which are described in more detail on the general [installation page](../../usage/installation).
+
+Note that regardless of the format chosen, the necessary headers and shared libraries can always be found from Python if needed (e.g. from build scripts). Two utility functions are provided at the top of the ncarray package to assist in locating the correct binaries and files:
+
+```py
+import ncarray
+
+# Headers:
+path_to_headers: str = ncarray.get_include()
+
+# Shared libs:
+path_to_libs: str = ncarray.get_lib_dir()
+```
+
+## Installation from XFELPP Indices
+
+Currently, the recommended method for installation is to select one of the distributed wheels from the XFELPP indices, depending on whether you require GPU support (Windows and Linux only), or host only.
+  - https://pypi.xfelpp.org/host - Host only
+  - https://pypi.xfelpp.org/cuda128 - GPU support agains the CUDA Toolkit Version 12.8
+  - https://pypi.xfelpp.org/cuda132 - GPU support agains the CUDA Toolkit Version 13.2 [COMING SOON]
+
+Installation from the command-line using `pip` directly is straightforward. When running `pip install` simply provide the extra keyword argument `--extra-index-url` pointing to the index for the variant of interest.
+
+<Tabs>
+  <TabItem label="CPU Only" icon="seti:cpp">
+    ```bash
+    pip install ncarray --extra-index-url https://pypi.xfelpp.org/host
+    ```
+  </TabItem>
+  <TabItem label="CUDA 12.8" icon="seti:cu">
+    ```bash
+    pip install ncarray --extra-index-url https://pypi.xfelpp.org/cuda128
+    ```
+  </TabItem>
+  <TabItem label="CUDA 13.2 [Coming Soon]" icon="seti:cu">
+    ```bash
+    pip install ncarray --extra-index-url https://pypi.xfelpp.org/cuda132
+    ```
+  </TabItem>
+</Tabs>
+
+If you need to setup extra indices for use with different tools, some examples are provided with the [general installation information](../../usage/installation).
+
+## Directly from GitHub Releases
+
+The wheels are also distributed directly on GitHub and can be found attached to each release. Refer to the [releases](https://github.com/XFELPP/ncarray/releases) to select the correct package. After downloading the wheel, the package can be installed with `pip install`.
+
+The entire procedure can be done from the command-line, for example:
+
+```bash
+wget https://github.com/XFELPP/ncarray/releases/download/v0.6.0/ncarray-0.6.0-cp311-cp311-manylinux_2_28_x86_64.whl
+pip install ncarray-0.6.0-cp311-cp311-manylinux_2_28_x86_64.whl
+```
+
+## With Conda
+
+`ncarray` is currently in the process of preparing conda packages. A recipe is available in the repo ([here](https://github.com/XFELPP/ncarray/blob/main/recipes/meta.yaml)); however, the package is not yet available on `conda-forge` and/or a private channel.
+
+## From Source
+
+The source code is available on [GitHub](https://github.com/XFELPP/ncarray). Please refer to the [build instructions](./build) for more information if building from source.
