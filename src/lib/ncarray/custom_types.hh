@@ -18,7 +18,9 @@ using cuda::std::is_arithmetic;
 
 using cuda::std::decay_t;
 using cuda::std::is_same_v;
+#if __CUDACC_VER_MAJOR__ < 13
 using cuda::std::sqrt;
+#endif
 
 typedef long long ssize_t;
 

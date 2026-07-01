@@ -30,7 +30,9 @@ typedef SSIZE_T ssize_t;
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
+#if __CUDACC_VER_MAJOR__ < 13
 using cuda::std::isfinite;
+#endif
 
 using cuda::std::complex;
 using cuda::std::is_floating_point_v;
