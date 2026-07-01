@@ -1,0 +1,126 @@
+---
+title: Type System
+description: Non-contiguous arrays for C++ and Python.
+---
+
+import { Aside, Card, CardGrid, Icon, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Primitive Types
+
+As `ncarray` array classes are in some ways "type-erased", it defines its own type system in order to tag the data an array is built over.
+
+The core component of the type system is the `ncarray::DType` enum class, the enumerators of which map to primitive C++ types (or custom vector primitives, as explained below). The library currently defines and uses the following types:
+
+```cpp
+enum class DType {
+  bool_,      ///< Boolean type
+  char_,      ///< `char` type (signed 8-bit)
+  //uchar, // Stuck cause of uint8_t
+  uint8,      ///< 8-bit unsigned integer
+  uint16,     ///< 16-bit unsigned integer
+  uint32,     ///< 32-bit unsigned integer
+  uint64,     ///< 64-bit unsigned integer
+  int8,       ///< 8-bit signed integer
+  int16,      ///< 16-bit signed integer
+  int32,      ///< 32-bit signed integer
+  int64,      ///< 64-bit signed integer
+  float32,    ///< single precision float
+  float64,    ///< double precision float
+  float128,   ///< equivalent to long double
+  complex64,  ///< complex<float>
+  complex128, ///< complex<double>
+  complex256, ///< complex<long double>
+  vfloat2,    ///< 2-float vector type (Float2)
+  vfloat3,    ///< 3-float vector type (Float3)
+  vfloat4,    ///< 4-float vector type (Float4)
+  vdouble2,   ///< 2-double vector type (Double2)
+  vdouble3,   ///< 3-double vector tyep (Double3)
+  vdouble4    ///< 4-double vector type (Double4)
+};
+```
+
+Each array class has a `m_dtype` member, accessible via the `dtype()` function. Combined with the array shape, strides, and (sub)offsets, the `DType` determines how to traverse the array data. It determines the number of bytes in each data element of the array, and how certain operations should be performed (e.g., floating point or integer math).
+
+The other libraries in the `XFELPP` project, namely `XAlgosPP` and `sbio`, also rely on this type system when handling data generically. It serves as the common reference point for determining the handled type.
+
+## Vector Primitives
+
+As shown above, there are currently 6 vector types (`DType::vfloat2`, ... `DType::vdouble4`). These types are defined in `ncarray/custom_types.hh`, and are simple composite types of two, three, or four values. Currently, the individual values are either single-precision or double-precision floating point primitives. The types defined in the header (inside the `ncarray` namespace) are:
+- `Float2` : Two single-precision floating point values
+- `Float3` : Three single-precision floating point values
+- `Float4` : Four single-precision floating point values
+- `Double2` : Two double-precision floating point values
+- `Double3` : Three double-precision floating point values
+- `Double4` : Four double-precision floating point values
+
+These vector primitives are packed and aligned to the same alignment boundaries as the corresponding `CUDA` types (`float2`, `double4`, etc.). The values are usable in both host and device code, and are not locked to the GPU.
+
+Basic mathematical operations are defined as being performed elementwise on these objects (i.e., adding two `Float2`s adds their individual members together). A scalar can be cast to a vector primitive, in which case it will be broadcast into each member. When casting a vector primitive to the corresponding scalar, all members are dropped except the first.
+
+These types are accessed through the `.x`, `.y`, `.z` (For 3, and 4-element types), and `.w` (for 4-element types). They could roughly be considered as equivalent to the following definitions (ignoring alignment specifications):
+
+```cpp
+template <typename T>
+struct VectorType2 {
+  T x;
+  T y;
+};
+
+template <typename T>
+struct VectorType3 {
+  T x;
+  T y;
+  T z;
+};
+
+template <typename T>
+struct VectorType4 {
+  T x;
+  T y;
+  T z;
+  T w;
+};
+```
+
+<Aside type="caution" title="More Types Coming">
+  Currently, vector types are only defined for single- and double- precision floating point. Various integer types are planned for different widths and signedness for future releases.
+</Aside>
+
+<Aside type="caution" title="Double4 Deprecation">
+  From CUDA 13 onwards, the `double4` CUDA type has been deprecated. The `ncarray::Double4` type has not been deprecated while the project evalutes the best alternatives for interoperability moving forward.
+</Aside>
+
+## Dispatch Engine
+
+Also in `ncarray/dtype.hh` are a series of generic metaprogramming utilties that are used to simplify implementation of expression evaluation across all the supported types.
+
+These utilties begin with a `type_list` implementation, and progress through various structs for wrapping and concatenating type lists, until arriving at the `list_dispatcher` implementations. These structs are used to correctly dispatch a `Visitor` (i.e., some lambda function) to across all the supported types in the system.
+
+Rather than using these metaprogramming tools, however, a simpler entry point is provided through the `dispatch` function defined at the end. This function will take a single lambda `visitor` as its argument and run it for the appropriate type. This is likely the only function generally needed from those defined here.
+
+## `BaseOpTraits<T>` and `op_traits<T>`: Specifying Operations for Types
+
+The other component of the `ncarray` type system, aside from the basic type mappings themselves, are a series of operation specifications. These are contained in the header `ncarray/op_traits.hh`.
+
+The structs defined in this header define how operations between scalars of the supported types of the type system should be performed. These structs are the source of truth for all expression evaluations. For example, not all of the standard C++ types above have all of the basic mathematical operators defined for them. As well, in some cases, the default behaviour may not be desirable for numerical calculations. E.g., we may want to promote small-width integers to larger-widths to avoid overflows during calculations.
+
+Additionally, the `op_traits<T>` structs contain instructions on how to perfom casts between types. For example, it correctly performs broadcasting or narrowing when interconverting between vector and scalar primitives.
+
+The main directives defined in this system are:
+- `sum_type` : The type used when adding types `T`.
+- `diff_type` : The type used when subtracting types `T`.
+- `truediv_type` : The type used when dividing types `T`.
+- `lowest()` : The lowest numerical value for this type.
+- `max()` : The greatest numerical value for this type.
+- `neg(const T& v)` : The unary negation operation.
+- `inc(const T& v)` : The unary increment operation.
+- `dec(const T& v)` : The unary decrement operation.
+- `isfinite(const T& v)` : The unary isfinite operation.
+- `mod(const T& a, const T& b)` : The binary modulo operation `a % b`
+- `greater(const T& a, const T& b)` : The binary comparison `a > b`
+- `ge(const T& a, const T& b)` : The binary comparison `a >= b`
+- `less(const T& a, const T& b)` : The binary comparison `a < b`
+- `le(const T& a, const T& b)` : The binary comparison `a <= b`
+- `land(const T& a, const T& b)` : The logical operation `a && b`
+- `lor(const T& a, const T& b)` : The logical operation `a || b`
+- `template <typename To> to cast(const T& v)` : Cast a value from `T` to `To`.
