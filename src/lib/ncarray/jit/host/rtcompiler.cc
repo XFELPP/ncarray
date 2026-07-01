@@ -54,6 +54,81 @@ namespace fs = std::filesystem;
 
 namespace ncarray {
   namespace host {
+    namespace {
+      /**
+       * Convert the ncarray type system to corresponding asmjit type system.
+       *
+       * This function only handles scalar datatypes. E.g. complex and vector types
+       * must be constructed using combinations of the returned type for their unit
+       * types (a complex<float> is two TypeId::kFloat32 for example).
+       *
+       * A `char_` is converted to signed integer kInt8. A `bool_` is converted to
+       * unsigned integer kUInt8, as these do not have corresponding types in asmjit.
+       *
+       * @param[in] dtype The ncarray datatype to convert.
+       * @returns typeid The asmjit TypeId that corresponds to the ncarray DType.
+       */
+      asmjit::TypeId dtype_to_typeid(DType dtype) {
+        switch (dtype) {
+        case DType::char_:
+        case DType::int8: {
+          return asmjit::TypeId::kInt8;
+        }
+        case DType::int16: {
+          return asmjit::TypeId::kInt16;
+        }
+        case DType::int32: {
+          return asmjit::TypeId::kInt32;
+        }
+        case DType::int64: {
+          return asmjit::TypeId::kInt64;
+        }
+        case DType::bool_:
+        case DType::uint8: {
+          return asmjit::TypeId::kUInt8;
+        }
+        case DType::uint16: {
+          return asmjit::TypeId::kUInt16;
+        }
+        case DType::uint32: {
+          return asmjit::TypeId::kUInt32;
+        }
+        case DType::uint64: {
+          return asmjit::TypeId::kUInt64;
+        }
+        case DType::float32: {
+          return asmjit::TypeId::kFloat32;
+        }
+        case DType::float64: {
+          return asmjit::TypeId::kFloat64;
+        }
+        case DType::float128: {
+          return asmjit::TypeId::kFloat80;
+        }
+        // asmjit has packed SIMD types for SSE/AVX packed instructions
+        case DType::complex64:
+        case DType::vfloat2: {
+          return asmjit::TypeId::kFloat32x2; // xmm (lower)
+        }
+        case DType::vfloat3: // No native 3 float types, use the 4 version and ignore 4th channel
+        case DType::vfloat4: {
+          return asmjit::TypeId::kFloat32x4; // xmm (all)
+        }
+        case DType::complex128:
+        case DType::vdouble2: {
+          return asmjit::TypeId::kFloat64x2; // xmm
+        }
+        case DType::vdouble3:
+        case DType::vdouble4: {
+          return asmjit::TypeId::kFloat64x4; // ymm
+        }
+        default: {
+          return asmjit::TypeId::kVoid;
+        }
+        }
+      }
+    } // anonymous namespace
+
     /**
      * Compute a hash of the expression function/kernel based on types and metadata.
      */
@@ -146,66 +221,6 @@ namespace ncarray {
 #endif
       static RuntimeCompiler inst;
       return inst;
-    }
-
-    asmjit::TypeId RuntimeCompiler::dtype_to_typeid(DType dtype) {
-      switch (dtype) {
-      case DType::char_:
-      case DType::int8: {
-        return asmjit::TypeId::kInt8;
-      }
-      case DType::int16: {
-        return asmjit::TypeId::kInt16;
-      }
-      case DType::int32: {
-        return asmjit::TypeId::kInt32;
-      }
-      case DType::int64: {
-        return asmjit::TypeId::kInt64;
-      }
-      case DType::bool_:
-      case DType::uint8: {
-        return asmjit::TypeId::kUInt8;
-      }
-      case DType::uint16: {
-        return asmjit::TypeId::kUInt16;
-      }
-      case DType::uint32: {
-        return asmjit::TypeId::kUInt32;
-      }
-      case DType::uint64: {
-        return asmjit::TypeId::kUInt64;
-      }
-      case DType::float32: {
-        return asmjit::TypeId::kFloat32;
-      }
-      case DType::float64: {
-        return asmjit::TypeId::kFloat64;
-      }
-      case DType::float128: {
-        return asmjit::TypeId::kFloat80;
-      }
-      // asmjit has packed SIMD types for SSE/AVX packed instructions
-      case DType::complex64:
-      case DType::vfloat2: {
-        return asmjit::TypeId::kFloat32x2; // xmm (lower)
-      }
-      case DType::vfloat3: // No native 3 float types, use the 4 version and ignore 4th channel
-      case DType::vfloat4: {
-        return asmjit::TypeId::kFloat32x4; // xmm (all)
-      }
-      case DType::complex128:
-      case DType::vdouble2: {
-        return asmjit::TypeId::kFloat64x2; // xmm
-      }
-      case DType::vdouble3:
-      case DType::vdouble4: {
-        return asmjit::TypeId::kFloat64x4; // ymm
-      }
-      default: {
-        return asmjit::TypeId::kVoid;
-      }
-      }
     }
 
     ExprKernelFunc RuntimeCompiler::get_expr_kernel(DType dest_t,
