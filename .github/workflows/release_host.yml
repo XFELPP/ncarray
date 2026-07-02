@@ -108,11 +108,12 @@ jobs:
       - name: Update Version for Variant
         shell: bash
         run: |
-          sed -i "s/version: '\([0-9]\+\.[0-9]\+\.[0-9]\+\)'/version: '\1+host'/g" meson.build
+          python -c "import re; p = 'meson.build'; c = open(p).read(); open(p, 'w').write(re.sub(r\"version:\s*'([0-9]+\.[0-9]+\.[0-9]+)'\", r\"version: '\1+host'\", c))"
 
       - name: Build wheels
         # Check pyproject.toml for supported versions and additional config
-        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55                    # v4.1.0
+        # NOTE: cibuildwheel does not support Python 3.8 after the 3.x series
+        uses: pypa/cibuildwheel@8d2b08b68458a16aeb24b64e68a09ab1c8e82084                    # v3.4.1
         with:
           config-file: "{package}/utilities/cibw_config/host.toml"
         env:
