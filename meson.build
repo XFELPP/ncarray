@@ -77,11 +77,12 @@ endif
 
 # For Windows adjust for limit of 65,536 COFF sections
 if cpp.get_id() == 'msvc'
-    add_project_arguments('/bigobj', '/DNOMINMAX', language: 'cpp')
+    add_project_arguments('/bigobj', '/DNOMINMAX', '/Zc:preprocessor', language: 'cpp')
     if nca_has_cuda
         add_project_arguments(
             '-Xcompiler=/bigobj',
             '-Xcompiler=/DNOMINMAX',
+            '-Xcompiler=/Zc:preprocessor',
             '-D_SOURCE_LOCATION_',
             language: 'cuda',
         )
@@ -788,13 +789,23 @@ if build_python_opt
     # DELAYLOAD will avoid the issue on Windows. On Linux, we provide a stub below.
     py_mod_link_args = []
     if nca_has_cuda and cpp.get_id() == 'msvc'
-        py_mod_link_args += [
-            '/DELAYLOAD:ncdevarray-1.dll',
-            '/DELAYLOAD:ncarrayjit-1.dll',
-            '/DELAYLOAD:cudart64_12.dll',
-            '/DELAYLOAD:nvrtc64_12.dll',
-            'delayimp.lib',
-        ]
+        if cuda_version.version_compare('>=13.0')
+            py_mod_link_args += [
+                '/DELAYLOAD:ncdevarray-1.dll',
+                '/DELAYLOAD:ncarrayjit-1.dll',
+                '/DELAYLOAD:cudart64_13.dll',
+                '/DELAYLOAD:nvrtc64_130_0.dll',
+                'delayimp.lib',
+            ]
+        else
+            py_mod_link_args += [
+                '/DELAYLOAD:ncdevarray-1.dll',
+                '/DELAYLOAD:ncarrayjit-1.dll',
+                '/DELAYLOAD:cudart64_12.dll',
+                '/DELAYLOAD:nvrtc64_12.dll',
+                'delayimp.lib',
+            ]
+        endif # cuda 13 casing
     endif
 
     libeagereval = shared_library(

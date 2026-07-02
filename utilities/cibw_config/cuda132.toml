@@ -3,7 +3,8 @@
 # cp36-* (Python 3.6)
 # cp37-* (Python 3.7)
 # *i686 (32-bit builds)
-skip = ["pp*", "cp36-*", "cp37-*", "*i686", "*-win32"]
+# *musllinux* (No CUDA support)
+skip = ["pp*", "cp36-*", "cp37-*", "*i686", "*-win32", "*musllinux*"]
 
 # Maybe redundant, but specify what we do build
 build = ["cp38-*", "cp39-*", "cp310-*", "cp311-*", "cp312-*", "cp313-*"]

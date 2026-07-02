@@ -189,4 +189,4 @@ jobs:
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b          # v3.0.1
         with:
           files: dist/*
-          generate_release_notes: true
+          # Only the host variant adds release notes, to prevent multiple copies.

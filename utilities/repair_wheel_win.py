@@ -45,21 +45,30 @@ def main():
             "CUDA_PATH is not defined! Cannot find CUDA! Skipping NVRTC builtins packaging."
         )
     else:
+        cuda_args.extend(["--no-dll", "nvcuda.dll"])
+
         cuda_path = os.path.normpath(cuda_path)
-        builtins_dlls: List[str] = glob.glob(f"{cuda_path}/bin/nvrtc-builtins64_*.dll")
+        # Seems like there's an [ARCH] sub-directory after CUDA13....
+        # See: https://github.com/shader-slang/slangpy/issues/614
+        cuda_dlls: List[str] = glob.glob(f"{cuda_path}/**/*.dll", recursive=True)
+        cuda_dlls_dirs: List[str] = sorted(
+            list(set(os.path.dirname(os.path.normpath(p)) for p in cuda_dlls))
+        )
+        for dll_dir in cuda_dlls_dirs:
+            delvewheel_search_path = f"{delvewheel_search_path};{dll_dir}"
+
+        builtins_dlls: List[str] = glob.glob(
+            f"{cuda_path}/**/nvrtc-builtins*.dll", recursive=True
+        )
 
         if not builtins_dlls:
             print("No NVRTC builtins dlls found!")
         else:
+            if len(builtins_dlls) > 1:
+                print(f"Multiple NVRTC DLLs found: {builtins_dlls}")
             selected_dll: str = os.path.basename(builtins_dlls[0])
-            delvewheel_search_path = f"{delvewheel_search_path};{cuda_path}/bin"
 
-            cuda_args = [
-                "--add-dll",
-                selected_dll,
-                "--no-dll",
-                "nvcuda.dll",
-            ]
+            cuda_args.extend(["--add-dll", selected_dll])
 
     delvewheel_cmd.extend(["--add-path", delvewheel_search_path])
     delvewheel_cmd.extend(cuda_args)
