@@ -180,13 +180,14 @@ if nca_has_openmp
 endif
 
 deps_for_ncarray = []
-if nca_has_cuda
-    # Add libdl as needed for JIT if not merged directly into the cstdlib
-    dl_dep = cpp.find_library('dl', required: false)
-    if dl_dep.found()
-        deps_for_ncarray += dl_dep
-    endif
 
+# Add libdl as needed for JIT if not merged directly into the cstdlib
+dl_dep = cpp.find_library('dl', required: false)
+if dl_dep.found()
+    deps_for_ncarray += dl_dep
+endif
+
+if nca_has_cuda
     # CUDA driver and nvrtc are both for JIT
     cuda_dep = dependency('cuda', modules: ['cuda', 'cudart', 'nvrtc'])
     deps_for_ncarray += cuda_dep
