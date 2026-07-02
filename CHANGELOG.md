@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reorganize to avoid users needing to have `asmjit` as an explicit dependency - headers no longer needed.
 - Move GitHub actions to pinning by commit hash instead of tag/branch.
 
+### Fixed
+- Update the shared library directory returned by the Python binding's `get_lib_dir` for the split-wheel approach.
+
 ## [0.6.0] - 2026-06-13
 
 ### Added
