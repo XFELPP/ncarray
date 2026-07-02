@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.6.0',
+    version: '0.7.0',
     default_options: [
         'cpp_std=c++23,c++latest',
         'cuda_std=c++20',
@@ -365,6 +365,7 @@ installed_common_jit_headers = [
 
 if nca_has_cuda
     installed_device_jit_headers = [
+        'src/lib/ncarray/jit/device/extensions.hh',
         'src/lib/ncarray/jit/device/rtcompiler.hh',
     ]
 endif # nca_has_cuda

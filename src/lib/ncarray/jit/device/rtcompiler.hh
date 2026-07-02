@@ -22,6 +22,7 @@
 #include "ncarray/dtype.hh"
 #include "ncarray/host/casts.hh"
 #include "ncarray/indexing.hh"
+#include "ncarray/jit/device/extensions.hh"
 #include "ncarray/jit/path_utils.hh"
 #include "ncarray/jit/jit_utils.hh"
 #include "ncarray/op_code.hh"
@@ -114,6 +115,7 @@ namespace ncarray {
                                          const std::vector<Instruction>& instrs,
                                          const std::vector<Scalar>& scalars,
                                          const std::vector<std::uint8_t>& is_pointer_axis,
+                                         const StencilJITExtensions& ext = {},
                                          bool expr_is_soarr = false) {
         std::string arch_opt = get_arch_opt();
         std::string kernel_str = get_stencil_expr_kernel_str(dest_t,
@@ -123,6 +125,7 @@ namespace ncarray {
                                                              instrs,
                                                              scalars,
                                                              is_pointer_axis,
+                                                             ext,
                                                              expr_is_soarr);
         std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
@@ -189,6 +192,7 @@ namespace ncarray {
                                               const std::vector<Instruction>& instrs,
                                               const std::vector<Scalar>& scalars,
                                               const std::vector<std::uint8_t>& is_pointer_axis,
+                                              const StencilJITExtensions& ext = {},
                                               bool expr_is_soarr = false) {
 
         auto get_dtype_name = [&] <typename T> () { return get_name_for_type<T>(); };
@@ -338,12 +342,15 @@ namespace ncarray {
   extern "C" __global__ void jit_stencil_expr_kernel(const void* src_data,
                                                      )a" + view_t_name + R"a( src_l,
                                                      void* dest_data,
-                                                     )a" + view_t_name + " dest_l" +
+                                                     )a" + view_t_name + R"a( dest_l)a"+
+                                                     ext.extra_params +
                                                      s_params + R"a( ) {
     unsigned b_idx { blockIdx.x * blockDim.x + threadIdx.x };
     if (b_idx >= dest_l.size()) {
       return;
     }
+
+    )a" + ext.prologue_code + R"a(
 
     ncarray::StaticCoords<NDIM_VAL, unsigned> c_out;
     unsigned tmp_idx { b_idx };
@@ -363,6 +370,8 @@ namespace ncarray {
   )a" + load_logic + R"a(
     *reinterpret_cast<)a" + dest_t_name + R"a(*>(dest_l.advance(dest_data, c_out)) =
       static_cast<)a" + dest_t_name + R"a(>( )a" + math_result + R"a( );
+
+    )a" + ext.epilogue_code + R"a(
   }
   )a";
 

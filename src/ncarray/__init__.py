@@ -28,9 +28,30 @@ def get_include() -> str:
 
 
 def get_lib_dir() -> str:
-    nca_wheel_lib_dir: str = os.path.join(os.path.dirname(__file__), "lib")
+    py_package_dir: str = os.path.dirname(__file__)
+
+    # Check full-wheel path first: site-packages/ncarray/lib
+    nca_wheel_lib_dir: str = os.path.join(py_package_dir, "lib")
     if os.path.exists(nca_wheel_lib_dir):
         return nca_wheel_lib_dir
+
+    # Check split-wheel: site-packages/ncarray/libncarray.so
+    #                    site-packages/ncarray.libs/libncarray.so
+    parent_dir: str = os.path.dirname(py_package_dir)
+    for folder in os.listdir(parent_dir):
+        if "ncarray" in folder and folder != os.path.basename(py_package_dir):
+            libs_dir: str = os.path.join(parent_dir, folder)
+            if not os.path.isdir(libs_dir):
+                continue
+            for fname in os.listdir(libs_dir):
+                if fname.startswith("libncarray") or fname.startswith("ncarray"):
+                    if (
+                        fname.endswith(".so")
+                        or fname.endswith(".dylib")
+                        or fname.endswith(".dll")
+                        or ".so." in fname
+                    ):
+                        return libs_dir
 
     # When installing with conda or not pure pip, the lib will be in the standard
     # prefix
