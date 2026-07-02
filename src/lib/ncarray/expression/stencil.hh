@@ -13,10 +13,12 @@
 #include "ncarray/expression/interface.hh"
 #include "ncarray/expression/mvnode.hh"
 #include "ncarray/indexing.hh"
+#include "ncarray/jit/device/extensions.hh"
 #include "ncarray/jit/device/rtcompiler.hh"
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -68,12 +70,14 @@ namespace ncarray {
      *        dim. The compiled kernel will only work for arrays that have the same
      *        kinds of pointer dimensions (although shape and stride can vary freely).
      * @param op_func A lambda that takes a vector of views and returns an expression.
+     * @param ext Optionally provide code to run before/after the main expression.
      * @param is_soarr A boolean flag as to whether SOArrayPolicy traversal is needed.
      */
     template <typename SrcT, typename Func>
     static Stencil<NDIM> create(const std::vector<StaticCoords<NDIM>>& offsets_in,
                                 const std::vector<std::uint8_t>& is_pointer_axis,
                                 Func&& op_func,
+                                const device::StencilJITExtensions& ext = {},
                                 bool is_soarr = false) {
       Stencil s;
       int num_views { static_cast<int>(offsets_in.size()) };
@@ -145,6 +149,7 @@ namespace ncarray {
                                                                           s.m_instrs,
                                                                           expr.scalars,
                                                                           is_pointer_axis,
+                                                                          ext,
                                                                           is_soarr);
 
       return s;
@@ -168,14 +173,16 @@ namespace ncarray {
      *
      * @tparam Src The input array type.
      * @tparam Dest The output array type.
+     * @tparam Args... The set of additional arguments (if any) for pro/epilogue code.
      * @param src The input array.
      * @param dest The output array.
      * @param stream Optionally, provide a stream to launch the kernel on.
      */
-    template <ViewArrayLike Src, OwningArrayLike Dest>
+    template <ViewArrayLike Src, OwningArrayLike Dest, typename... Args>
     void apply(const Src& src,
                Dest& dest,
-               std::optional<cudaStream_t> stream = std::nullopt) {
+               std::optional<cudaStream_t> stream = std::nullopt,
+               Args&&... extra_args) {
       constexpr int TPB { 256 };
       int blocks { static_cast<int>(dest.size() + TPB - 1) / TPB };
 
@@ -184,24 +191,33 @@ namespace ncarray {
 
       // We have 4 args for the src and dest layouts and data pointers. Add the
       // the number of scalars/constants to that count for total number of args
-      std::vector<void*> args(4 + m_constants_offsets.size());
-      args[0] = reinterpret_cast<void*>(&src_ptr);
-      args[2] = reinterpret_cast<void*>(&dest_ptr);
-
+      // If extensions are provided via the extra_args, then those will also be
+      // added in.
+      std::vector<void*> args;
+      args.reserve(4 + sizeof...(Args) + m_constants_offsets.size());
+      args.push_back(reinterpret_cast<void*>(&src_ptr));
       if constexpr (std::is_base_of_v<SOArrayPolicy, Src>) {
-        args[1] =
-          reinterpret_cast<void*>(&const_cast<SOArrayPolicy&>(static_cast<const SOArrayPolicy&>(src)));
-        args[3] = reinterpret_cast<void*>(&static_cast<SOArrayPolicy&>(dest));
+        args.push_back(reinterpret_cast<void*>(&const_cast<SOArrayPolicy&>(static_cast<const SOArrayPolicy&>(src))));
       } else {
-        args[1] =
-          reinterpret_cast<void*>(&const_cast<SOArrayPolicy&>(reinterpret_cast<const SOArrayPolicy&>(src)));
-        args[3] = reinterpret_cast<void*>(&reinterpret_cast<SOArrayPolicy&>(dest));
+        args.push_back(reinterpret_cast<void*>(&const_cast<SOArrayPolicy&>(reinterpret_cast<const SOArrayPolicy&>(src))));
       }
 
+      args.push_back(&dest_ptr);
+      if constexpr (std::is_base_of_v<SOArrayPolicy, Src>) {
+        args.push_back(reinterpret_cast<void*>(&static_cast<SOArrayPolicy&>(dest)));
+      } else {
+        args.push_back(reinterpret_cast<void*>(&reinterpret_cast<SOArrayPolicy&>(dest)));
+      }
+
+      // Include the custom JIT extension parameters
+      (args.push_back(const_cast<void*>(reinterpret_cast<const void*>(&extra_args))), ...);
+
+      // Finally pack in the constants
       for (std::size_t i = 0; i < m_constants_offsets.size(); ++i) {
         auto offset { m_constants_offsets[i] };
-        args[4 + i] = &m_constants_buf[offset];
+        args.push_back(&m_constants_buf[offset]);
       }
+
       CUresult launch_res = cuLaunchKernel(m_kernel,                         // Kernel
                                            blocks, 1, 1,                     // Grid dims (x, y, z)
                                            TPB, 1, 1,                        // Block dims (x, y, z)

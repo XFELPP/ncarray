@@ -365,6 +365,7 @@ installed_common_jit_headers = [
 
 if nca_has_cuda
     installed_device_jit_headers = [
+        'src/lib/ncarray/jit/device/extensions.hh',
         'src/lib/ncarray/jit/device/rtcompiler.hh',
     ]
 endif # nca_has_cuda
