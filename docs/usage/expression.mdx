@@ -1,0 +1,145 @@
+---
+title: Expression Engine
+description: Non-contiguous arrays for C++ and Python.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Operators, Operations, and Expressions
+
+In both C++ and Python, implementations and overloads are provided for performing all standard mathematical operations involving arrays. Operations, as defined by operator (i.e. function) implementations in the library, are always performed **ELEMENTWISE**. I.e., multiplication between two arrays is the Hadamard product as opposed to the vector/matrix product.
+
+`ncarray`, however, is lazily evaluated: the expression `arr1 + arr2`, where `arr1` and `arr2` are objects of the type of one of `ncarray`'s array classes, does not return a new array in C++. Instead, it returns an expression object, or, more specifically, an `ExprMVNode<MemTag>`, where the `MemTag` is an empty struct indicating whether the data is on host (CPU memory) or device (GPU memory).
+
+<Aside type="caution" title="Organic Naming">
+  The names of many of the objects involved in the expression system grew organically. The initial versions were implemented first as naive expression templates, followed by attempts and various tree structures. The naming of the classes reflects this (e.g. `ExprMVNode` was a node in a tree). As such, the names are not necessarily in line with how the system actually works.
+</Aside>
+
+These expression objects contain all the information needed to evalute, or materialize, the expression on demand. In C++, an expression object is always returned, and evaluation must ultimately be triggered either through assignment or construction in C++. In Python, the bindings use the same expression machinery under the hood; however, in order to match expectations for users coming from other libraries, materialization is by default invoked immediately. There is a global toggle to control whether expressions are evaluated eagerly or lazily. The basic behaviours are shown for both C++ and Python below:
+
+<Tabs>
+  <TabItem label="C++" icon="seti:cpp">
+  ```cpp
+  // We assume we have two arrays called `arr0` and `arr1` from some previous step
+
+  // Can perform all standard operations -- these return EXPRESSION objects
+  auto sum_expr = arr0 + arr1;
+
+  // Materialize through assignment or construction
+  ncarray::NCArray sum_res_0 = sum_expr;
+  ncarray::NCArray sum_res_1(sum_expr);
+  ```
+  </TabItem>
+
+  <TabItem label="Python" icon="seti:python">
+  ```py
+  # We assume we have two arrays called `arr0` and `arr1` from some previous step
+
+  # In Python, the expression engine is also used, but by default, we auto-materialize
+  sum_res_0: nca.NCArray = arr0 + arr1
+
+  # We can turn off eager evaluation
+  nca.set_eager(False)
+
+  # Now, we get expression objects
+  sum_expr: nca.HostExpr = arr0 + arr1
+
+  # We can force materialization to get the result
+  sum_res_1: nca.NCArray = nca.materialize(div_expr)
+
+  # We can toggle back
+  nca.set_eager(True)
+
+  # Using a context manager we can use lazy evaluation only locally
+  with nca.lazy_mode():
+      # NOTE: There are NO intermediates created now!
+      lazy_expr: nca.HostExpr = arr0 + arr1 + arr0 * 3
+      lazy_res: nca.NCArray = nca.materialize(lazy_expr)
+  ```
+  </TabItem>
+</Tabs>
+
+## `OpCode`s - Identifying the Operations
+
+In order to implement the expression engine, and keep track of the operations, the supported operations are each given an `OpCode`. These are enumerators defined in `ncarray/op_code.hh`. This system was heavily inspired by [numexpr](https://github.com/pydata/numexpr). The `OpCode`s are ordered semi-logically beginning with "loads" (fetch an array or constant), followed by unary operations, and then binary operations. The currently suppported (at least in part) `OpCode`s are:
+
+```cpp
+  enum class OpCode: uint8_t {
+    NOOP = 0,   ///< Null op
+    IDX,        ///< Index generator (Like APL)
+    LOAD_NCARR, ///< Load an NCArray (VM only)
+    LOAD_SOARR, ///< Load an SOArray (VM only)
+    LOAD_CONST, ///< Load a constant (VM only)
+    // --- Unary ops --- //
+    NEG,        ///< Negative
+    INC,        ///< Increment
+    DEC,        ///< Decrement
+    SZOF,       ///< Size of
+    ADDR,       ///< Address of
+    INDR,       ///< Indirection/dereference
+    CAST,       ///< Cast
+    LNOT,       ///< Logical not
+    BNOT,       ///< Bitwise not
+    // --- Binary ops --- //
+    // Arithmetic
+    ADD,        ///< Addition
+    SUB,        ///< Subtraction
+    MUL,        ///< Multiplication
+    DIV,        ///< True division
+    MOD,        ///< Modulo
+    FDIV,       ///< Floor (integer) division
+    // Comparisons
+    EQ,         ///< Equal to
+    NE,         ///< Not equal
+    LT,         ///< Less than
+    LE,         ///< Less than or equal
+    GT,         ///< Greater than
+    GE,         ///< Greater than or equal
+    // Logical
+    LAND,       ///< Logical and
+    LOR,        ///< Logical or
+    // Bitwise
+    BAND,       ///< Bitwise and (&)
+    BOR,        ///< Bitwise or (|)
+    XOR,        ///< Bitwise XOR (^)
+    LSHFT,      ///< Left shift (<<)
+    RSHFT       ///< Right shift (>>)
+  };
+
+```
+
+The `OpCode` is further combined into a single `std::uint32_t` value to form an `Instruction`. The other part of the `Instruction` contains an index which is used for looking up the correct array or constant when it comes time to evaluate the expression.
+
+Importantly, and different from how `numexpr` works, reduction operations do **NOT** use the same expression and `OpCode` system. Reductions are implemented as a set of independent functions (or kernels, on the GPU).
+
+## Expression Classes
+
+The main classes involved in the expression engine are:
+
+- `ExprMVNode<MemTag>`: This is really an "expression builder". The template parameter determines where the array memory is; however, this class **CANNOT** be constructed on the GPU. It relies on STL containers, and grows dynamically as expressions are created.
+- `StaticExprMVNode<...>`: This represents a linearized unrolling of the expression from an `ExprMVNode`. It is also templated on all requisite types. This comes with performance benefits at evaluation time, as the `DType` does not need to be checked, and the `OpCode`s have been unrolled into a single loop (which, generally, the compiler can unroll completely). However, it therefore has the disadvantage that it limits both the variety of `DType`s allowed in the expression, and their number.
+- `DynamicExprMVNode<...>`: This is essentially just a virtual machine (VM), that evaluates the `Instruction`s that were built by the `ExprMVNode`; however, unlike the latter, it can be used on the GPU.
+
+The `ExprMVNode` builds expressions that map naturally to a stack-based VM, or a system that could be evaluted in reverse Polish notation (RPN). For this reason, the second two classes were designed as the principle mechanisms for ultimately evaluating the built expression.
+
+## JIT Compilation
+
+To finally evaluate the expression, `ncarray` relies on just-in-time (JIT) compilation where it can. It will use JIT compilation if the expression can be turned into a `StaticExprMVNode`. Practically, this means that JIT compilation is currently limited to expressions that contain:
+- Fewer than 17 arrays
+- Fewer than 32 instructions
+- More than 1 `DType` base array
+- Non-linear sub-expression structures (E.g. some tree-like subexpressions that lead to greater stack depths)
+
+The specific check is implemented in the `can_linearize` function in `ncarray/expression/staticmvnode.hh`. If JIT compilation cannot be used, then the `DynamicExprMVNode` will be used instead, which is compiled ahead-of-time (AOT), and included in the distributed shared libraries. For GPU-bound code, this is generally relatively performant. On the host, however, the non-JIT path is currently poorly optimized.
+
+### Compiler Implementation
+
+For the host, JIT compilation is performed using a custom compiler implemneted using `asmjit` for emitting the final machine code. The compiler is defined in `ncarray/jit/host/rtcompiler.hh`. The `RuntimeCompiler` for the host currently supports 64-bit x86 and AArch64 (ARM) ISAs.
+
+For GPU, JIT compilation is peformed using `NVRTC`. The necessary dependencies are packaged in the wheel along with the `ncarray` shared libraries. The compiler for the GPU-side is defined in `ncarray/jit/device/rtcompiler.hh`.
+
+Whether using the host or GPU compiler, the implementation will attempt to cache the compiled functions/kernels for faster lookup later. Both compilers will retain an in-memory cache for the duration of the program's execution. Additionally, they will try to write the compiled functions to disk to be read from a file in the future. For the host the fully position-independent machine code is written as a `.bin`, and the SASS compiled output for the specific GPU-architecture being used is written as a `.cubin` file. `ncarray` will attempt to write these files to the appropriate system cache folder (e.g. `~/.cache/...` on Linux, or the folder provided via XDG environment variable).
+
+<Aside type="caution" title="Features Still Pending">
+  A number of types and operations are still not fully implemented. For the host implementations, complex math is not entirely supported, and for the GPU implementation not all operators have been ported. Refer to the GitHub issues in the repository for tracking updates and progress on this issue.
+</Aside>

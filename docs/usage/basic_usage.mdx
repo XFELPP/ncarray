@@ -1,0 +1,370 @@
+---
+title: Basic Usage
+description: Non-contiguous arrays for C++ and Python.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Imports, Includes and Constructing Arrays
+
+<Tabs>
+  <TabItem label="C++" icon="seti:cpp">
+  ```cpp
+  #include "ncarray/ncarrays.hh" // Will provide access to all NCArray*
+  #include "ncarray/soarrays.hh" // If SOArray* arrays wanted instead
+
+  // For GPU arrays, use:
+  #include "ncarray/ncdevarrays.cuh"
+  #include "ncarray/sodevarrays.cuh"
+
+  #ifdef _WIN32
+  #include <BaseTsd.h>
+  typedef SSIZE_T ssize_t;
+  #else
+  #include <sys/types.h>
+  #endif
+
+  #include <cstdint>
+  #include <vector>
+
+  // Make some dummy non-contiguous data
+  std::vector<std::int32_t> data(10, 42);
+  std::vector<ssize_t> shape { 2, 5 };
+  std::vector<ssize_t> strides { 5 * sizeof(std::int32_t), sizeof(std::int32_t) };
+  std::vector<void*> ptrs { data.data() };
+
+  // Create a view from this data
+  std::vector<ssize_t> offsets(10);
+  ncarray::DType dtype = ncarray::DType::int32;
+  // You can get the dtype from traits too:
+  // ncarray::dtype_traits<std::int32_t>::value;
+  auto view = ncarray::NCArrayView(ptrs.data(),
+                                   shape.data(),
+                                   strides.data(),
+                                   offsets.data(),
+                                   dtype,
+                                   /*pointer_axis=*/0,
+                                   /*read_only=*/false);
+  // NOTE: You can make a reference type, this tends to be of particular use
+  //       in Python
+  // ncarray::NCArrayRef ref(ptrs, shape, strides, ncarray::DType::int32, 0, false);
+
+  // Can retrieve general information about the array
+  ssize_t ndim = view.ndim(); // 2
+  ssize_t* arr_shape = view.shape(); // ssize_t* with 2 items. (2, 5)
+  ssize_t arr_size = view.size(); // 10
+  ssize_t arr_itemsize = view.itemsize(); // 4 (bytes)
+  ssize_t arr_nbytes = view.nbytes(); // 40 (size() * itemsize())
+  ```
+  </TabItem>
+
+  <TabItem label="Python" icon="seti:python">
+  ```py
+  from typing import List, Tuple
+
+  import numpy as np
+  import numpy.typing as npt
+
+  import ncarray as nca
+
+  # Construct a disjoint set of arrays
+  # These are subarrays that are really part of 1 larger one
+  subarray_list: List[npt.NDArray[np.uint32]] = [
+      np.random.randint(1, 255, size=(512,1024), dtype=np.uint16) for _ in range(10)
+  ]
+
+  # Create a wrapped reference -- we can treat all of these as 1 array now
+  ncarr: nca.NCArrayRef = nca.NCArrayRef(subarray_list)
+
+  # Can retrieve general information about the array
+  ndim: int = ncarr.ndim() # 3
+  arr_shape: Tuple[int, int, int] = ncarr.shape
+  arr_size: int = ncarr.size() # 5242880
+  arr_itemsize: int = ncarr.itemsize() # 2
+  arr_nbytes: int = ncarr.nbytes() # 10485760
+  ```
+
+  </TabItem>
+</Tabs>
+
+## Array Indexing
+
+Regardless of the presence (or absence) of pointer axes, their number, and location, all array kinds can be indexed into sub-views, or all the way down to a scalar. In C++ there are a number of APIs for indexing depending on whether you are selecting a sub-view of an array, or are indexing all the way down to a **reference** of a single array element. These are illustrated in the example below. In Python, these are all collapsed into the single standard multi-dimensional indexing, as also shown below.
+
+<Tabs>
+  <TabItem label="C++" icon="seti:cpp">
+  ```cpp
+  // We assume we have an array called `view` from some previous step
+
+  // ---------------------- Indexing to sub array views ------------------------
+  // For host-only code, we can use the variadic multi-argument operator[] to index subviews
+  // The `Slice` object allows indexing between a start, and stop index of an axis (optionally with a step)
+  using sl = ncarray::Slice; // Slice(start, stop, step); -- The slice is not inclusive of the stop value
+  auto subview = view[sl(0, 1), sl(2, 4), sl(3, 6, 2)];
+
+  // The multi-argument operator() has equivalent semantics
+  auto subview2 = view(sl(0, 1), sl(2, 4), sl(3, 6, 2));
+
+  // Can use Ellipsis to represent all intermediate axes
+  using elp = ncarray::Ellipsis;
+  // The subview contains all of axis 0, axis 1 and the slice of axis 2
+  auto subview3 = view[elp{}, sl(2, 4)];
+
+  // ---------------------- Indexing to Proxy Reference ------------------------
+  // We can use initializer lists to index to a proxy reference
+  // This is NOT bounds checked -- its the callers responsibility to verify this
+  // The PROXY is not the reference yet
+  auto proxy123_0 = view[ { 1, 2, 3 } ];
+  // We can coerce this to the reference
+  std::int32_t& item123_0 = proxy123_0;
+  std::int32_t& item123_1 = proxy123_0.get<std::int32_t>(); // This type checks in DEBUG builds.
+  // Alternatively, can do this in one step if the proxy is not needed.
+  std::int32_t& item123_2 = view[ { 1, 2, 3 } ];
+
+  // The proxy objects can be used for assignment as well
+  proxy123_0 = 12;
+  // Can alternatively do this directly as well
+  view[ { 1, 2, 3 } ] = 13;
+
+  // Finally, can use `StaticCoords` objects
+  // These are templated on dimensionality and integer type
+  // - The second template argument allows using a narrower int if width is a concern
+  ncarray::StaticCoords<3, ssize_t> coords;
+  coords[0] = 1;
+  coords[1] = 2;
+  coords[2] = 3;
+  proxy123_1 = view[coords];
+  std::int32_t& item123_3 = proxy123_1;
+  std::int32_t& item123_4 = view[coords];
+  ```
+  </TabItem>
+
+  <TabItem label="Python" icon="seti:python">
+  ```py
+  # We assume we have an array called `view` (NCArrayView) from some previous step
+
+  # ----------------------- Indexing to sub array views ------------------------
+  # Can select some subview -- Familiar Python/NumPy indexing and slicing applies
+  subview: nca.NCArrayView = view[:1, 2:4, 3:6:2]
+
+  # Ellipsis work as well
+  subview2: nca.NCArrayView = view[..., 2:4]
+
+  # ---------------------- Indexing fully down to scalar -----------------------
+  # There's nothing special here, the same indexing as above
+  item123: int = view[1, 2, 3];
+  ```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="No bounds checks in C++">
+  Indexing will bounds check and throw exceptions in Python - it will NOT do this when using the C++ API.
+</Aside>
+
+<Aside type="caution" title="Watch Out for auto">
+  When using the `auto` keyword in C++, be careful if indexing to proxy reference. `auto` will create an `ArrayElementProxy` object (the proxy reference). You *must* coerce yourself if the actual underlying reference to the element is needed.
+</Aside>
+
+<Aside type="tip">
+  Using the `StaticCoords` method for indexing in C++ can have major performance benefits, particularly in GPU-bound code. It is used extensively in `ncarray`s internal expression engine implementations. The benefit comes from the `StaticCoords` have a `constexpr` size routine - the compiler can unroll loops fully, as opposed to having to check the dimensionality of the array.
+</Aside>
+
+
+## Array Reductions
+
+All array variants, whether managing CPU or GPU memory, expose reduction APIs. These are host-side APIs even if managing GPU memory in which case they launch kernels. There are two variants
+
+- Full reductions to scalar - will return a scalar.
+- Axis-aware reductions: Perform the operation only along the specified axes - will return a new array.
+
+
+<Tabs>
+  <TabItem label="C++" icon="seti:cpp">
+  ```cpp
+  // We assume we have an array called `arr` from some previous step
+
+  // ---------------------- Full reductions to a scalar ------------------------
+
+  // Can get the sum, max, argmax, argmin, std, var, any and all
+  auto a_sum = arr.sum();
+  auto a_max = arr.max();  
+  auto a_min = arr.min();
+
+  // These return linearized, ravel, indices
+  // I.e., a single value calculated assuming a row-major traversal
+  auto a_argmax = arr.argmax();
+  auto a_argmin = arr.argmin();
+
+  // The variance and standard dev can be supplied a ddof - delta degrees of freedom
+  auto a_var = arr.var(0);
+  auto a_std = arr.std(0);
+
+  // These return true if all elements are truthy, or if any element is, respectively
+  auto a_all = arr.all();
+  auto a_any = arr.any();
+
+  // ------------------------- Axis-aware reductions ---------------------------
+
+  // We can alternatively provide a vector of axes to perform the reduction along
+  // These overloads return new arrays
+
+  // Create a new array and initialize with: [[1, 2, 3],
+  //                                          [4, 5, 6]]
+  // Will create on GPU -- but could do the same with host memory
+  std::vector<ssize_t> shape { 2, 3 };
+  ncarray::NCDevArray d_arr(shape, ncarray::dtype_traits<std::int32_t>::value);
+  d_arr = arr.iota() + 1;
+
+  // Along axis 0
+  auto d_sum0 = d_arr.sum({ 0 }); // Sum: [5, 7, 9]
+  auto d_max0 = d_arr.max({ 0 }); // Max: [4, 5, 6]
+  auto d_min0 = d_arr.min({ 0 }); // Min: [1, 2, 3]
+
+  // Along axis 1
+  auto d_argmax1 = d_arr.argmax({ 1 });
+  auto d_argmin1 = d_arr.argmin({ 1 });
+
+  // Still can provide ddof -- Its the second argument
+  auto d_var1 = d_arr.var({ 1 }, 0);
+  auto d_std1 = d_arr.std({ 1 }, 0);
+
+  // Any and all also work
+  auto d_all1 = d_arr.all({ 1 });
+  auto d_any1 = d_arr.any({ 1 });
+  ```
+  </TabItem>
+
+  <TabItem label="Python" icon="seti:python">
+  ```py
+  # We assume we have an array called `arr` (NCArrayView) from some previous step
+
+  # ----------------------- Full reductions to a scalar ------------------------
+  # Assuming the DType is an integer variety
+  a_sum: int = arr.sum()
+  a_max: int = arr.max()
+  a_min: int = arr.min()
+
+  # These return linearized, ravel, indices
+  # I.e., a single value calculated assuming a row-major traversal
+  a_argmax: int = arr.argmax()
+  a_argmin: int = arr.argmin()
+
+  # The variance and standard dev can be supplied a ddof - delta degrees of freedom
+  a_var: int = arr.var(ddof=0)
+  a_std: int = arr.std(ddof=0)
+
+  # These return true if all elements are truthy, or if any element is, respectively
+  a_all: bool = arr.all();
+  a_any: bool = arr.any();
+
+  # ------------------------- Axis-aware reductions ---------------------------
+
+  # We can alternatively provide a vector of axes to perform the reduction along
+  # These overloads return new arrays
+
+  # Assume that our array contains: [[1, 2, 3],
+  #                                  [4, 5, 6]]
+  # Built over GPU memory: d_arr: nca.NCDevArray(shape=[2,3], dtype=nca.DType.int32)
+
+  # Along axis 0
+  d_sum0: nca.NCDevArrayView = d_arr.sum(axis=[0]) # Sum: [5, 7, 9]
+  d_max0: nca.NCDevArrayView = d_arr.max(axis=[0]) # Max: [4, 5, 6]
+  d_min0: nca.NCDevArrayView = d_arr.min(axis=[0]) # Min: [1, 2, 3]
+
+  # Along axis 1
+  d_argmax1: nca.NCDevArrayView = d_arr.argmax(axis=[1])
+  d_argmin1: nca.NCDevArrayView = d_arr.argmin(axis=[1])
+
+  # Still can provide ddof -- Its the second argument
+  d_var1: nca.NCDevArrayView = d_arr.var(axis=[1], ddof=0)
+  d_std1: nca.NCDevArrayView = d_arr.std(axis=[1], ddof=0)
+
+  # Any and all also work
+  d_all1: nca.NCDevArrayView = d_arr.all(axis=[1])
+  d_any1: nca.NCDevArrayView = d_arr.any(axis=[1])
+  ```
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="`op_traits` Determines Result DType">
+  A keen observer may notice that the variance and standard deviation operations above used an int type hint for the result of those reductions -- this is not a mistake. Like other expression and operation evalutions, the output data types are determined by the `op_traits` system. For the most part, these likely match intuition; however, they may on occasion differ than behaviour of, e.g., `NumPy`. Refer to the documentation the type system for more information.
+</Aside>
+
+## Binary and Unary Operations
+
+Most binary operations can be performed on pairs of arrays, or between arrays and scalars. Operations are performed in an **elementwise** fashion, i.e., multiplication does NOT imply matrix multiplication in the linear algebra sense but rather the Hadamard (or Schur) product. Likewise, a number of unary operations, such as negation, can be applied to arrays.
+
+`ncarray` uses a lazily evaluated expression engine. The result of invoking the operator (e.g. `operator+` in C++, or `__add__` in Python) is an **expression** object. These objects are "tapes" of `OpCode`s with their respective data, references to the views, and a history of all scalar constants. It can be thought of as a stack-based virtual machine evaluated in a reverse Polish notation (RPN) style. (Although internally, the implementation may actually be optimized to avoid the VM/stack). Inplace operations also use the expression engine; however, they are materialized immediately with no return of an expression object.
+
+Importantly, however, in Python, to avoid confusion when first starting, despite creating the expression object, the result will immediately be evaluated (or *materialized*). This is toggleable, however, either via directly switching the global state, or alternatively by temporarily using a context manager.
+
+<Aside type="caution" title="Broadcasting is only done for scalars">
+  Currently, sub-array broadcasting is not supported. Binary operations performed between an array and scalar will broadcast the scalar, but operations between two arrays require identical shapes. The one exception is in Python where an extra dimension of 1 is tolerated.
+</Aside>
+
+<Tabs>
+  <TabItem label="C++" icon="seti:cpp">
+  ```cpp
+  // We assume we have two arrays called `arr0` and `arr1` from some previous step
+
+  // Can perform all standard operations -- these return EXPRESSION objects
+  auto sum_expr = arr0 + arr1;
+  auto mul_expr = arr0 * arr1; // This is ELEMENTWISE
+
+  // We can get the result be assigning to an array
+  ncarray::NCArray sum_owner_0 = sum_expr;
+
+  // Or by using the constructor
+  ncarray::NCArray sum_owner_1(sum_expr);
+
+  // Inplace opterations evalute immediately.
+  arr0 += arr1;
+
+  // Scalar broadcasting is supported
+  arr1 /= 4.2f;
+
+  // All normal comparison operations are supported - also done ELEMENTWISE
+  auto eq_expr = (arr0 == arr1); // Can use >, <, >=, <=, &&, ||
+
+  ncarray::NCArray eq_res = eq_expr;
+  ncarray::NCArray le_res = (arr0 <= arr1);
+  ```
+  </TabItem>
+
+  <TabItem label="Python" icon="seti:python">
+  ```py
+  # We assume we have two arrays called `arr0` and `arr1` from some previous step
+
+  # Can perform all standard operations
+  # In Python, the expression engine is also used, but by default, we auto-materialize
+  sum_res: nca.NCArray = arr0 + arr1
+  mul_res: nca.NCArray = arr0 * arr1 # This is ELEMENTWISE
+
+  # We can turn off eager evaluation
+  nca.set_eager(False)
+
+  # Now, we get expression objects
+  div_expr: nca.HostExpr = arr0 / arr1
+
+  # We can force materialization to get the result
+  div_res: nca.NCArray = nca.materialize(div_expr)
+
+  # We can toggle back
+  nca.set_eager(True)
+
+  # Using a context manager we can use lazy evaluation only locally
+  with nca.lazy_mode():
+      # NOTE: There are NO intermediates created now!
+      lazy_expr: nca.HostExpr = arr0 + arr1 + arr0 * 3
+      lazy_res: nca.NCArray = nca.materialize(lazy_expr)
+
+  # After exiting the manager, eager evaluation is now on again
+
+  # All normal comparison operations are supported - also done ELEMENTWISE
+  # These operations are subject to the same eager eval toggle as above
+  eq_res: nca.NCArray = (arr0 == arr1) # Will be of DType bool
+  le_res: nca.NCArray = (arr0 <= arr1) # Can use >, <, >=, <=, &&, ||
+  ```
+  </TabItem>
+</Tabs>

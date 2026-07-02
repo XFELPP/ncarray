@@ -55,10 +55,12 @@ jobs:
           # Clear the existing target folder to remove deleted pages
           rm -rf xfelpp-home/src/content/docs/ncarray/*
           mkdir -p xfelpp-home/src/content/docs/ncarray/api
+          mkdir -p xfelpp-home/src/content/docs/ncarray/usage
 
           # Copy source markdown into the ncarray API sub-directory
           cp -r docs/api/md/* xfelpp-home/src/content/docs/ncarray/api
           cp -r docs/index.mdx xfelpp-home/src/content/docs/ncarray/index.mdx
+          cp -r docs/usage/* xfelpp-home/src/content/docs/ncarray/usage
           # TODO: Setup copies for any manual pages once those are being written
 
       - name: Commit and Push Changes

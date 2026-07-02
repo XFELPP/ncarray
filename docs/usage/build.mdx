@@ -1,0 +1,86 @@
+---
+title: Building from Source
+description: Non-contiguous arrays for C++ and Python.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Builds are long and memory intensive">
+  Unless actively developing `ncarray`, or you've encountered an issue with a distribution (please open an issue!), it is highly recommended to use one the distributed wheels rather than building from source. Builds can exhaust system memory of a standard workstation - read on for more information.
+</Aside>
+
+## General Information
+
+`ncarray` uses `meson` as its build system. It will also require a relatively modern compiler for C++23 support. If building with GPU support it then also requires the CUDA toolkit.
+
+In general, the steps for building are:
+
+```bash
+meson setup $MY_BUILD_DIR # --prefix=$MY_INSTALL_DIR #-Dbuildtype=debug # (or release etc).
+meson compile -C $MY_BUILD_DIR -j 4
+meson install -C $MY_BUILD_DIR
+# For tests:
+meson test -C $MY_BUILD_DIR
+```
+
+### Requirements
+
+In addition to `meson` the following dependencies are needed:
+- `meson`
+- `ninja`
+- `meson-python`
+- `cmake` -- for `asmjit`
+- `pybind11`
+
+The remaining dependencies are vendored through the `meson` subprojects system. `ncarray` requires `Python >= 3.8`.
+
+## Compiler Matrix
+
+`ncarray` requires at least `gcc >= 12` (although `gcc >= 13` is recommended, if permitted by CUDA version), `clang > 15`, or `msvc >= 19.30`. Other compilers may work but are not tested.
+
+If building with CUDA support then for CUDA Version:
+- `CUDA < 12.4` you must use `gcc > 12 && gcc < 13`, `clang > 16 && clang < 17`, `msvc >= 19.30 && msvc < 19.38 (VS 2022 < 17.8)`
+- `CUDA >= 12.4 && CUDA < 12.8` you must use `gcc > 12 && gcc < 14`, `clang > 16 && clang < 19`, `msvc >= 19.30 && msvc < 19.41 (VS 2022 < 17.11)`
+- `CUDA >= 12.8` you must use `gcc > 12 && gcc < 15`, `clang > 16 && clang < 20`, `msvc >= 19.30 && msvc < 19.50 (VS 2022 < 18.0)`
+
+## Buid Options
+
+There are a number of flags which can be provided when running the `meson setup`:
+
+- `build_core` : bool flag for whether to build the C++ libraries.
+- `build_python` : bool flag for whether to build the Python bindings.
+- `nca_cuda_archs` : A string of architectures for building CUDA fat binaries, or, alternatively, the string `all`, in which case architectures `75,80,86,89` and `90` are built (with `compute_90` at the end for PTX forward compatibility).
+- `nca_as_wheel` : bool flag for whether to build as the combined standard wheel. If not, it is expected that the wheel will built as `build_core=true build_python=false` in one phase, and `build_core=false build_python=true` in a second.
+- `build_examples` : bool flag for whether to build the example programs. These are small executables and in general are not needed. The tests are always built as part of `build_core`.
+
+## Compilation
+
+For host-only builds, compile times, and memory usage, are generally moderate and will run acceptably on any modern laptop/workstation etc. If building with CUDA compatibility, however, it is HIGHLY recommended to limit the number of parallel jobs. E.g., use `meson compile -j 4` or provide `-l 4`, or both. This value will depend on the resources available on your system. By default `meson` will launch as many parallel jobs with `ninja` as cores are available on your system; however, using all available cores as the guide for the number of jobs is highly likely to run into out of memory problems. Four parallel jobs could use 32 GB of RAM, plus swap, during compilation and linking. In general, the current library will requires ~16 GB for every two parallel jobs. In the CI jobs, an additional 12 GB of swap is created to provide enough head room.
+
+Refactoring to decrease the memory usage from template bloat, and also decrease compilation time, is an on going goal for the project.
+
+## Building via `pip`
+
+You can also run `pip install .` directly after cloning the repo:
+
+```bash
+git clone git@github.com:XFELPP/ncarray
+cd ncarray
+pip install . # --prefix=....
+```
+
+This will be very slow though. For wheel creation, the meson calls are done as above, and a final pip install is run at the end. See `build.sh` for the mechanism, or the GitHub actions.
+
+## Building with Conda
+
+A conda recipe is also available at `recipes/meta.yaml` from the root of the repository. A `conda_build_config.yaml` file is also provided which can be commented and adjusted to modify the matrix of build variants.
+
+From the root of the repo, this recipe and build config YAML can be used to build with conda using:
+
+```bash
+conda build recipes -m recipes/conda_build_config.yaml -c conda-forge -c nvidia
+```
+
+This is a split-recipe to build the `libncarray` C++ library, and then the `ncarray` Python bindings. After the builds complete, the packages can be installed from the `conda-bld` directory using `conda install ...full/path/to/file.conda`. The paths will be output to the terminal at the end of the build.

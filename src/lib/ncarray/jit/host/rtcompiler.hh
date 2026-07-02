@@ -14,18 +14,6 @@
 #include "ncarray/op_code.hh"
 #include "ncarray/op_traits.hh"
 
-#ifdef __CUDACC__
-// Silence warning: reduction in alignment ignored
-#pragma nv_diag_suppress 1286
-#endif
-
-#include <asmjit/core.h>
-#include <asmjit/x86.h>
-
-#ifdef __CUDACC__
-#pragma nv_diag_default 1286
-#endif
-
 #ifdef _WIN32
 typedef SSIZE_T ssize_t;
 
@@ -61,21 +49,6 @@ namespace ncarray {
     class NCA_JIT_API RuntimeCompiler {
     public:
       static RuntimeCompiler& instance();
-
-      /**
-       * Convert the ncarray type system to corresponding asmjit type system.
-       *
-       * This function only handles scalar datatypes. E.g. complex and vector types
-       * must be constructed using combinations of the returned type for their unit
-       * types (a complex<float> is two TypeId::kFloat32 for example).
-       *
-       * A `char_` is converted to signed integer kInt8. A `bool_` is converted to
-       * unsigned integer kUInt8, as these do not have corresponding types in asmjit.
-       *
-       * @param[in] dtype The ncarray datatype to convert.
-       * @returns typeid The asmjit TypeId that corresponds to the ncarray DType.
-       */
-      asmjit::TypeId dtype_to_typeid(DType dtype);
 
       /**
        * Get the compiled funcion/kernel for evaluation of the lineriazable expression
