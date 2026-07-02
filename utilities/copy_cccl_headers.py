@@ -36,11 +36,19 @@ os.makedirs(target_dir, exist_ok=True)
 cccl_subdirs: Tuple[str, str] = ("cuda", "nv")
 for subdir in cccl_subdirs:
     src: str = os.path.join(cuda_path, "include", subdir)
+    if not os.path.exists(src):
+        # From CUDA 13, the CCCL headers are further sub-nested under "include/cccl"
+        src = os.path.join(cuda_path, "include/cccl", subdir)
+        if not os.path.exists(src):
+            # If it STILL does not exist, then we give up for now
+            print(
+                f"Warning: {cuda_path}/include[/cccl]/{subdir} does not exist. Skipping."
+            )
+            continue
+
     dst: str = os.path.join(target_dir, subdir)
     if os.path.exists(dst):
         shutil.rmtree(dst)
-    if os.path.exists(src):
-        shutil.copytree(src, dst)
-        print(f"Successfully copied JIT headers from {src} to {dst}")
-    else:
-        print(f"Warning: {src} does not exist. Skipping.")
+
+    shutil.copytree(src, dst)
+    print(f"Successfully copied JIT headers from {src} to {dst}")

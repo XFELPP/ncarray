@@ -35,7 +35,9 @@ typedef long long ssize_t;
 
 using cuda::std::false_type;
 using cuda::std::is_same_v;
+#if __CUDACC_VER_MAJOR__ < 13
 using cuda::std::isfinite;
+#endif
 using cuda::std::true_type;
 using cuda::std::uint8_t;
 using cuda::std::uint16_t;
