@@ -210,12 +210,12 @@ if [ ! -d "${BUILD_DIR}" ]; then
         NCA_RELTYPE=release
     fi
     print_banner "${LINES[@]}"
-    meson setup "${BUILD_DIR}" -Dnca_cuda_archs="80" -Dbuild_examples=true --prefix="${INSTALL_DIR}" -Dbuildtype=${NCA_RELTYPE}
+    meson setup "${BUILD_DIR}" -Dnca_cuda_archs="80" -Dbuild_examples=true -Dbuild_tests=true --prefix="${INSTALL_DIR}" -Dbuildtype=${NCA_RELTYPE}
 elif [[ ${FIRST_BUILD} || ${NEED_RECONFIG} ]]; then
     LINES=("Running meson setup reconfiguration")
     print_banner "${LINES[@]}"
     # Reconfigure in case prefix or options changed, but keep cache
-    meson setup "${BUILD_DIR}" -Dnca_cuda_archs="80" -Dbuild_examples=true --reconfigure --prefix="${INSTALL_DIR}"
+    meson setup "${BUILD_DIR}" -Dnca_cuda_archs="80" -Dbuild_examples=true -Dbuild_tests=true --reconfigure --prefix="${INSTALL_DIR}"
 else
     LINES=(
         "!!!!! Skipping meson setup reconfiguration !!!!!"

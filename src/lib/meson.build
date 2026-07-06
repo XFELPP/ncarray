@@ -1,0 +1,2 @@
+subdir('ncarray')
+subdir('pyncarray')

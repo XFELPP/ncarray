@@ -28,3 +28,9 @@ option(
     value: false,
     description: 'Build the small example programs.',
 )
+option(
+    'build_tests',
+    type: 'boolean',
+    value: false,
+    description: 'Build the tests.',
+)

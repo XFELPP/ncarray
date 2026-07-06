@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/binding_builder.hh"
+#include "pyncarray/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
@@ -35,16 +35,16 @@ namespace py = pybind11;
 
 using namespace pyncarray;
 
-void register_ncdevarray_owner(py::module_& m) {
+void register_sodevarray_owner(py::module_& m) {
 #ifdef NCA_HAS_CUDA
-  auto ncdevowner_cls = py::classh<ncarray::NCDevArray>(m, "NCDevArray")
+  auto sodevowner_cls = py::classh<ncarray::SODevArray>(m, "SODevArray")
     .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
-      return new ncarray::NCDevArray(shape, dtype);
+      return new ncarray::SODevArray(shape, dtype);
     }),
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
-  register_common_array_methods(ncdevowner_cls);
+  register_common_array_methods(sodevowner_cls);
 
-  py::implicitly_convertible<ncarray::NCDevArray, ncarray::NCDevArrayView>();
+  py::implicitly_convertible<ncarray::SODevArray, ncarray::SODevArrayView>();
 #endif
 }

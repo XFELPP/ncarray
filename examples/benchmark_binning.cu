@@ -371,6 +371,7 @@ void test_fused_stencil_binning(ncarray::NCDevArrayView data,
   auto binning_stencil = ncarray::Stencil<3>::create<float>(offsets,
                                                             is_pointer_axis,
                                                             binning_expr,
+                                                            /*ext=*/{},
                                                             /*is_soarr=*/false);
 
   auto stencil_end = std::chrono::high_resolution_clock::now();

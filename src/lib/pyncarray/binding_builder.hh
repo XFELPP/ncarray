@@ -9,7 +9,7 @@
 #ifndef NCA_PYTHON_BINDING_BUILDER_HH
 #define NCA_PYTHON_BINDING_BUILDER_HH
 
-#include "python/utilities.hh"
+#include "pyncarray/utilities.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/dtype.hh"

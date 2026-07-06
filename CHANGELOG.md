@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-06
+
+### Added
+- A `build_tests` option for the build.
+
+### Changed
+- Refactored the top-level `meson.build` into files per-sub-directory.
+- Renamed the `python` directory for the Python bindings to `pyncarray` and updated includes accordingly. This allows for their installation even when not in a wheel format. Previously this was avoided as they would be under a "python" directory in a global prefix which could cause confusion.
+
+### Fixed
+- All headers are always installed to avoid issues. There are some transitive includes which mean that even if not used, GPU/device headers are needed when including and linking `libncarray`. Host-only wheels did not provide them.
+
 ## [0.7.0] - 2026-07-01
 
 ### Added
