@@ -365,12 +365,11 @@ installed_common_jit_headers = [
     'src/lib/ncarray/jit/path_utils.hh',
 ]
 
-if nca_has_cuda
-    installed_device_jit_headers = [
-        'src/lib/ncarray/jit/device/extensions.hh',
-        'src/lib/ncarray/jit/device/rtcompiler.hh',
-    ]
-endif # nca_has_cuda
+
+installed_device_jit_headers = [
+    'src/lib/ncarray/jit/device/extensions.hh',
+    'src/lib/ncarray/jit/device/rtcompiler.hh',
+]
 
 # The following headers are for integration with device code on host side
 installed_device_compat_headers = [
@@ -528,26 +527,35 @@ if build_core_opt
             installed_common_jit_headers,
             install_dir: header_install_dir / 'ncarray/jit',
         )
+
+        # Device implementation headers
+        install_headers(
+            installed_gpu_engine_headers,
+            install_dir: header_install_dir / 'ncarray/engines',
+        )
+
+        install_headers(
+            installed_expression_stencil_headers,
+            install_dir: header_install_dir / 'ncarray/expression',
+        )
+
+        install_headers(
+            installed_device_jit_headers,
+            install_dir: header_install_dir / 'ncarray/jit/device',
+        )
+
+        install_headers(
+            installed_device_compat_headers,
+            install_dir: header_install_dir / 'ncarray',
+        )
+
+        install_headers(
+            installed_device_headers,
+            install_dir: header_install_dir / 'ncarray/device',
+        )
     endif # not nca_as_wheel_opt
 
     if nca_has_cuda
-        if not nca_as_wheel_opt
-            install_headers(
-                installed_gpu_engine_headers,
-                install_dir: header_install_dir / 'ncarray/engines',
-            )
-
-            install_headers(
-                installed_expression_stencil_headers,
-                install_dir: header_install_dir / 'ncarray/expression',
-            )
-
-            install_headers(
-                installed_device_jit_headers,
-                install_dir: header_install_dir / 'ncarray/jit/device',
-            )
-        endif # not nca_as_wheel_opt
-
         #### Install CCCL Headers for JIT ####
         # Will run a little Python script to copy the current CUDA toolkit CCCL headers
         # Afterwards, these will be installed into the wheel for use by the JIT compiler
@@ -625,19 +633,6 @@ if build_core_opt
             dependencies: cuda_dep,
             include_directories: ncarray_headers,
         )
-
-        if not nca_as_wheel_opt
-            install_headers(
-                installed_device_compat_headers,
-                install_dir: header_install_dir / 'ncarray',
-            )
-
-            install_headers(
-                installed_device_headers,
-                install_dir: header_install_dir / 'ncarray/device',
-            )
-        endif # not nca_as_wheel_opt
-
     endif # end nca_has_cuda
 else
     libncarray = cpp.find_library('ncarray', required: true)
@@ -714,26 +709,38 @@ if build_python_opt
             subdir: 'ncarray/include/ncarray/jit',
         )
 
+        # Core GPU/CUDA headers
+        py3.install_sources(
+            installed_gpu_engine_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/engines',
+        )
+
+        py3.install_sources(
+            installed_expression_stencil_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/expression',
+        )
+
+        py3.install_sources(
+            installed_device_jit_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/jit/device',
+        )
+
+        # Device-compat headers for integration with host code
+        py3.install_sources(
+            installed_device_compat_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray',
+        )
+
+        py3.install_sources(
+            installed_device_headers,
+            pure: false,
+            subdir: 'ncarray/include/ncarray/device',
+        )
         if nca_has_cuda
-            # Core GPU/CUDA headers
-            py3.install_sources(
-                installed_gpu_engine_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/engines',
-            )
-
-            py3.install_sources(
-                installed_expression_stencil_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/expression',
-            )
-
-            py3.install_sources(
-                installed_device_jit_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/jit/device',
-            )
-
             #### Install CCCL Headers for JIT ####
             # Will run a little Python script to copy the current CUDA toolkit CCCL headers
             # Afterwards, these will be installed into the wheel for use by the JIT compiler
@@ -754,18 +761,6 @@ if build_python_opt
                 install_dir: py3.get_install_dir() / 'ncarray/include/ncarray/jit',
             )
 
-            # Device-compat headers for integration with host code
-            py3.install_sources(
-                installed_device_compat_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray',
-            )
-
-            py3.install_sources(
-                installed_device_headers,
-                pure: false,
-                subdir: 'ncarray/include/ncarray/device',
-            )
         endif # nca_has_cuda
     endif # nca_as_wheel_opt
 
