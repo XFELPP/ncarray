@@ -1,2 +1,2 @@
 subdir('ncarray')
-subdir('python')
+subdir('pyncarray')

@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-#include "python/binding_builder.hh"
+#include "pyncarray/binding_builder.hh"
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
@@ -35,23 +35,23 @@ namespace py = pybind11;
 
 using namespace pyncarray;
 
-void register_ncdevarray_ref(py::module_& m) {
+void register_sodevarray_ref(py::module_& m) {
 #ifdef NCA_HAS_CUDA
-  auto ncdevref_cls = py::classh<ncarray::NCDevArrayRef>(m, "NCDevArrayRef")
+  auto sodevref_cls = py::classh<ncarray::SODevArrayRef>(m, "SODevArrayRef")
     .def(py::init([](const py::array& arr, const bool read_only = false) {
       return
-        pyarray_to_ref<ncarray::NCOffsetsPolicy, ncarray::DevRefPolicy>(arr, read_only);
+        pyarray_to_ref<ncarray::SOArrayPolicy, ncarray::DevRefPolicy>(arr, read_only);
     }),
       py::arg("data"),
       py::arg("read_only") = py::cast(false))
     .def(py::init([](const py::list& list, const bool read_only = false) {
       return
-        pylist_to_ref<ncarray::NCOffsetsPolicy, ncarray::DevRefPolicy>(list, read_only);
+        pylist_to_ref<ncarray::SOArrayPolicy, ncarray::DevRefPolicy>(list, read_only);
     }),
       py::arg("data"),
       py::arg("read_only") = py::cast(false));
-  register_common_array_methods(ncdevref_cls);
+  register_common_array_methods(sodevref_cls);
 
-  py::implicitly_convertible<ncarray::NCDevArrayRef, ncarray::NCDevArrayView>();
+  py::implicitly_convertible<ncarray::SODevArrayRef, ncarray::SODevArrayView>();
 #endif
 }

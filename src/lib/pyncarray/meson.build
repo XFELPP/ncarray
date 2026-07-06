@@ -7,21 +7,6 @@ if build_python_opt
         deps_for_py_mod += ncdevarray_dep
     endif
 
-    py_bindings_headers = [
-        'binding_builder.hh',
-        'utilities.hh',
-    ]
-
-    if nca_as_wheel_opt
-        # NOTE: Only installing the bindings specific headers if in a wheel.
-        # The include path would be confusing in a global install directory.
-        py3.install_sources(
-            py_bindings_headers,
-            pure: false,
-            subdir: 'ncarray/include/python',
-        )
-    endif
-
     # NOTE: The way the CUDA dependencies are linked would cause issues
     # opening host-only extension modules if the CUDA driver is not available. Using
     # DELAYLOAD will avoid the issue on Windows. On Linux, we provide a stub below.
@@ -172,3 +157,21 @@ if build_python_opt
         endif # Linux guard
     endif
 endif # build_python_opt
+
+installed_py_bindings_headers = [
+    'binding_builder.hh',
+    'utilities.hh',
+]
+
+if not nca_as_wheel_opt and build_core_opt
+    install_headers(
+        installed_py_bindings_headers,
+        install_dir: header_install_dir / 'pyncarray',
+    )
+else
+    py3.install_sources(
+        installed_py_bindings_headers,
+        pure: false,
+        subdir: 'ncarray/include/pyncarray',
+    )
+endif # not nca_as_wheel_opt and build_core_opt

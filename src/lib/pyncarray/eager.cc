@@ -1,4 +1,4 @@
-#include "python/binding_builder.hh"
+#include "pyncarray/binding_builder.hh"
 
 namespace pyncarray {
   bool g_eager_eval = true;
