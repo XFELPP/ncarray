@@ -78,7 +78,7 @@ if nca_has_cuda
     # Afterwards, these will be installed into the wheel for use by the JIT compiler
     jit_headers_build_dir = meson.current_build_dir() / 'jit_tmp_headers'
 
-    copy_script = meson.source_root() + '/utilities/copy_cccl_headers.py'
+    copy_script = meson.project_source_root() + '/utilities/copy_cccl_headers.py'
 
     run_command(
         py3, copy_script, jit_headers_build_dir,
