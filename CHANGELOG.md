@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-08-02
+
+### Added
+- Update CI to allow builds for Python up to 3.15t. Builds are now done for versions 3.8-3.15t.
+
 ## [0.7.2] - 2026-08-01
 
 ### Changed

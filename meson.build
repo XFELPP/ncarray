@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.7.2',
+    version: '0.7.3',
     default_options: [
         'cpp_std=c++23,c++latest',
         'cuda_std=c++20',
