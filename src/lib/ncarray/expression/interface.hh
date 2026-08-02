@@ -80,9 +80,9 @@ namespace ncarray {
    */
   template <typename T>
   concept AnyExpressionOrScalar =
-    AnyExpression<T>                                ||
-    std::is_same_v<std::decay_t<T>, Scalar>         ||
-    is_in_type_list_v<std::decay_t<T>, base_types>;
+    AnyExpression<T>                                   ||
+    hd_std::is_same_v<hd_std::decay_t<T>, Scalar>      ||
+    is_in_type_list_v<hd_std::decay_t<T>, base_types>;
 
   /**
    * The enum DTypes are already ordered. For expressions' working dtype, promote
@@ -113,7 +113,7 @@ namespace ncarray {
 
     template <typename OpT, typename Coords>
     NCA_HD inline OpT md_to_lin(Coords coords) const {
-      using IdxT = decay_t<decltype(coords[0])>;
+      using IdxT = hd_std::decay_t<decltype(coords[0])>;
       IdxT lin_idx { 0 };
       IdxT cum_stride { 1 };
 
@@ -142,7 +142,7 @@ namespace ncarray {
       } else if (op == OpCode::SUB) {
         return static_cast<OpT>(res - leaf);
       } else if (op == OpCode::MUL) {
-        if constexpr (is_same_v<OpT, bool>) {
+        if constexpr (hd_std::is_same_v<OpT, bool>) {
           return static_cast<OpT>(res && leaf);
         } else {
           return static_cast<OpT>(res * leaf);
