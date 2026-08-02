@@ -16,7 +16,7 @@ typedef long long ssize_t;
 
 #include <cuda/std/cstdint>
 
-using cuda::std::uint8_t;
+namespace hd_std = cuda::std;
 
 #else
 
@@ -31,7 +31,7 @@ typedef SSIZE_T ssize_t;
 #include <cstdint>
 #include <memory>
 
-using std::uint8_t;
+namespace hd_std = std;
 
 #endif // nvrtc
 
@@ -175,7 +175,7 @@ namespace ncarray {
 
   struct DevDeleter {
 #ifndef __CUDACC_RTC__
-    void operator()(uint8_t* ptr) {
+    void operator()(hd_std::uint8_t* ptr) {
 //#ifndef __CUDACC_RTC__
 #ifdef NCA_HAS_CUDA
       cudaFree(ptr);
@@ -187,7 +187,7 @@ namespace ncarray {
 
   struct HostDeleter {
 #ifndef __CUDACC_RTC__
-    void operator()(uint8_t* ptr) {
+    void operator()(hd_std::uint8_t* ptr) {
       delete[] ptr;
     }
 #endif
@@ -209,17 +209,17 @@ namespace ncarray {
 
     NCA_H inline void allocate(ssize_t nbytes) {
       m_storage =
-          std::unique_ptr<std::uint8_t[], HostDeleter>(new std::uint8_t[nbytes], HostDeleter());
+          std::unique_ptr<hd_std::uint8_t[], HostDeleter>(new hd_std::uint8_t[nbytes], HostDeleter());
     }
 
     NCA_H inline void copy(void* src, ssize_t nbytes) {
-      std::copy(reinterpret_cast<std::uint8_t*>(src),
-                reinterpret_cast<std::uint8_t*>(src) + nbytes,
+      std::copy(reinterpret_cast<hd_std::uint8_t*>(src),
+                reinterpret_cast<hd_std::uint8_t*>(src) + nbytes,
                 this->m_storage.get());
     }
 
   protected:
-    std::unique_ptr<std::uint8_t[], HostDeleter> m_storage;
+    std::unique_ptr<hd_std::uint8_t[], HostDeleter> m_storage;
 #endif // nvrtc guard
   };
 
@@ -241,13 +241,13 @@ namespace ncarray {
 
     NCA_H inline void allocate(ssize_t nbytes) {
 #ifdef NCA_HAS_CUDA
-      std::uint8_t* devPtr { nullptr };
+      hd_std::uint8_t* devPtr { nullptr };
 
       CHECK_CUDA_ERROR(cudaMallocAsync(reinterpret_cast<void**>(&devPtr),
                                        nbytes,
                                        alloc_stream()));
       cudaDeviceSynchronize();
-      m_storage = std::unique_ptr<std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
+      m_storage = std::unique_ptr<hd_std::uint8_t[], DevDeleter>(devPtr, DevDeleter());
 #endif
     }
 
@@ -261,7 +261,7 @@ namespace ncarray {
     }
 
   protected:
-    std::unique_ptr<std::uint8_t[], DevDeleter> m_storage;
+    std::unique_ptr<hd_std::uint8_t[], DevDeleter> m_storage;
   private:
 #ifdef NCA_HAS_CUDA
     cudaStream_t m_stream;

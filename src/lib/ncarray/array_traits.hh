@@ -27,20 +27,14 @@ typedef SSIZE_T ssize_t;
 #ifdef __CUDACC_RTC__
 #include <cuda/std/concepts>
 
-using cuda::std::convertible_to;
-using cuda::std::is_base_of_v;
-using cuda::std::is_convertible_v;
-using cuda::std::remove_cvref_t;
-using cuda::std::same_as;
+namespace hd_std = cuda::std;
+
 #else
 #include <concepts>
 #include <vector>
 
-using std::convertible_to;
-using std::is_base_of_v;
-using std::is_convertible_v;
-using std::remove_cvref_t;
-using std::same_as;
+namespace hd_std = std;
+
 #endif
 
 #ifndef NCA_HD
@@ -57,8 +51,8 @@ namespace ncarray {
    */
   template <typename T>
   concept Shaped = requires(const T arr) {
-    { arr.ndim() } -> convertible_to<ssize_t>;
-    { arr.shape() } -> convertible_to<const ssize_t*>;
+    { arr.ndim() } -> hd_std::convertible_to<ssize_t>;
+    { arr.shape() } -> hd_std::convertible_to<const ssize_t*>;
   };
 
   /**
@@ -66,7 +60,7 @@ namespace ncarray {
    */
   template <typename T>
   concept Strided = requires(const T arr) {
-    { arr.strides() } -> convertible_to<const ssize_t*>;
+    { arr.strides() } -> hd_std::convertible_to<const ssize_t*>;
   };
 
   /**
@@ -74,7 +68,7 @@ namespace ncarray {
    */
   template <typename T>
   concept HasData = requires(const T arr) {
-    { arr.data() } -> convertible_to<const void*>;
+    { arr.data() } -> hd_std::convertible_to<const void*>;
   };
 
   /**
@@ -82,7 +76,7 @@ namespace ncarray {
    */
   template <typename T>
   concept HasDType = requires(const T arr) {
-    { arr.dtype() } -> same_as<ncarray::DType>;
+    { arr.dtype() } -> hd_std::same_as<ncarray::DType>;
   };
 
   /**
@@ -99,7 +93,7 @@ namespace ncarray {
    */
   template <typename T>
   concept MutableArrayLike = ArrayLike<T> && requires(T arr) {
-    { arr.data() } -> same_as<void*>;
+    { arr.data() } -> hd_std::same_as<void*>;
   };
 
   /**
@@ -107,7 +101,7 @@ namespace ncarray {
    */
   template <class T>
   concept ViewArrayLike = ArrayLike<T> &&
-    is_base_of_v<ViewTag, typename remove_cvref_t<T>::StoragePolicy>;
+    hd_std::is_base_of_v<ViewTag, typename hd_std::remove_cvref_t<T>::StoragePolicy>;
 
 #ifndef __CUDACC_RTC__
   /**

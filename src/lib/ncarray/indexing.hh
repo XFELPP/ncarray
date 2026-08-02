@@ -14,9 +14,8 @@ typedef long long ssize_t;
 
 #include <cuda/std/type_traits>
 
-using cuda::std::decay_t;
-using cuda::std::integral;
-using cuda::std::same_as;
+namespace hd_std = cuda::std;
+
 #else
 #ifdef _WIN32
 #include <BaseTsd.h>
@@ -27,9 +26,7 @@ typedef SSIZE_T ssize_t;
 
 #include <type_traits>
 
-using std::decay_t;
-using std::integral;
-using std::same_as;
+namespace hd_std = std;
 
 #endif
 
@@ -79,9 +76,9 @@ namespace ncarray {
    * Determines whether an object as an allowable argument to array indexing functions.
    */
   template <typename IdxT>
-  concept IndexArg = integral<decay_t<IdxT>> ||
-    same_as<decay_t<IdxT>, Slice> ||
-    same_as<decay_t<IdxT>, Ellipsis>;
+  concept IndexArg = hd_std::integral<hd_std::decay_t<IdxT>> ||
+    hd_std::same_as<hd_std::decay_t<IdxT>, Slice>            ||
+    hd_std::same_as<hd_std::decay_t<IdxT>, Ellipsis>;
 
   /**
    * A tag identifier for the type of indexing argument when constructing lists of args.

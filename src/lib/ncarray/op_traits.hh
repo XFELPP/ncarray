@@ -30,27 +30,12 @@ typedef SSIZE_T ssize_t;
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
+// Need to `using` just this, since its global in CUDA >= 13, library <13.
 #if __CUDACC_VER_MAJOR__ < 13
 using cuda::std::isfinite;
 #endif
 
-using cuda::std::complex;
-using cuda::std::is_floating_point_v;
-using cuda::std::is_integral_v;
-using cuda::std::is_same_v;
-using cuda::std::numeric_limits;
-
-using cuda::std::int8_t;
-using cuda::std::int16_t;
-using cuda::std::int32_t;
-using cuda::std::int64_t;
-
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-using cuda::std::uint32_t;
-using cuda::std::uint64_t;
-
-using cuda::std::decay_t;
+namespace hd_std = cuda::std;
 
 #else
 #include <cmath>
@@ -59,27 +44,11 @@ using cuda::std::decay_t;
 #include <limits>
 #include <type_traits>
 
+// Need to `using` just this, since its global in CUDA >= 13, library <13.
 using std::isfinite;
 
-using std::complex;
-using std::is_floating_point_v;
-using std::is_integral_v;
-using std::is_same_v;
-using std::numeric_limits;
+namespace hd_std = std;
 
-using std::int8_t;
-using std::int16_t;
-using std::int32_t;
-using std::int64_t;
-
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-
-using std::decay_t;
-
-using std::trunc;
 #endif
 
 #ifndef NCA_HD
@@ -118,12 +87,12 @@ namespace ncarray {
     NCA_HD static bool ge(const T& a, const T& b) { return a >= b; }
     NCA_HD static bool less(const T& a, const T& b) { return a < b; }
     NCA_HD static bool le(const T& a, const T& b) { return a <= b; }
-    NCA_HD static T lowest() { return numeric_limits<T>::lowest(); }
-    NCA_HD static T max() { return numeric_limits<T>::max(); }
+    NCA_HD static T lowest() { return hd_std::numeric_limits<T>::lowest(); }
+    NCA_HD static T max() { return hd_std::numeric_limits<T>::max(); }
 
     template <typename To>
     NCA_HD static To cast(const T& val) {
-      if constexpr (is_same_v<To, T>) {
+      if constexpr (hd_std::is_same_v<To, T>) {
         return val;
       } else if constexpr (Vector2DType<T> && !Vector2DType<To>) {
         // For vectors just return the first value during a cast to scalar
@@ -185,14 +154,14 @@ namespace ncarray {
     }
 
     NCA_HD static bool isfinite(const T& v) {
-      using U = decay_t<T>;
+      using U = hd_std::decay_t<T>;
       if constexpr (Vector4DType<U>) {
         return ::isfinite(v.x) && ::isfinite(v.y) && ::isfinite(v.z) && ::isfinite(v.w);
       } else if constexpr (Vector3DType<U>) {
         return ::isfinite(v.x) && ::isfinite(v.y) && ::isfinite(v.z);
       } else if constexpr (Vector2DType<U>) {
         return ::isfinite(v.x) && ::isfinite(v.y);
-      } else if constexpr (is_integral_v<U>) {
+      } else if constexpr (hd_std::is_integral_v<U>) {
         return true;
       } else {
         return ::isfinite(v);
@@ -200,12 +169,12 @@ namespace ncarray {
     }
 
     NCA_HD static T mod(const T& a, const T& b) {
-      using U = decay_t<T>;
+      using U = hd_std::decay_t<T>;
       // NOTE: See below about long double. If a long double vec type
       //       added in the future, must handle that here as well.
       if constexpr (Vector2DType<U>) {
-        using V = decay_t<decltype(a.x)>;
-        if constexpr (is_integral_v<V>) {
+        using V = hd_std::decay_t<decltype(a.x)>;
+        if constexpr (hd_std::is_integral_v<V>) {
           V x = a.x % b.x;
           V y = a.y % b.y;
 
@@ -220,7 +189,7 @@ namespace ncarray {
           } else {
             return { x, y };
           }
-        } else if constexpr (is_floating_point_v<V>) {
+        } else if constexpr (hd_std::is_floating_point_v<V>) {
           V x = fmod(a.x, b.x);
           V y = fmod(a.y, b.y);
 
@@ -236,14 +205,15 @@ namespace ncarray {
             return { x, y };
           }
         }
-      } else if constexpr (is_integral_v<U>) {
+      } else if constexpr (hd_std::is_integral_v<U>) {
         return a % b;
-      } else if constexpr (is_floating_point_v<U>) {
-        if constexpr (is_same_v<U, long double>) {
+      } else if constexpr (hd_std::is_floating_point_v<U>) {
+        if constexpr (hd_std::is_same_v<U, long double>) {
 #ifdef __CUDACC_RTC__
           // NOTE: No quad-precision long double supported in device code
           return
-            static_cast<long double>(fmod(static_cast<double>(a), static_cast<double>(b)));
+            static_cast<long double>(fmod(static_cast<double>(a),
+                                          static_cast<double>(b)));
 #else
           return fmod(a, b);
 #endif
@@ -261,57 +231,64 @@ namespace ncarray {
 
   // Complex need comparison operations
   template <typename T>
-  struct op_traits<complex<T>> : BaseOpTraits<T> {
+  struct op_traits<hd_std::complex<T>> : BaseOpTraits<T> {
     using value_type = T;
-    using sum_type = complex<T>;
-    using diff_type = complex<T>;
-    using truediv_type = complex<double>;
+    using sum_type = hd_std::complex<T>;
+    using diff_type = hd_std::complex<T>;
+    using truediv_type = hd_std::complex<double>;
 
-    NCA_HD static complex<T> neg(const complex<T>& v) { return -v; }
-    NCA_HD static complex<T> inc(const complex<T>& v) { return v + complex<T>(1); }
-    NCA_HD static complex<T> dec(const complex<T>& v) { return v - complex<T>(1); }
+    NCA_HD static hd_std::complex<T> neg(const hd_std::complex<T>& v) { return -v; }
+    NCA_HD static hd_std::complex<T> inc(const hd_std::complex<T>& v) {
+      return v + hd_std::complex<T>(1);
+    }
+    NCA_HD static hd_std::complex<T> dec(const hd_std::complex<T>& v) {
+      return v - hd_std::complex<T>(1);
+    }
 
-    NCA_HD static bool greater(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static bool greater(const hd_std::complex<T>& a, const hd_std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() > b.real();
       }
       return a.imag() > b.imag();
     }
 
-    NCA_HD static bool ge(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static bool ge(const hd_std::complex<T>& a, const hd_std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() > b.real();
       }
       return a.imag() >= b.imag();
     }
 
-    NCA_HD static bool less(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static bool less(const hd_std::complex<T>& a, const hd_std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() < b.real();
       }
       return a.imag() < b.imag();
     }
 
-    NCA_HD static bool le(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static bool le(const hd_std::complex<T>& a, const hd_std::complex<T>& b) {
       if (a.real() != b.real()) {
         return a.real() < b.real();
       }
       return a.imag() <= b.imag();
     }
 
-    NCA_HD static complex<T> lowest() {
-      return { numeric_limits<T>::lowest(), numeric_limits<T>::lowest() };
+    NCA_HD static hd_std::complex<T> lowest() {
+      return {
+        hd_std::numeric_limits<T>::lowest(),
+        hd_std::numeric_limits<T>::lowest()
+      };
     }
 
-    NCA_HD static complex<T> max() {
-      return { numeric_limits<T>::max(), numeric_limits<T>::max() };
+    NCA_HD static hd_std::complex<T> max() {
+      return { hd_std::numeric_limits<T>::max(), hd_std::numeric_limits<T>::max() };
     }
 
     template <typename To>
-    NCA_HD static To cast(const complex<T>& val) {
-      if constexpr (is_same_v<To, complex<T>>) {
+    NCA_HD static To cast(const hd_std::complex<T>& val) {
+      if constexpr (hd_std::is_same_v<To, hd_std::complex<T>>) {
         return val;
-      } else if constexpr (is_same_v<To, bool>) {
+      } else if constexpr (hd_std::is_same_v<To, bool>) {
         return val.real() != 0 || val.imag() != 0;
       } else if constexpr (Vector2DType<To>) {
         // For vectors broadcast into the first values.
@@ -335,89 +312,101 @@ namespace ncarray {
       }
     }
 
-    NCA_HD static bool land(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static bool land(const hd_std::complex<T>& a, const hd_std::complex<T>& b) {
       if (a.real() && b.real()) {
         return a.imag() && b.imag();
       }
       return false;
     }
-    NCA_HD static bool lor(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static bool lor(const hd_std::complex<T>& a, const hd_std::complex<T>& b) {
       if (a.real() || b.real()) {
         return true;
       }
       return a.imag() || b.imag();
     }
 
-    NCA_HD static bool isfinite(const complex<T>& v) {
+    NCA_HD static bool isfinite(const hd_std::complex<T>& v) {
       return ::isfinite(v.real()) && ::isfinite(v.imag());
     }
 
-    NCA_HD static complex<T> mod(const complex<T>& a, const complex<T>& b) {
+    NCA_HD static hd_std::complex<T> mod(const hd_std::complex<T>& a,
+                                         const hd_std::complex<T>& b) {
       if (b.real() == 0 && b.imag() == 0) {
-        if constexpr (is_same_v<T, long double>) {
+        if constexpr (hd_std::is_same_v<T, long double>) {
 #ifdef __CUDACC_RTC__
           // NOTE: No quad-precision long double supported in device code
-          return { numeric_limits<double>::quiet_NaN(), numeric_limits<double>::quiet_NaN() };
+          return {
+            hd_std::numeric_limits<double>::quiet_NaN(),
+            hd_std::numeric_limits<double>::quiet_NaN()
+          };
 #else
-          return { numeric_limits<T>::quiet_NaN(), numeric_limits<T>::quiet_NaN() };
+          return {
+            hd_std::numeric_limits<T>::quiet_NaN(),
+            hd_std::numeric_limits<T>::quiet_NaN()
+          };
 #endif
         } else {
-          return { numeric_limits<T>::quiet_NaN(), numeric_limits<T>::quiet_NaN() };
+          return {
+            hd_std::numeric_limits<T>::quiet_NaN(),
+            hd_std::numeric_limits<T>::quiet_NaN()
+          };
         }
       }
 
-      if constexpr (is_same_v<T, long double>) {
+      if constexpr (hd_std::is_same_v<T, long double>) {
 #ifdef __CUDACC_RTC__
         // NOTE: No quad-precision long double supported in device code
         using U = double;
 #else
         using U = T;
 #endif
-        complex<U> q { a / b };
-        U real { trunc(q.real()) };
-        U imag { trunc(q.imag()) };
+        hd_std::complex<U> q { a / b };
+        U real { hd_std::trunc(q.real()) };
+        U imag { hd_std::trunc(q.imag()) };
 
-        return complex<U>(a) - complex<U>(b) * complex<U>(real, imag);
+        return
+          hd_std::complex<U>(a) -
+          hd_std::complex<U>(b) * hd_std::complex<U>(real, imag);
       } else {
-        complex<T> q { a / b };
-        T real { trunc(q.real()) };
-        T imag { trunc(q.imag()) };
+        hd_std::complex<T> q { a / b };
+        T real { hd_std::trunc(q.real()) };
+        T imag { hd_std::trunc(q.imag()) };
 
-        return a - b * complex<T>(real, imag);
+        return a - b * hd_std::complex<T>(real, imag);
       }
     }
   };
 
   template <>
-  struct op_traits<int8_t> : BaseOpTraits<int8_t> {
-    using sum_type = int64_t;
-    using diff_type = int64_t;
+  struct op_traits<hd_std::int8_t> : BaseOpTraits<hd_std::int8_t> {
+    using sum_type = hd_std::int64_t;
+    using diff_type = hd_std::int64_t;
   };
 
   template <>
-  struct op_traits<uint8_t> : BaseOpTraits<uint8_t> {
-    using sum_type = uint64_t;
+  struct op_traits<hd_std::uint8_t> : BaseOpTraits<hd_std::uint8_t> {
+    using sum_type = hd_std::uint64_t;
     // NOTE: Unsigned types promot to SIGNED for subtraction!
-    using diff_type = int64_t;
+    using diff_type = hd_std::int64_t;
   };
 
   template <>
-  struct op_traits<int16_t> : BaseOpTraits<int16_t> {
-    using sum_type = int64_t;
-    using diff_type = int64_t;
+  struct op_traits<hd_std::int16_t> : BaseOpTraits<hd_std::int16_t> {
+    using sum_type = hd_std::int64_t;
+    using diff_type = hd_std::int64_t;
   };
 
   template <>
-  struct op_traits<uint16_t> : BaseOpTraits<uint16_t> {
-    using sum_type = uint64_t;
+  struct op_traits<hd_std::uint16_t> : BaseOpTraits<hd_std::uint16_t> {
+    using sum_type = hd_std::uint64_t;
     // NOTE: Unsigned types promot to SIGNED for subtraction!
-    using diff_type = int64_t;
+    using diff_type = hd_std::int64_t;
   };
 
   template <>
   struct op_traits<bool> : BaseOpTraits<bool> {
-    using sum_type = uint64_t;
-    using diff_type = int64_t;
+    using sum_type = hd_std::uint64_t;
+    using diff_type = hd_std::int64_t;
   };
 
   template <>
@@ -435,14 +424,14 @@ namespace ncarray {
     }
     NCA_HD static Float2 lowest() {
       return {
-        numeric_limits<float>::lowest(),
-        numeric_limits<float>::lowest()
+        hd_std::numeric_limits<float>::lowest(),
+        hd_std::numeric_limits<float>::lowest()
       };
     }
     NCA_HD static Float2 max() {
       return {
-        numeric_limits<float>::max(),
-        numeric_limits<float>::max()
+        hd_std::numeric_limits<float>::max(),
+        hd_std::numeric_limits<float>::max()
       };
     }
   };
@@ -460,16 +449,16 @@ namespace ncarray {
     }
     NCA_HD static Float3 lowest() {
       return {
-        numeric_limits<float>::lowest(),
-        numeric_limits<float>::lowest(),
-        numeric_limits<float>::lowest()
+        hd_std::numeric_limits<float>::lowest(),
+        hd_std::numeric_limits<float>::lowest(),
+        hd_std::numeric_limits<float>::lowest()
       };
     }
     NCA_HD static Float3 max() {
       return {
-        numeric_limits<float>::max(),
-        numeric_limits<float>::max(),
-        numeric_limits<float>::max()
+        hd_std::numeric_limits<float>::max(),
+        hd_std::numeric_limits<float>::max(),
+        hd_std::numeric_limits<float>::max()
       };
     }
   };
@@ -487,18 +476,18 @@ namespace ncarray {
     }
     NCA_HD static Float4 lowest() {
       return {
-        numeric_limits<float>::lowest(),
-        numeric_limits<float>::lowest(),
-        numeric_limits<float>::lowest(),
-        numeric_limits<float>::lowest()
+        hd_std::numeric_limits<float>::lowest(),
+        hd_std::numeric_limits<float>::lowest(),
+        hd_std::numeric_limits<float>::lowest(),
+        hd_std::numeric_limits<float>::lowest()
       };
     }
     NCA_HD static Float4 max() {
       return {
-        numeric_limits<float>::max(),
-        numeric_limits<float>::max(),
-        numeric_limits<float>::max(),
-        numeric_limits<float>::max()
+        hd_std::numeric_limits<float>::max(),
+        hd_std::numeric_limits<float>::max(),
+        hd_std::numeric_limits<float>::max(),
+        hd_std::numeric_limits<float>::max()
       };
     }
   };
@@ -518,14 +507,14 @@ namespace ncarray {
     }
     NCA_HD static Double2 lowest() {
       return {
-        numeric_limits<double>::lowest(),
-        numeric_limits<double>::lowest()
+        hd_std::numeric_limits<double>::lowest(),
+        hd_std::numeric_limits<double>::lowest()
       };
     }
     NCA_HD static Double2 max() {
       return {
-        numeric_limits<double>::max(),
-        numeric_limits<double>::max()
+        hd_std::numeric_limits<double>::max(),
+        hd_std::numeric_limits<double>::max()
       };
     }
   };
@@ -543,16 +532,16 @@ namespace ncarray {
     }
     NCA_HD static Double3 lowest() {
       return {
-        numeric_limits<double>::lowest(),
-        numeric_limits<double>::lowest(),
-        numeric_limits<double>::lowest()
+        hd_std::numeric_limits<double>::lowest(),
+        hd_std::numeric_limits<double>::lowest(),
+        hd_std::numeric_limits<double>::lowest()
       };
     }
     NCA_HD static Double3 max() {
       return {
-        numeric_limits<double>::max(),
-        numeric_limits<double>::max(),
-        numeric_limits<double>::max()
+        hd_std::numeric_limits<double>::max(),
+        hd_std::numeric_limits<double>::max(),
+        hd_std::numeric_limits<double>::max()
       };
     }
   };
@@ -570,18 +559,18 @@ namespace ncarray {
     }
     NCA_HD static Double4 lowest() {
       return {
-        numeric_limits<double>::lowest(),
-        numeric_limits<double>::lowest(),
-        numeric_limits<double>::lowest(),
-        numeric_limits<double>::lowest()
+        hd_std::numeric_limits<double>::lowest(),
+        hd_std::numeric_limits<double>::lowest(),
+        hd_std::numeric_limits<double>::lowest(),
+        hd_std::numeric_limits<double>::lowest()
       };
     }
     NCA_HD static Double4 max() {
       return {
-        numeric_limits<double>::max(),
-        numeric_limits<double>::max(),
-        numeric_limits<double>::max(),
-        numeric_limits<double>::max()
+        hd_std::numeric_limits<double>::max(),
+        hd_std::numeric_limits<double>::max(),
+        hd_std::numeric_limits<double>::max(),
+        hd_std::numeric_limits<double>::max()
       };
     }
   };

@@ -26,38 +26,14 @@ typedef SSIZE_T ssize_t;
 #include <cuda/std/cstdint>
 #include <cuda/std/type_traits>
 
-using cuda::std::int8_t;
-using cuda::std::int16_t;
-using cuda::std::int32_t;
-using cuda::std::int64_t;
-
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-using cuda::std::uint32_t;
-using cuda::std::uint64_t;
-
-using cuda::std::false_type;
-using cuda::std::is_base_of_v;
-using cuda::std::true_type;
+namespace hd_std = cuda::std;
 
 #else
 #include <concepts>
 #include <cstdint>
 #include <type_traits>
 
-using std::int8_t;
-using std::int16_t;
-using std::int32_t;
-using std::int64_t;
-
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-
-using std::false_type;
-using std::is_base_of_v;
-using std::true_type;
+namespace hd_std = std;
 
 #endif
 
@@ -495,7 +471,7 @@ namespace ncarray {
       }
 
       return
-        reinterpret_cast<uint8_t*>(data) +
+        reinterpret_cast<hd_std::uint8_t*>(data) +
         index * this->m_strides[axis] + this->m_offsets[axis];
     }
 
@@ -523,7 +499,7 @@ namespace ncarray {
       }
 
       return
-        reinterpret_cast<const uint8_t*>(data) +
+        reinterpret_cast<const hd_std::uint8_t*>(data) +
         index * this->m_strides[axis] + this->m_offsets[axis];
     }
 
@@ -551,7 +527,7 @@ namespace ncarray {
           data_p = reinterpret_cast<void**>(data_p)[index + this->m_offsets[axis]];
         } else {
           data_p =
-            reinterpret_cast<uint8_t*>(data_p) + index * this->m_strides[axis] +
+            reinterpret_cast<hd_std::uint8_t*>(data_p) + index * this->m_strides[axis] +
             this->m_offsets[axis];
         }
       }
@@ -583,7 +559,7 @@ namespace ncarray {
           data_p = reinterpret_cast<const void* const*>(data_p)[index + this->m_offsets[axis]];
         } else {
           data_p =
-            reinterpret_cast<const uint8_t*>(data_p) +
+            reinterpret_cast<const hd_std::uint8_t*>(data_p) +
             index * this->m_strides[axis] + this->m_offsets[axis];
         }
       }
@@ -699,10 +675,10 @@ namespace ncarray {
      * @returns The pointer to the next item in the array.
      */
     NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
-      uint8_t* next =
-        reinterpret_cast<uint8_t*>(data) + index * this->m_strides[axis];
+      hd_std::uint8_t* next =
+        reinterpret_cast<hd_std::uint8_t*>(data) + index * this->m_strides[axis];
       if (m_suboffsets[axis] >= 0) {
-        next = *reinterpret_cast<uint8_t**>(next) + this->m_suboffsets[axis];
+        next = *reinterpret_cast<hd_std::uint8_t**>(next) + this->m_suboffsets[axis];
       }
       return reinterpret_cast<void*>(next);
     }
@@ -726,11 +702,11 @@ namespace ncarray {
     NCA_HD inline const void* advance(const void* data,
                                       ssize_t axis,
                                       ssize_t index) const {
-      const uint8_t* next =
-        reinterpret_cast<const uint8_t*>(data) + index * this->m_strides[axis];
+      const hd_std::uint8_t* next =
+        reinterpret_cast<const hd_std::uint8_t*>(data) + index * this->m_strides[axis];
       if (m_suboffsets[axis] >= 0) {
         next =
-          *reinterpret_cast<const uint8_t* const*>(next) +
+          *reinterpret_cast<const hd_std::uint8_t* const*>(next) +
           this->m_suboffsets[axis];
       }
       return reinterpret_cast<const void*>(next);
@@ -757,10 +733,10 @@ namespace ncarray {
       for (int axis = 0; axis < coords.size(); ++axis) {
         auto index { coords[axis] };
 
-        uint8_t* next =
-          reinterpret_cast<uint8_t*>(data_p) + index * this->m_strides[axis];
+        hd_std::uint8_t* next =
+          reinterpret_cast<hd_std::uint8_t*>(data_p) + index * this->m_strides[axis];
         if (m_suboffsets[axis] >= 0) {
-          next = *reinterpret_cast<uint8_t**>(next) + this->m_suboffsets[axis];
+          next = *reinterpret_cast<hd_std::uint8_t**>(next) + this->m_suboffsets[axis];
         }
         data_p = reinterpret_cast<void*>(next);
       }
@@ -789,11 +765,11 @@ namespace ncarray {
       for (int axis = 0; axis < coords.size(); ++axis) {
         auto index { coords[axis] };
 
-        const uint8_t* next =
-            reinterpret_cast<const uint8_t*>(data_p) + index * this->m_strides[axis];
+        const hd_std::uint8_t* next =
+            reinterpret_cast<const hd_std::uint8_t*>(data_p) + index * this->m_strides[axis];
         if (m_suboffsets[axis] >= 0) {
           next =
-            *reinterpret_cast<const uint8_t* const*>(next) + this->m_suboffsets[axis];
+            *reinterpret_cast<const hd_std::uint8_t* const*>(next) + this->m_suboffsets[axis];
         }
         data_p = reinterpret_cast<const void*>(next);
       }
@@ -877,19 +853,19 @@ namespace ncarray {
    * Determines whether an object is a LayoutPolicy that can define array traversal.
    */
   template <class L, class D>
-  concept IsLayoutPolicy = is_base_of_v<LayoutPolicy<D>, L>;
+  concept IsLayoutPolicy = hd_std::is_base_of_v<LayoutPolicy<D>, L>;
 
   /**
    * Type-trait style struct for the IsLayoutPolicy concept default falsey specialization.
    */
   template <class L>
-  struct is_layout_policy : false_type {};
+  struct is_layout_policy : hd_std::false_type {};
 
   /**
    * Type-trait style struct for the IsLayoutPolicy concept true specialization.
    */
   template <class D>
-  struct is_layout_policy<LayoutPolicy<D>> : true_type {};
+  struct is_layout_policy<LayoutPolicy<D>> : hd_std::true_type {};
 
   /**
    * Underlying trait to check for layout policy descendence.
@@ -901,25 +877,25 @@ namespace ncarray {
    * Type-trait style struct for whether NCOffsetsPolicy default false specialization.
    */
   template <class L>
-  struct is_ncoffsets_policy : false_type {};
+  struct is_ncoffsets_policy : hd_std::false_type {};
 
   /**
    * Type-trait style struct for whether NCOffsetsPolicy true specialization.
    */
   template <>
-  struct is_ncoffsets_policy<NCOffsetsPolicy> : true_type {};
+  struct is_ncoffsets_policy<NCOffsetsPolicy> : hd_std::true_type {};
 
   /**
    * Type-trait style struct for whether SOArrayPolicy default false specialization.
    */
   template <class L>
-  struct is_soarray_policy : false_type {};
+  struct is_soarray_policy : hd_std::false_type {};
 
   /**
    * Type-trait style struct for whether SOArrayPolicy true specialization.
    */
   template <>
-  struct is_soarray_policy<SOArrayPolicy> : true_type {};
+  struct is_soarray_policy<SOArrayPolicy> : hd_std::true_type {};
 
   /**
    * Underlying trait to check for if NCOffsetsPolicy.

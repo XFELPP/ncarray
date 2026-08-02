@@ -15,15 +15,13 @@
 #ifdef __CUDACC_RTC__
 #include <cuda/std/cstdint>
 
-using cuda::std::uint8_t;
-using cuda::std::uint32_t;
+namespace hd_std = cuda::std;
 
 #else
 
 #include <cstdint>
 
-using std::uint8_t;
-using std::uint32_t;
+namespace hd_std = std;
 
 #endif
 
@@ -46,7 +44,7 @@ namespace ncarray {
    * to the necessary codes to indicate loading/retrieval of the operands (arrays,
    * or constant scalars)
    */
-  enum class OpCode: uint8_t {
+  enum class OpCode: hd_std::uint8_t {
     NOOP = 0,   ///< Null op
     IDX,        ///< Index generator (Like APL)
     LOAD_NCARR, ///< Load an NCArray (VM only)
@@ -168,13 +166,15 @@ namespace ncarray {
    * The op code (e.g. ADD, LOAD_ARRAY etc) is stored in the lower 8 bits. The index of
    * the operand in the VM's stack is in the remaining bits.
    */
-  using Instruction = uint32_t;
+  using Instruction = hd_std::uint32_t;
 
   /**
    * Pack an op code and an operand index into a single VM instruction.
    */
-  NCA_HD inline uint32_t pack_instruction(OpCode op, int idx) {
-    return (static_cast<uint32_t>(op) << 24) | (static_cast<uint32_t>(idx) & 0xFFFFFF);
+  NCA_HD inline hd_std::uint32_t pack_instruction(OpCode op, int idx) {
+    return
+      (static_cast<hd_std::uint32_t>(op) << 24) |
+      (static_cast<hd_std::uint32_t>(idx) & 0xFFFFFF);
   }
 
   /**

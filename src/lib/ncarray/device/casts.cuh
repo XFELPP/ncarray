@@ -8,29 +8,13 @@
 #include <cuda/std/complex>
 #include <cuda/std/cstdint>
 
-using cuda::std::complex;
-using cuda::std::int8_t;
-using cuda::std::int16_t;
-using cuda::std::int32_t;
-using cuda::std::int64_t;
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-using cuda::std::uint32_t;
-using cuda::std::uint64_t;
+namespace hd_std = cuda::std;
 
 #else
 #include <complex>
 #include <cstdint>
 
-using std::complex;
-using std::int8_t;
-using std::int16_t;
-using std::int32_t;
-using std::int64_t;
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
+namespace hd_std = std;
 
 #endif
 
@@ -54,29 +38,29 @@ namespace ncarray {
       }
 
       case DType::uint8: {
-        return vm_cast_logic<DestT, uint8_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::uint8_t>(ptr);
       }
       case DType::uint16: {
-        return vm_cast_logic<DestT, uint16_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::uint16_t>(ptr);
       }
       case DType::uint32: {
-        return vm_cast_logic<DestT, uint32_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::uint32_t>(ptr);
       }
       case DType::uint64: {
-        return vm_cast_logic<DestT, uint64_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::uint64_t>(ptr);
       }
 
       case DType::int8: {
-        return vm_cast_logic<DestT, int8_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::int8_t>(ptr);
       }
       case DType::int16: {
-        return vm_cast_logic<DestT, int16_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::int16_t>(ptr);
       }
       case DType::int32: {
-        return vm_cast_logic<DestT, int32_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::int32_t>(ptr);
       }
       case DType::int64: {
-        return vm_cast_logic<DestT, int64_t>(ptr);
+        return vm_cast_logic<DestT, hd_std::int64_t>(ptr);
       }
 
       case DType::float32: {
@@ -95,17 +79,17 @@ namespace ncarray {
       }
 
       case DType::complex64: {
-        return vm_cast_logic<DestT, complex<float>>(ptr);
+        return vm_cast_logic<DestT, hd_std::complex<float>>(ptr);
       }
       case DType::complex128: {
-        return vm_cast_logic<DestT, complex<double>>(ptr);
+        return vm_cast_logic<DestT, hd_std::complex<double>>(ptr);
       }
       case DType::complex256: {
 #ifdef __CUDACC_RTC__
         // No long double in device code (nvcc maps automatically, NVRTC does not)
-        return vm_cast_logic<DestT, complex<double>>(ptr);
+        return vm_cast_logic<DestT, hd_std::complex<double>>(ptr);
 #else
-        return vm_cast_logic<DestT, complex<long double>>(ptr);
+        return vm_cast_logic<DestT, hd_std::complex<long double>>(ptr);
 #endif
       }
 

@@ -5,7 +5,7 @@ subdir('jit')
 if build_core_opt
     deps_for_ncarray += [asmjit_dep, ncarrayjit_dep]
 
-    make_tus_script = meson.source_root() + '/utilities/make_tus.py'
+    make_tus_script = meson.project_source_root() + '/utilities/make_tus.py'
 
     host_src_dir = meson.current_source_dir() / 'tus/host'
 
