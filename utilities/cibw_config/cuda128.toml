@@ -1,10 +1,14 @@
 [tool.cibuildwheel]
+# The following are not even supported in the cibw releases being used so dont
+# need to be specified. PyPy was not enabled so does not need to be skipped.
 # pp* (PyPy for now)
 # cp36-* (Python 3.6)
 # cp37-* (Python 3.7)
+# Still specify though the 32-bit skips and musl
 # *i686 (32-bit builds)
+# *win32 (32-bit Windows)
 # *musllinux* (No CUDA support)
-skip = ["pp*", "cp36-*", "cp37-*", "*i686", "*-win32", "*musllinux*"]
+skip = ["*i686", "*-win32", "*musllinux*"]
 
 # Builds are defined in the ymls for the actions. We use two containers with
 # two different cibuildwheel versions to support 3.8 in one, and 3.9-3.15 in the other
