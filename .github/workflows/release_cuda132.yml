@@ -134,6 +134,7 @@ jobs:
           config-file: "{package}/utilities/cibw_config/cuda132.toml"
         env:
           CIBW_CACHE_PATH: ".cibw_cache"
+          CIBW_ENABLE: "cpython-prerelease"
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-* cp315-* cp315t-*"
           PreferredToolArchitecture: "x64"
 

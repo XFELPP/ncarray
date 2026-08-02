@@ -3,6 +3,7 @@ import os
 import sys
 import glob
 import subprocess
+import zipfile
 from typing import List, Optional
 
 
@@ -75,6 +76,16 @@ def main():
     delvewheel_cmd.extend(["-w", dest_dir, wheel_path])
 
     subprocess.run(delvewheel_cmd, check=True)
+
+    # Add back `.lib` files.... How on erth does Windows build system work!??!?
+    repaired_wheels: List[str] = glob.glob(os.path.join(dest_dir, "*.whl"))
+    for whl in repaired_wheels:
+        print(f"Injecting .lib import libraries into {whl}...")
+        with zipfile.ZipFile(whl, "a") as z:
+            for lib_file in glob.glob(os.path.join(lib_dir, "*.lib")):
+                target_path: str = f"ncarray/lib/{os.path.basename(lib_file)}"
+                print(f"  Adding {lib_file} -> {target_path}")
+                z.write(lib_file, target_path)
 
 
 if __name__ == "__main__":
