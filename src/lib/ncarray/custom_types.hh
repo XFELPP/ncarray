@@ -14,15 +14,14 @@
 #include <cuda/std/complex>
 #include <cuda/std/type_traits>
 
-using cuda::std::is_arithmetic;
-
-using cuda::std::decay_t;
-using cuda::std::is_same_v;
+// Need to `using` just this, since its global in CUDA >= 13, library <13.
 #if __CUDACC_VER_MAJOR__ < 13
 using cuda::std::sqrt;
 #endif
 
 typedef long long ssize_t;
+
+namespace hd_std = cuda::std;
 
 #else
 #include <algorithm>
@@ -40,12 +39,10 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
-using std::is_arithmetic;
-using std::log2;
-
-using std::decay_t;
-using std::is_same_v;
+// Need to `using` just this, since its global in CUDA >= 13, library <13.
 using std::sqrt;
+
+namespace hd_std = std;
 
 #endif
 
@@ -288,7 +285,7 @@ namespace ncarray {
    * An aliased concept for the the is_arithmetic type trait value.
    */
   template <typename T>
-  concept Numeric = is_arithmetic<T>::value;
+  concept Numeric = hd_std::is_arithmetic<T>::value;
 
 /**
  * @def DEFINE_SCALAR_OPS(VECDTYPE, ...)
@@ -494,7 +491,7 @@ namespace ncarray {
 
     // A constructor for static_cast<OtherVec>..
     template <Vector2DType U>
-    requires (!is_same_v<decay_t<U>, Float2>)
+    requires (!hd_std::is_same_v<hd_std::decay_t<U>, Float2>)
     NCA_HD constexpr Float2(const U& other)
       : x(static_cast<float>(other.x))
       , y(static_cast<float>(other.y))
@@ -545,7 +542,7 @@ namespace ncarray {
 
     // A constructor for static_cast<OtherVec>..
     template <Vector2DType U>
-    requires (!is_same_v<decay_t<U>, Float3>)
+    requires (!hd_std::is_same_v<hd_std::decay_t<U>, Float3>)
     NCA_HD constexpr Float3(const U& other)
       : x(static_cast<float>(other.x))
       , y(static_cast<float>(other.y))
@@ -603,7 +600,7 @@ namespace ncarray {
 
     // A constructor for static_cast<OtherVec>..
     template <Vector2DType U>
-    requires (!is_same_v<decay_t<U>, Float4>)
+    requires (!hd_std::is_same_v<hd_std::decay_t<U>, Float4>)
     NCA_HD constexpr Float4(const U& other)
       : x(static_cast<float>(other.x))
       , y(static_cast<float>(other.y))
@@ -658,7 +655,7 @@ namespace ncarray {
 
     // A constructor for static_cast<OtherVec>..
     template <Vector2DType U>
-    requires (!is_same_v<decay_t<U>, Double2>)
+    requires (!hd_std::is_same_v<hd_std::decay_t<U>, Double2>)
     NCA_HD constexpr Double2(const U& other)
       : x(static_cast<double>(other.x))
       , y(static_cast<double>(other.y))
@@ -709,7 +706,7 @@ namespace ncarray {
 
     // A constructor for static_cast<OtherVec>..
     template <Vector2DType U>
-    requires (!is_same_v<decay_t<U>, Double3>)
+    requires (!hd_std::is_same_v<hd_std::decay_t<U>, Double3>)
     NCA_HD constexpr Double3(const U& other)
       : x(static_cast<double>(other.x))
       , y(static_cast<double>(other.y))
@@ -768,7 +765,7 @@ namespace ncarray {
 
     // A constructor for static_cast<OtherVec>..
     template <Vector2DType U>
-    requires (!is_same_v<decay_t<U>, Double4>)
+    requires (!hd_std::is_same_v<hd_std::decay_t<U>, Double4>)
     NCA_HD constexpr Double4(const U& other)
       : x(static_cast<double>(other.x))
       , y(static_cast<double>(other.y))

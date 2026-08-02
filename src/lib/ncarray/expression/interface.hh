@@ -21,7 +21,7 @@ typedef long long ssize_t;
 
 #include <cuda/std/type_traits>
 
-using cuda::std::is_base_of_v;
+namespace hd_std = cuda::std;
 
 #else
 
@@ -35,7 +35,7 @@ typedef SSIZE_T ssize_t;
 #include <concepts>
 #include <type_traits>
 
-using std::is_base_of_v;
+namespace hd_std = std;
 
 #endif // nvrtc check
 
@@ -52,7 +52,7 @@ namespace ncarray {
 
   // Helper to check if a type is an expression
   template <typename T>
-  concept Expression = is_base_of_v<ExpressionTag, T>;
+  concept Expression = hd_std::is_base_of_v<ExpressionTag, T>;
 
   /**
    * Defines array-like expressions.

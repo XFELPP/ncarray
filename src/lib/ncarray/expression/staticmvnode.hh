@@ -35,16 +35,7 @@ typedef long long ssize_t;
 #include <cuda/std/cstdint>
 #include <cuda/std/type_traits>
 
-using cuda::std::false_type;
-using cuda::std::is_same_v;
-#if __CUDACC_VER_MAJOR__ < 13
-using cuda::std::isfinite;
-#endif
-using cuda::std::true_type;
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-
-using cuda::std::decay_t;
+namespace hd_std = cuda::std;
 
 #else
 
@@ -55,7 +46,6 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
-
 #include <cassert>
 #include <cmath>
 #include <complex>
@@ -63,15 +53,7 @@ typedef SSIZE_T ssize_t;
 #include <cstdint>
 #include <type_traits>
 
-using std::false_type;
-using std::is_same_v;
-using std::isfinite;
-using std::nan;
-using std::true_type;
-using std::uint8_t;
-using std::uint16_t;
-
-using std::decay_t;
+namespace hd_std = std;
 
 #endif
 
@@ -126,7 +108,7 @@ namespace ncarray {
       }
 
       auto cast_op = [&](auto&& val) {
-        using SrcT = std::decay_t<decltype(val)>;
+        using SrcT = hd_std::decay_t<decltype(val)>;
         return op_traits<SrcT>::template cast<ScalarT>(val);
       };
 

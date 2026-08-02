@@ -33,16 +33,7 @@ typedef long long ssize_t;
 #include <cuda/std/cstdint>
 #include <cuda/std/type_traits>
 
-using cuda::std::false_type;
-using cuda::std::is_same_v;
-#if __CUDACC_VER_MAJOR__ < 13
-using cuda::std::isfinite;
-#endif
-using cuda::std::true_type;
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-
-using cuda::std::decay_t;
+namespace hd_std = cuda::std;
 
 #else
 
@@ -53,7 +44,6 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
-
 #include <cassert>
 #include <cmath>
 #include <complex>
@@ -61,15 +51,7 @@ typedef SSIZE_T ssize_t;
 #include <cstdint>
 #include <type_traits>
 
-using std::false_type;
-using std::is_same_v;
-using std::isfinite;
-using std::nan;
-using std::true_type;
-using std::uint8_t;
-using std::uint16_t;
-
-using std::decay_t;
+namespace hd_std = std;
 
 #endif
 
@@ -96,25 +78,25 @@ namespace ncarray {
 
     // Scalars
     const DType* constants_dtypes { nullptr };     ///< Scalar data types
-    const uint16_t* constants_offsets { nullptr }; ///< Scalar offset in byte stream
+    const hd_std::uint16_t* constants_offsets { nullptr }; ///< Scalar offset in byte stream
     // Largest supported scalar type is 32 bytes.
-    const uint8_t* constants_buf { nullptr };      ///< Byte stream of scalars
+    const hd_std::uint8_t* constants_buf { nullptr };      ///< Byte stream of scalars
 
     DType expr_dtype;     ///< The DType for the final evaluated expression
     DType work_dtype;     ///< The DType for intermediate sub-expression evaluations
 
-    uint8_t n_layouts { 0 };
-    uint8_t n_scalars { 0 };
-    uint8_t n_instrs { 0 };
+    hd_std::uint8_t n_layouts { 0 };
+    hd_std::uint8_t n_scalars { 0 };
+    hd_std::uint8_t n_instrs { 0 };
 
     size_t arr_alignment { 16 };
 
 #ifndef __CUDACC_RTC__
     DynamicExprMVNode(const ExprMVNode<MemTag>& node,
-                      const uint8_t* buf,
-                      uint8_t n_instrs_,
-                      uint8_t n_arrays_,
-                      uint8_t n_scalars_,
+                      const hd_std::uint8_t* buf,
+                      hd_std::uint8_t n_instrs_,
+                      hd_std::uint8_t n_arrays_,
+                      hd_std::uint8_t n_scalars_,
                       size_t alignment = 16)
       : n_layouts(n_arrays_)
       , n_scalars(n_scalars_)
@@ -128,7 +110,7 @@ namespace ncarray {
 
       auto align = [&](size_t off) { return (off + (alignment - 1)) & ~(alignment - 1); };
 
-      uint16_t offset { 0 };
+      hd_std::uint16_t offset { 0 };
       instrs = reinterpret_cast<const Instruction*>(buf);
       offset += n_instrs * sizeof(Instruction);
       offset = align(offset);
@@ -149,7 +131,7 @@ namespace ncarray {
       offset += n_scalars * sizeof(DType);
       offset = align(offset);
 
-      constants_offsets = reinterpret_cast<const uint16_t*>(buf + offset);
+      constants_offsets = reinterpret_cast<const hd_std::uint16_t*>(buf + offset);
       offset += n_scalars * 2;
       offset = align(offset);
 
@@ -180,7 +162,7 @@ namespace ncarray {
           case OpCode::LOAD_NCARR:
           case OpCode::LOAD_SOARR: {
             int arr_idx = get_index(instr);
-            const uint8_t* layout_ptr = reinterpret_cast<const uint8_t*>(layouts);
+            const hd_std::uint8_t* layout_ptr = reinterpret_cast<const hd_std::uint8_t*>(layouts);
             size_t aligned_offset =
               arr_idx * ((sizeof(SOArrayPolicy) + (arr_alignment - 1)) & ~(arr_alignment - 1));
             const auto& view = *reinterpret_cast<const SOArrayPolicy*>(layout_ptr + aligned_offset);
@@ -195,7 +177,7 @@ namespace ncarray {
 
             int src_idx { static_cast<int>(src_dtype) };
 
-            if constexpr (is_same_v<MemTag, HostTag>) {
+            if constexpr (hd_std::is_same_v<MemTag, HostTag>) {
   #ifndef __CUDA_ARCH__
               stack[++top] = host::vm_cast_table<WorkT>[src_idx](ptr);
   #endif
@@ -211,7 +193,7 @@ namespace ncarray {
             const void* ptr = constants_buf + constants_offsets[c_idx];
             int src_idx { static_cast<int>(constants_dtypes[c_idx]) };
 
-            if constexpr (is_same_v<MemTag, HostTag>) {
+            if constexpr (hd_std::is_same_v<MemTag, HostTag>) {
   #ifndef __CUDA_ARCH__
               stack[++top] = host::vm_cast_table<WorkT>[src_idx](ptr);
   #endif
@@ -261,7 +243,7 @@ namespace ncarray {
         return op_traits<WorkT>::template cast<DestT>(stack[0]);
       };
 
-      if constexpr (is_same_v<DestT, bool>) {
+      if constexpr (hd_std::is_same_v<DestT, bool>) {
         return dispatch(this->work_dtype, eval_op);
       } else {
         return dispatch(dtype_traits<DestT>::value, eval_op);
@@ -293,8 +275,8 @@ namespace ncarray {
 
   template <typename MemTag>
   inline DynamicExprMVNode<MemTag> get_dynamic_mv_node(const ExprMVNode<MemTag>& node,
-                                                       uint8_t* h_ptr,
-                                                       uint8_t* d_ptr = nullptr,
+                                                       hd_std::uint8_t* h_ptr,
+                                                       hd_std::uint8_t* d_ptr = nullptr,
                                                        size_t alignment = 16) {
     auto align = [&](size_t off) { return (off + (alignment - 1)) & ~(alignment - 1); };
 
@@ -332,11 +314,11 @@ namespace ncarray {
     auto scalar_off_bytes { 2 * node.scalars.size() };
 
     unsigned scalar_cnt { 0 };
-    uint16_t scalar_off { 0 };
+    hd_std::uint16_t scalar_off { 0 };
 
     auto scalar_cast = [&](auto&& val) {
-      using SrcT = std::decay_t<decltype(val)>;
-      auto* bytes = reinterpret_cast<const uint8_t*>(&val);
+      using SrcT = hd_std::decay_t<decltype(val)>;
+      auto* bytes = reinterpret_cast<const hd_std::uint8_t*>(&val);
       // Data types begin at memory: (offset + sizeof(DType) * scalar_cnt)
       size_t dtypes_off = align(offset);
       auto* dtype_buf = reinterpret_cast<DType*>(h_ptr + dtypes_off);
@@ -345,15 +327,15 @@ namespace ncarray {
       // Scalar offsets begin at:
       // (offset + node.scalars.size() * sizeof(DType) + scalar_cnt * 2)
       size_t offsets_off = align(offset + scalar_dtype_bytes);
-      auto* offsets_buf = reinterpret_cast<uint16_t*>(h_ptr + offsets_off);
-      uint16_t off = scalar_off;
+      auto* offsets_buf = reinterpret_cast<hd_std::uint16_t*>(h_ptr + offsets_off);
+      hd_std::uint16_t off = scalar_off;
       offsets_buf[scalar_cnt] = off;
       scalar_off += sizeof(val);
 
       // Actual scalars buffer begin at:
       // (offset + scalar_dtype_bytes + scalar_off_bytes)
       size_t scalars_buf_off = align(align(offset + scalar_dtype_bytes) + scalar_off_bytes);
-      uint8_t* scalars_buf = h_ptr + scalars_buf_off;
+      hd_std::uint8_t* scalars_buf = h_ptr + scalars_buf_off;
       for (unsigned i = 0; i < sizeof(val); ++i) {
         scalars_buf[off + i] = bytes[i];
       }
@@ -364,7 +346,7 @@ namespace ncarray {
       std::visit(scalar_cast, scalar);
     }
 
-    if constexpr (is_same_v<MemTag, HostTag>) {
+    if constexpr (hd_std::is_same_v<MemTag, HostTag>) {
       return DynamicExprMVNode<MemTag>(node, h_ptr, n_instrs, n_arrays, n_scalars, alignment);
     } else {
       return DynamicExprMVNode<MemTag>(node, d_ptr, n_instrs, n_arrays, n_scalars, alignment);

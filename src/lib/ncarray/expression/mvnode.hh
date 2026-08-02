@@ -34,16 +34,7 @@ typedef long long ssize_t;
 #include <cuda/std/cstdint>
 #include <cuda/std/type_traits>
 
-using cuda::std::false_type;
-using cuda::std::is_same_v;
-#if __CUDACC_VER_MAJOR__ < 13
-using cuda::std::isfinite;
-#endif
-using cuda::std::true_type;
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-
-using cuda::std::decay_t;
+namespace hd_std = cuda::std;
 
 #else
 
@@ -54,7 +45,6 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
-
 #include <cassert>
 #include <cmath>
 #include <complex>
@@ -62,15 +52,7 @@ typedef SSIZE_T ssize_t;
 #include <cstdint>
 #include <type_traits>
 
-using std::false_type;
-using std::is_same_v;
-using std::isfinite;
-using std::nan;
-using std::true_type;
-using std::uint8_t;
-using std::uint16_t;
-
-using std::decay_t;
+namespace hd_std = std;
 
 #endif
 
@@ -141,7 +123,7 @@ namespace ncarray {
           int src_idx { static_cast<int>(dtypes[i]) };
 
           WorkT leaf_res;
-          if constexpr (std::is_same_v<MemTag, HostTag>) {
+          if constexpr (hd_std::is_same_v<MemTag, HostTag>) {
   #ifndef __CUDA_ARCH__
             leaf_res = host::vm_cast_table<WorkT>[src_idx](leaf_ptr);
   #endif
@@ -162,7 +144,7 @@ namespace ncarray {
         return static_cast<DestT>(res);
       };
 
-      if constexpr (std::is_same_v<DestT, bool>) {
+      if constexpr (hd_std::is_same_v<DestT, bool>) {
         // In the case of bool as the final result (e.g. for comparisons) we will do
         // the rest of the evaluation in the working datatype to avoid precision loss.
         return dispatch(this->work_dtype, eval_op);
@@ -178,7 +160,7 @@ namespace ncarray {
       } else if (op == OpCode::SUB) {
         return res - leaf;
       } else if (op == OpCode::MUL) {
-        if constexpr (is_same_v<DestT, bool>) {
+        if constexpr (hd_std::is_same_v<DestT, bool>) {
           return res && leaf;
         } else {
           return res * leaf;
@@ -187,7 +169,7 @@ namespace ncarray {
         bool is_finite { op_traits<DestT>::isfinite(res) };
 
         if (leaf == DestT(0)) {
-          return is_finite ? nan("") : res;
+          return is_finite ? hd_std::nan("") : res;
         }
         return res / leaf;
         // Comparisons
@@ -210,7 +192,7 @@ namespace ncarray {
           // Ensure both true types and the variant get processed
           Scalar tmp = node;
           auto get_dtype = [](auto&& val) {
-            using T = std::decay_t<decltype(val)>;
+            using T = hd_std::decay_t<decltype(val)>;
             return dtype_traits<T>::value;
           };
           expr_dtype = std::visit(get_dtype, tmp);
@@ -467,7 +449,7 @@ namespace ncarray {
         Scalar tmp = node;
 
         auto dtype_op = [](auto&& val) {
-          using ScalarT = std::decay_t<decltype(val)>;
+          using ScalarT = hd_std::decay_t<decltype(val)>;
           return dtype_traits<ScalarT>::value;
         };
 
@@ -477,10 +459,10 @@ namespace ncarray {
   };
 
   template <class Expr>
-  struct is_exprmv_node : false_type {};
+  struct is_exprmv_node : hd_std::false_type {};
 
   template <typename MemTag>
-  struct is_exprmv_node<ExprMVNode<MemTag>> : true_type {};
+  struct is_exprmv_node<ExprMVNode<MemTag>> : hd_std::true_type {};
 
   template <class Expr>
   constexpr bool is_exprmv_node_v = is_exprmv_node<Expr>::value;

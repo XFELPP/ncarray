@@ -18,23 +18,7 @@
 #include <cuda/std/functional>
 #include <cuda/std/type_traits>
 
-using cuda::std::complex;
-
-using cuda::std::int8_t;
-using cuda::std::int16_t;
-using cuda::std::int32_t;
-using cuda::std::int64_t;
-
-using cuda::std::uint8_t;
-using cuda::std::uint16_t;
-using cuda::std::uint32_t;
-using cuda::std::uint64_t;
-
-using cuda::std::is_same;
-using cuda::std::disjunction;
-using cuda::std::is_void_v;
-
-using cuda::std::forward;
+namespace hd_std = cuda::std;
 
 #else
 #include <cassert>
@@ -46,23 +30,7 @@ using cuda::std::forward;
 #include <type_traits>
 #include <variant>
 
-using std::complex;
-
-using std::int8_t;
-using std::int16_t;
-using std::int32_t;
-using std::int64_t;
-
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-
-using std::is_same;
-using std::disjunction;
-using std::is_void_v;
-
-using std::forward;
+namespace hd_std = std;
 
 #endif
 
@@ -129,23 +97,23 @@ namespace ncarray {
   REGISTER_NCARRAY_DTYPE(bool, bool_)
   REGISTER_NCARRAY_DTYPE(char, char_)
   //REGISTER_NCARRAY_DTYPE(unsigned char, uchar) // Stuck cause of uint8_t
-  REGISTER_NCARRAY_DTYPE(uint8_t, uint8)
-  REGISTER_NCARRAY_DTYPE(uint16_t, uint16)
-  REGISTER_NCARRAY_DTYPE(uint32_t, uint32)
-  REGISTER_NCARRAY_DTYPE(uint64_t, uint64)
+  REGISTER_NCARRAY_DTYPE(hd_std::uint8_t, uint8)
+  REGISTER_NCARRAY_DTYPE(hd_std::uint16_t, uint16)
+  REGISTER_NCARRAY_DTYPE(hd_std::uint32_t, uint32)
+  REGISTER_NCARRAY_DTYPE(hd_std::uint64_t, uint64)
 
-  REGISTER_NCARRAY_DTYPE(int8_t, int8)
-  REGISTER_NCARRAY_DTYPE(int16_t, int16)
-  REGISTER_NCARRAY_DTYPE(int32_t, int32)
-  REGISTER_NCARRAY_DTYPE(int64_t, int64)
+  REGISTER_NCARRAY_DTYPE(hd_std::int8_t, int8)
+  REGISTER_NCARRAY_DTYPE(hd_std::int16_t, int16)
+  REGISTER_NCARRAY_DTYPE(hd_std::int32_t, int32)
+  REGISTER_NCARRAY_DTYPE(hd_std::int64_t, int64)
 
   REGISTER_NCARRAY_DTYPE(float, float32)
   REGISTER_NCARRAY_DTYPE(double, float64)
   REGISTER_NCARRAY_DTYPE(long double, float128)
 
-  REGISTER_NCARRAY_DTYPE(complex<float>, complex64)
-  REGISTER_NCARRAY_DTYPE(complex<double>, complex128)
-  REGISTER_NCARRAY_DTYPE(complex<long double>, complex256)
+  REGISTER_NCARRAY_DTYPE(hd_std::complex<float>, complex64)
+  REGISTER_NCARRAY_DTYPE(hd_std::complex<double>, complex128)
+  REGISTER_NCARRAY_DTYPE(hd_std::complex<long double>, complex256)
 
   REGISTER_NCARRAY_DTYPE(Float2, vfloat2)
   REGISTER_NCARRAY_DTYPE(Float3, vfloat3)
@@ -297,10 +265,10 @@ namespace ncarray {
   using Scalar = std::variant<
     // Cannot use unsigned char, identical to std::uint8_t
     bool, char,
-    uint8_t, uint16_t, uint32_t, uint64_t,
-    int8_t, int16_t, int32_t, int64_t,
+    hd_std::uint8_t, hd_std::uint16_t, hd_std::uint32_t, hd_std::uint64_t,
+    hd_std::int8_t, hd_std::int16_t, hd_std::int32_t, hd_std::int64_t,
     float, double, long double,
-    complex<float>, complex<double>, complex<long double>,
+    hd_std::complex<float>, hd_std::complex<double>, hd_std::complex<long double>,
     Float2, Float3, Float4, Double2, Double3, Double4
   >;
 
@@ -328,20 +296,20 @@ namespace ncarray {
   NCA_HD inline auto dispatch_integers(DType type, Visitor&& visitor) {
     switch (type) {
     case DType::uint32: {
-      return visitor.template operator()<uint32_t>();
+      return visitor.template operator()<hd_std::uint32_t>();
     }
     case DType::uint64: {
-      return visitor.template operator()<uint64_t>();
+      return visitor.template operator()<hd_std::uint64_t>();
     }
     case DType::int32: {
-      return visitor.template operator()<int32_t>();
+      return visitor.template operator()<hd_std::int32_t>();
     }
     case DType::int64: {
-      return visitor.template operator()<int64_t>();
+      return visitor.template operator()<hd_std::int64_t>();
     }
     default: {
       assert(false && "Invalid DType for operation! Only integers accepted!");
-      return visitor.template operator()<uint32_t>();
+      return visitor.template operator()<hd_std::uint32_t>();
     }
     }
   }
@@ -362,7 +330,7 @@ namespace ncarray {
   struct is_in_list;
 
   template <typename T, typename... Ts>
-  struct is_in_list<T, type_list<Ts...>> : disjunction<is_same<T, Ts>...> {};
+  struct is_in_list<T, type_list<Ts...>> : hd_std::disjunction<hd_std::is_same<T, Ts>...> {};
 
   /**
    * Whether a requested type is in the specified type_list.
@@ -390,18 +358,18 @@ namespace ncarray {
   // long double, and complex<long double> from NVRTC code
   using base_types = type_list<
     bool, char,
-    uint8_t, uint16_t, uint32_t, uint64_t,
-    int8_t, int16_t, int32_t, int64_t,
+    hd_std::uint8_t, hd_std::uint16_t, hd_std::uint32_t, hd_std::uint64_t,
+    hd_std::int8_t, hd_std::int16_t, hd_std::int32_t, hd_std::int64_t,
     float, double, // No long double
-    complex<float>, complex<double>, // No complex<long double>
+    hd_std::complex<float>, hd_std::complex<double>, // No complex<long double>
     Float2, Float3,  Float4, Double2, Double3, Double4>;
 #else
   using base_types = type_list<
     bool, char,
-    uint8_t, uint16_t, uint32_t, uint64_t,
-    int8_t, int16_t, int32_t, int64_t,
+    hd_std::uint8_t, hd_std::uint16_t, hd_std::uint32_t, hd_std::uint64_t,
+    hd_std::int8_t, hd_std::int16_t, hd_std::int32_t, hd_std::int64_t,
     float, double, long double,
-    complex<float>, complex<double>, complex<long double>,
+    hd_std::complex<float>, hd_std::complex<double>, hd_std::complex<long double>,
     Float2, Float3, Float4, Double2, Double3, Double4>;
 #endif
 
@@ -494,10 +462,10 @@ namespace ncarray {
         return visitor.template operator()<T>();
       }
       if constexpr (sizeof...(Ts) > 0) {
-        return list_dispatcher<type_list<Ts...>>::dispatch(type, forward<Visitor>(visitor));
+        return list_dispatcher<type_list<Ts...>>::dispatch(type, hd_std::forward<Visitor>(visitor));
       } else {
         using ReturnT = decltype(visitor.template operator()<T>());
-        if constexpr (!is_void_v<ReturnT>) {
+        if constexpr (!hd_std::is_void_v<ReturnT>) {
           return ReturnT{};
         }
       }
@@ -531,14 +499,14 @@ namespace ncarray {
 #ifdef __CUDACC_RTC__
     if (type == DType::float128) {
       return list_dispatcher<base_types>::dispatch(DType::float64,
-                                                   forward<Visitor>(visitor));
+                                                   hd_std::forward<Visitor>(visitor));
     }
     if (type == DType::complex256) {
       return list_dispatcher<base_types>::dispatch(DType::complex128,
-                                                   forward<Visitor>(visitor));
+                                                   hd_std::forward<Visitor>(visitor));
     }
 #else
-    return list_dispatcher<base_types>::dispatch(type, forward<Visitor>(visitor));
+    return list_dispatcher<base_types>::dispatch(type, hd_std::forward<Visitor>(visitor));
 #endif
   }
 

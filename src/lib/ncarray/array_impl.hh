@@ -25,11 +25,7 @@
 #include <cuda/std/initializer_list>
 #include <cuda/std/type_traits>
 
-using cuda::std::initializer_list;
-using cuda::std::is_base_of_v;
-using cuda::std::is_same_v;
-using cuda::std::move;
-using cuda::std::uint64_t;
+namespace hd_std = cuda::std;
 
 #else
 
@@ -54,11 +50,7 @@ typedef SSIZE_T ssize_t;
 #include <variant>
 #include <vector>
 
-using std::initializer_list;
-using std::is_base_of_v;
-using std::move;
-using std::is_same_v;
-using std::uint64_t;
+namespace hd_std = std;
 
 #endif // nvrtc guard
 
@@ -226,7 +218,7 @@ namespace ncarray {
      * @note This constructor is compatible with device code.
      */
     NCA_HD ArrayImpl(const ArrayImpl& other)
-      requires (!is_base_of_v<OwnerTag, Storage>)
+      requires (!hd_std::is_base_of_v<OwnerTag, Storage>)
       : Layout(static_cast<const Layout&>(other))
     {
       // Handle the attributes coming from Storage
@@ -235,7 +227,7 @@ namespace ncarray {
       this->m_read_only = other.read_only();
 
       // Specializations for the Reference and Owning classes
-      if constexpr (is_base_of_v<RefTag, Storage>) {
+      if constexpr (hd_std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -249,11 +241,11 @@ namespace ncarray {
      * @note This constructor is compatible with device code.
      */
     NCA_HD ArrayImpl(ArrayImpl&& other) noexcept
-      requires (!is_base_of_v<OwnerTag, Storage>)
-      : Layout(move(static_cast<Layout&>(other)))
-      , Storage(move(static_cast<Storage&>(other)))
+      requires (!hd_std::is_base_of_v<OwnerTag, Storage>)
+      : Layout(hd_std::move(static_cast<Layout&>(other)))
+      , Storage(hd_std::move(static_cast<Storage&>(other)))
     {
-      if constexpr (is_base_of_v<RefTag, Storage>) {
+      if constexpr (hd_std::is_base_of_v<RefTag, Storage>) {
         for (ssize_t i = 0; i < this->ndim(); ++i) {
           this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
         }
@@ -273,7 +265,7 @@ namespace ncarray {
      * @note This constructor is compatible with device code.
      */
     template <class OtherStorage>
-    requires is_base_of_v<ViewTag, Storage>
+    requires hd_std::is_base_of_v<ViewTag, Storage>
     NCA_HD ArrayImpl(const ArrayImpl<Layout, OtherStorage>& other)
       : Layout(static_cast<const Layout&>(other))
       , Storage()
@@ -291,9 +283,9 @@ namespace ncarray {
      * @note This constructor is compatible with device code.
      */
     template <class OtherStorage>
-    requires is_base_of_v<ViewTag, Storage>
+    requires hd_std::is_base_of_v<ViewTag, Storage>
     NCA_HD ArrayImpl(ArrayImpl<Layout, OtherStorage>&& other) noexcept
-      : Layout(move(static_cast<const Layout&>(other)))
+      : Layout(hd_std::move(static_cast<const Layout&>(other)))
       , Storage()
     {
       this->m_data = other.data();
@@ -312,7 +304,7 @@ namespace ncarray {
      *       This is a host-only constructor.
      */
     ArrayImpl& operator=(const ArrayImpl& other)
-      requires is_base_of_v<OwnerTag, Storage>
+      requires hd_std::is_base_of_v<OwnerTag, Storage>
     {
       if (this != &other) {
         *this = ArrayImpl(other);
@@ -327,11 +319,11 @@ namespace ncarray {
      *       This is a host-only constructor.
      */
     ArrayImpl& operator=(ArrayImpl&& other) noexcept
-      requires is_base_of_v<OwnerTag, Storage>
+      requires hd_std::is_base_of_v<OwnerTag, Storage>
     {
       if (this != &other) {
-        Layout::operator=(move(static_cast<Layout&>(other)));
-        Storage::operator=(move(static_cast<Storage&>(other)));
+        Layout::operator=(hd_std::move(static_cast<Layout&>(other)));
+        Storage::operator=(hd_std::move(static_cast<Storage&>(other)));
 
         this->m_data = this->m_storage.get();
       }
@@ -348,7 +340,7 @@ namespace ncarray {
      * @note This constructor is compatible with device code.
      */
     NCA_HD ArrayImpl& operator=(const ArrayImpl& other)
-      requires (!is_base_of_v<OwnerTag, Storage>)
+      requires (!hd_std::is_base_of_v<OwnerTag, Storage>)
     {
       if (this != &other) {
         *this = ArrayImpl(other);
@@ -363,13 +355,13 @@ namespace ncarray {
      * @note This constructor is compatible with device code.
      */
     NCA_HD ArrayImpl& operator=(ArrayImpl&& other) noexcept
-      requires (!is_base_of_v<OwnerTag, Storage>)
+      requires (!hd_std::is_base_of_v<OwnerTag, Storage>)
     {
       if (this != &other) {
-        Layout::operator=(move(static_cast<Layout&>(other)));
-        Storage::operator=(move(static_cast<Storage&>(other)));
+        Layout::operator=(hd_std::move(static_cast<Layout&>(other)));
+        Storage::operator=(hd_std::move(static_cast<Storage&>(other)));
 
-        if constexpr (is_base_of_v<RefTag, Storage>) {
+        if constexpr (hd_std::is_base_of_v<RefTag, Storage>) {
           for (ssize_t i = 0; i < this->ndim(); ++i) {
             this->m_ref_ptrs[i] = other.m_ref_ptrs[i];
           }
@@ -410,10 +402,10 @@ namespace ncarray {
       this->m_shape.set(shape_.data, ndim);
       this->m_strides.set(strides_.data, ndim);
 
-      if constexpr (is_same_v<Layout, NCOffsetsPolicy>) {
+      if constexpr (hd_std::is_same_v<Layout, NCOffsetsPolicy>) {
         this->m_offsets.ndim = this->ndim();
         this->m_offsets.set(offsets_.data, ndim);
-      } else if constexpr (is_same_v<Layout, SOArrayPolicy>) {
+      } else if constexpr (hd_std::is_same_v<Layout, SOArrayPolicy>) {
         this->m_suboffsets.ndim = this->ndim();
         this->m_suboffsets.set(offsets_.data, ndim);
       }
@@ -448,10 +440,10 @@ namespace ncarray {
       this->m_pointer_axis = pointer_axis_;
       this->m_read_only = read_only_;
       for (ssize_t i = 0; i < this->ndim(); ++i) {
-        if constexpr (is_same_v<Layout, NCOffsetsPolicy>) {
+        if constexpr (hd_std::is_same_v<Layout, NCOffsetsPolicy>) {
           this->m_offsets.ndim = ndim;
           this->m_offsets[i] = 0;
-        } else if constexpr (is_same_v<Layout, SOArrayPolicy>) {
+        } else if constexpr (hd_std::is_same_v<Layout, SOArrayPolicy>) {
           this->m_suboffsets.ndim = ndim;
           this->m_suboffsets[i] = -1;
         }
@@ -898,7 +890,7 @@ namespace ncarray {
      * @param coords The coords to use to index to proxy reference.
      * @returns The proxy reference pointed to by the provided coords.
      */
-    NCA_HD ArrayElementProxy operator[](initializer_list<uint64_t> coords) {
+    NCA_HD ArrayElementProxy operator[](hd_std::initializer_list<hd_std::uint64_t> coords) {
       assert(coords.size() == static_cast<size_t>(this->ndim()));
       void* out_data = const_cast<void*>(this->data());
 
@@ -921,7 +913,7 @@ namespace ncarray {
      * @param coords The coords to use to index to proxy reference.
      * @returns The proxy reference pointed to by the provided coords.
      */
-    NCA_HD const ArrayElementProxy operator[](initializer_list<uint64_t> coords) const {
+    NCA_HD const ArrayElementProxy operator[](hd_std::initializer_list<hd_std::uint64_t> coords) const {
       assert(coords.size() == static_cast<size_t>(this->ndim()));
       const void* out_data = this->data();
 

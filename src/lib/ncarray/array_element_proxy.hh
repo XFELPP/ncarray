@@ -15,13 +15,13 @@
 #ifdef __CUDACC_RTC__
 #include <cuda/std/type_traits>
 
-using cuda::std::enable_if_t;
+namespace hd_std = cuda::std;
 
 #else
 
 #include <type_traits>
 
-using std::enable_if_t;
+namespace hd_std = std;
 
 #endif
 
@@ -59,7 +59,7 @@ namespace ncarray {
      *           issues, particularly with bool coercions.
      * @returns Reference to the array element as the requested type.
      */
-    template <typename T, typename = enable_if_t<is_in_type_list_v<T, all_supported_types>>>
+    template <typename T, typename = hd_std::enable_if_t<is_in_type_list_v<T, all_supported_types>>>
     NCA_HD inline operator T&() const {
       return *reinterpret_cast<T*>(m_data);
     }
@@ -73,7 +73,7 @@ namespace ncarray {
      *           issues, particularly with bool coercions.
      * @returns Const reference to the array element as the requested type.
      */
-    template <typename T, typename = enable_if_t<is_in_type_list_v<T, all_supported_types>>>
+    template <typename T, typename = hd_std::enable_if_t<is_in_type_list_v<T, all_supported_types>>>
     NCA_HD inline operator const T&() const {
       return *reinterpret_cast<const T*>(m_data);
     }
