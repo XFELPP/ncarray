@@ -35,11 +35,23 @@ def get_lib_dir() -> str:
     if os.path.exists(nca_wheel_lib_dir):
         return nca_wheel_lib_dir
 
+    # Check split-wheel: site-packages/ncarray/.dylibs
+    #                    site-packages/ncarray/.libs
+    nca_wheel_dot_dylibs_dir: str = os.path.join(py_package_dir, ".dylibs")
+    if os.path.exists(nca_wheel_dot_dylibs_dir):
+        return nca_wheel_dot_dylibs_dir
+
+    nca_wheel_dot_libs_dir: str = os.path.join(py_package_dir, ".libs")
+    if os.path.exists(nca_wheel_dot_libs_dir):
+        return nca_wheel_dot_libs_dir
+
     # Check split-wheel: site-packages/ncarray/libncarray.so
     #                    site-packages/ncarray.libs/libncarray.so
     parent_dir: str = os.path.dirname(py_package_dir)
     for folder in os.listdir(parent_dir):
-        if "ncarray" in folder and folder != os.path.basename(py_package_dir):
+        if (
+            "ncarray" in folder or "dylib" in folder or "lib" in folder
+        ) and folder != os.path.basename(py_package_dir):
             libs_dir: str = os.path.join(parent_dir, folder)
             if not os.path.isdir(libs_dir):
                 continue
