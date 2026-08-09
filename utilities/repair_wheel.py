@@ -100,8 +100,6 @@ def main():
             [
                 "--exclude",
                 "libeagereval.1.dylib",
-                "--lib-sdir",
-                ".",
                 "-w",
                 dest_dir,
                 wheel_path,
@@ -155,7 +153,7 @@ def main():
                         for name in z.namelist()
                         if "libnvrtc-" in os.path.basename(name)
                     ),
-                    None,
+                    "",
                 )
 
                 if not libs_dir:
