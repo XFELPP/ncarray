@@ -163,6 +163,7 @@ jobs:
 
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
+    needs: build_core
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -170,7 +171,11 @@ jobs:
       matrix:
         # windows-latest was updated to MSVC 19.51 which is outside of our supported
         # compiler matrix so pinned to windows-2022 for now
-        os: [ubuntu-latest, windows-2022]
+        include:
+          - target: linux-glibc-x86_64
+            os: ubuntu-latest
+          - target: windows-x86_64
+            os: windows-2022
 
     steps:
       - name: Free Unused Disk Space
@@ -352,7 +357,7 @@ jobs:
 
   # Create release, publish
   create_release_and_publish_to_pypi:
-    needs: [build_wheels, build_sdist]
+    needs: [build_core, build_wheels, build_sdist]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -372,6 +377,13 @@ jobs:
         # Currently disabled by default pending quota request
         if: inputs.publish_to_pypi == true
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b          # v1.14.0
+
+      - name: Gather libncarray
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c            # v8
+        with:
+          pattern: libncarray*
+          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b          # v3.0.1
