@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5] - 2026-08-09
+
+### Added
+- Create per-platform bundles of shared libraries independently of the Python wheels.
+- Add `pkg-config` file generation. Python wheels provide a small command-line utility to find it.
+
+### Changed
+- Run the CI builds with a true split stage building C++ libraries first followed by solely Python with cibuildwheel.
+
+### Fixed
+- Fixed broken Python 3.8 wheel on macOS where extension module was partially bundled as Python 3.14.
+
 ## [0.7.4] - 2026-08-07
 
 ### Fixed
