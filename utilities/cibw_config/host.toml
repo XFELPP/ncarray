@@ -58,7 +58,7 @@ CCACHE_DIR = ".ccache"
 PIP_RETRIES = "20"
 MACOSX_DEPLOYMENT_TARGET = "11.0"
 # Not able to find cmake in wheel step otherwise?
-PATH = "/Applications/CMake.app/Contents/bin:{project}/install/bin:$(pwd)/install/bin:$GITHUB_WORKSPACE/install/bin:$PATH:/opt/homebrew/bin:/usr/local/bin"
+PATH = "$PATH:/Applications/CMake.app/Contents/bin:{project}/install/bin:$(pwd)/install/bin:$GITHUB_WORKSPACE/install/bin:/opt/homebrew/bin:/usr/local/bin"
 LIBRARY_PATH = "{project}/install/lib:$(pwd)/install/lib:$GITHUB_WORKSPACE/install/lib:$LIBRARY_PATH"
 DYLD_LIBRARY_PATH = "{project}/install/lib:$(pwd)/install/lib:$GITHUB_WORKSPACE/install/lib:$DYLD_LIBRARY_PATH"
 LDFLAGS = "-L$GITHUB_WORKSPACE/install/lib -L$(pwd)/install/lib -L{project}/install/lib"

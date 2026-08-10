@@ -334,8 +334,6 @@ if nca_has_cuda
     pc_libs += [libncdevarray]
 endif
 
-pc_headers = ['.', 'ncarray']
-
 feature_flags = []
 if nca_has_cuda
     feature_flags += ['-DNCA_HAS_CUDA']
