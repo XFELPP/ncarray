@@ -1,11 +1,13 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.7.4',
+    version: '0.7.5',
+    meson_version: '>=1.10.0',
     default_options: [
         'cpp_std=c++23,c++latest',
         'cuda_std=c++20',
         'optimization=3',
+        'pkgconfig.relocatable=true',
     ],
 )
 add_languages('cpp', native: true, required: true)
@@ -194,7 +196,6 @@ endif
 if nca_has_cuda
     # CUDA driver and nvrtc are both for JIT
     cuda_dep = dependency('cuda', modules: ['cuda', 'cudart', 'nvrtc'])
-    deps_for_ncarray += cuda_dep
 
     # On Windows need symbol demangling for the JIT compiler.
     dbghelp_dep = []
@@ -222,13 +223,7 @@ if build_core_opt
     asmjit_proj = cmake.subproject('asmjit', options: asmjit_opts)
     asmjit_dep = asmjit_proj.dependency('asmjit')
 else
-    # I have no idea what happens in macOS cibuildwheel. But despite cmake being available
-    # cmake being pip installed, brew installed, and cmake being used to BUILD libncarray
-    # it is incapable of finding cmake during the actual wheel phase on GitHub runner.
-    # Gave up. Hopefully since its statically linked to the libncarray etc it's fine to
-    # just make this empty.
-    asmjit_inc = include_directories('subprojects/asmjit')
-    asmjit_dep = declare_dependency(include_directories: asmjit_inc)
+    asmjit_dep = declare_dependency()
 endif
 
 #### Main Python Setup ####
@@ -318,3 +313,35 @@ subdir('examples')
 
 # Build the test suite
 subdir('tests')
+
+# Setup a pkgconfig file now after the build completed.
+pkg = import('pkgconfig')
+
+if build_core_opt and not nca_as_wheel_opt
+    pc_install_dir = get_option('libdir') / 'pkgconfig'
+else
+    pc_install_dir = py_install_dir / 'ncarray/pkgconfig'
+endif
+
+pc_libs = [libncarray, libncarrayjit]
+if nca_has_cuda
+    pc_libs += [libncdevarray]
+endif
+
+feature_flags = []
+if nca_has_cuda
+    feature_flags += ['-DNCA_HAS_CUDA']
+endif
+
+pc_headers = ['.', 'ncarray']
+pkg.generate(
+    name: 'ncarray',
+    description: 'Non-contiguous multi-dimensional arrays.',
+    libraries: pc_libs,
+    extra_cflags: feature_flags,
+    subdirs: pc_headers,
+    version: meson.project_version(),
+    url: 'https://ncarray.xfelpp.org',
+    license: 'MPL-2.0',
+    install_dir: pc_install_dir,
+)

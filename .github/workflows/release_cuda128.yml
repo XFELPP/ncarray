@@ -18,48 +18,47 @@ on:
 
 jobs:
   # Build binaries
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+  build_core:
+    name: Build libncarray (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    # Disable this for forks. Its expensive, and the PyPI portion will fail later
+    if: ${{ github.repository == 'XFELPP/ncarray' }}
     strategy:
       fail-fast: false
-      max-parallel: 6
       matrix:
-        # windows-latest was updated to MSVC 19.51 which is outside of our supported
-        # compiler matrix so pinned to windows-2022 for now
-        os: [ubuntu-latest, windows-2022]
+        include:
+          - target: linux-glibc-x86_64
+            os: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - target: windows-x86_64
+            os: windows-2022
+            container: null
 
     steps:
       - name: Free Unused Disk Space
         if: runner.os == 'Linux'
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /usr/lib/jvm
+          if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else SUDO=""; fi
+          $SUDO rm -rf /usr/share/dotnet
+          $SUDO rm -rf /usr/local/lib/android
+          $SUDO rm -rf /opt/ghc
+          $SUDO rm -rf /usr/local/.ghcup
+          $SUDO rm -rf /usr/share/swift
+          $SUDO rm -rf /usr/lib/jvm
           df -h
 
       - name: Create Swap File
         if: runner.os == 'Linux'
         run: |
-          sudo fallocate -l 12G /swapfile_ncarray
-          sudo chmod 600 /swapfile_ncarray
-          sudo mkswap /swapfile_ncarray
-          sudo swapon /swapfile_ncarray
+          if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else SUDO=""; fi
+          $SUDO fallocate -l 12G /swapfile_ncarray || $SUDO dd if=/dev/zero of=/swapfile_ncarray bs=1M count=12288
+          $SUDO chmod 600 /swapfile_ncarray
+          $SUDO mkswap /swapfile_ncarray
+          $SUDO swapon /swapfile_ncarray || true
           free -h
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0                     # v7
-
-        # MANUALLY try and pull this down. So Windows doesn't break.... every time
-      - name: PRE-DOWNLOAD
-        shell: bash
-        run: |
-          mkdir -p .cibw_cache
-          for i in {1..5}; do
-            curl -L -o .cibw_cache/virtualenv-20.27.1.pyz https://raw.githubusercontent.com/pypa/get-virtualenv/20.27.1/public/virtualenv.pyz && break || sleep 15
-          done
 
       # Cache pip (for speedup)
       - name: Cache pip
@@ -113,6 +112,178 @@ jobs:
         with:
           arch: amd64
 
+      - name: Build libncarray (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH += ";$GITHUB_WORKSPACE/install/bin;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/bin"
+          $env:CUDA_PATH = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
+          $env:CUDA_HOME = "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
+          $env:LIB += ";$GITHUB_WORKSPACE/install/lib"
+          python -m pip install meson ninja
+          meson setup builddir -Dbuild_core=true -Dbuild_python=false -Dnca_as_wheel=false -Dbuildtype=release --prefix="$((Get-Location).Path)\install"
+          meson compile -j 2 -C builddir
+          meson install -C builddir
+
+      - name: Build libncarray (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if command -v apt-get >/dev/null; then
+              apt-get update && apt-get install -y ccache
+          elif command -v dnf >/dev/null; then
+              dnf install -y epel-release && dnf install -y ccache
+          elif command -v yum >/dev/null; then
+              yum install -y epel-release && yum install -y ccache
+          elif command -v apk >/dev/null; then
+              apk add ccache
+          fi
+          ccache -z
+
+          mkdir install
+          /opt/python/cp310-cp310/bin/pip install meson ninja
+          export PATH="/opt/python/cp310-cp310/bin:$PATH"
+          export LD_LIBRARY_PATH="/project/install/lib:/project/install/lib64:/usr/local/cuda-12.8/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+          export LIBRARY_PATH="/project/install/lib:/project/install/lib64:$LIBRARY_PATH"
+          export CUDA_PATH="/usr/local/cuda-12.8"
+          export CUDA_HOME="/usr/local/cuda-12.8"
+          export PATH="/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH"
+          meson setup builddir -Dbuild_core=true -Dbuild_python=false -Dnca_as_wheel=false -Dbuildtype=release --prefix=$(pwd)/install
+          meson compile -j 2 -C builddir
+          meson install -C builddir
+
+      - name: Create Lib Release Tarball
+        shell: bash
+        run: |
+          tar -czvf libncarray_${{ github.ref_name }}-cuda128_${{ matrix.target }}.tar.gz -C install .
+
+      - name: Upload Core Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libncarray_${{ github.ref_name }}-cuda128_${{ matrix.target }}
+          path: libncarray_${{ github.ref_name }}-cuda128_${{ matrix.target }}.tar.gz
+
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    needs: build_core
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        # windows-latest was updated to MSVC 19.51 which is outside of our supported
+        # compiler matrix so pinned to windows-2022 for now
+        include:
+          - target: linux-glibc-x86_64
+            os: ubuntu-latest
+          - target: windows-x86_64
+            os: windows-2022
+
+    steps:
+      - name: Free Unused Disk Space
+        if: runner.os == 'Linux'
+        run: |
+          if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else SUDO=""; fi
+          $SUDO rm -rf /usr/share/dotnet
+          $SUDO rm -rf /usr/local/lib/android
+          $SUDO rm -rf /opt/ghc
+          $SUDO rm -rf /usr/local/.ghcup
+          $SUDO rm -rf /usr/share/swift
+          $SUDO rm -rf /usr/lib/jvm
+          df -h
+
+      - name: Create Swap File
+        if: runner.os == 'Linux'
+        run: |
+          if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else SUDO=""; fi
+          $SUDO fallocate -l 12G /swapfile_ncarray || $SUDO dd if=/dev/zero of=/swapfile_ncarray bs=1M count=12288
+          $SUDO chmod 600 /swapfile_ncarray
+          $SUDO mkswap /swapfile_ncarray
+          $SUDO swapon /swapfile_ncarray || true
+          free -h
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0                     # v7
+
+        # MANUALLY try and pull this down. So Windows doesn't break.... every time
+      - name: PRE-DOWNLOAD
+        shell: bash
+        run: |
+          mkdir -p .cibw_cache
+          for i in {1..5}; do
+            curl -L -o .cibw_cache/virtualenv-20.27.1.pyz https://raw.githubusercontent.com/pypa/get-virtualenv/20.27.1/public/virtualenv.pyz && break || sleep 15
+          done
+
+      # Cache pip (for speedup)
+      - name: Cache pip
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9                        # v6
+        with:
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # Cache ccache (for speedup)
+      - name: Cache ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9                        # v6
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      # interpreter caching (to avoid running into HTTP request rate limiting)
+      - name: Cache cibuildwheel
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9                        # v6
+        with:
+          path: .cibw_cache
+          key: ${{ runner.os }}-cibw-v1
+          restore-keys: |
+            ${{ runner.os }}-cibw-
+
+      - name: Grab Windows CUDA
+        uses: Jimver/cuda-toolkit@406fa58d8abbf1bad2edd217b58b073dd2f548e4                  # v0.2.34
+        if: runner.os == 'Windows'
+        id: cuda-toolkit
+        with:
+          cuda: '12.8.0'
+          use-github-cache: 'false'
+
+      - name: Download libncarray
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c            # v8
+        with:
+          name: libncarray_${{ github.ref_name }}-cuda128_${{ matrix.target }}
+          path: core
+
+      - name: Extract libncarray (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p install
+          tar -xzvf core/*.tar.gz -C install
+
+      - name: Extract libncarray (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path install -Force
+          Get-ChildItem core/*.tar.gz | ForEach-Object { tar xzvf $_.FullName -C install }
+
+      - name: Clean Strawberry Perl (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $paths = $env:PATH -split ';' | Where-Object { $_ -notlike '*Strawberry*' }
+          $newPath = $paths -join ';'
+          echo "PATH=$newPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756                  # v1
+        if: runner.os == 'Windows'
+        with:
+          arch: amd64
+
       - name: Update Version for Variant
         shell: bash
         run: |
@@ -125,17 +296,32 @@ jobs:
           config-file: "{package}/utilities/cibw_config/cuda128.toml"
         env:
           CIBW_BUILD: "cp38-*"
+          CIBW_SKIP: "${{ matrix.cibw_skip }} *i686 *-win32"
           CIBW_CACHE_PATH: ".cibw_cache"
+          SYSTEM_VERSION_COMPAT: "0"
           PreferredToolArchitecture: "x64"
 
-      - name: Build 3.9 and later wheels
+      - name: Build 3.9 through 3.13 wheels
+        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55                    # v4.1.0
+        with:
+          config-file: "{package}/utilities/cibw_config/cuda128.toml"
+        env:
+          CIBW_CACHE_PATH: ".cibw_cache"
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-*"
+          CIBW_SKIP: "${{ matrix.cibw_skip }} *i686 *-win32"
+          SYSTEM_VERSION_COMPAT: "0"
+          PreferredToolArchitecture: "x64"
+
+      - name: Build 3.14(t) and 3.15(t) wheels
         uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55                    # v4.1.0
         with:
           config-file: "{package}/utilities/cibw_config/cuda128.toml"
         env:
           CIBW_CACHE_PATH: ".cibw_cache"
           CIBW_ENABLE: "cpython-prerelease"
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-* cp315-* cp315t-*"
+          CIBW_BUILD: "cp314-* cp314t-* cp315-* cp315t-*"
+          CIBW_SKIP: "${{ matrix.cibw_skip }} *i686 *-win32"
+          SYSTEM_VERSION_COMPAT: "0"
           PreferredToolArchitecture: "x64"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a              # v7.0.1
@@ -174,7 +360,7 @@ jobs:
 
   # Create release, publish
   create_release_and_publish_to_pypi:
-    needs: [build_wheels, build_sdist]
+    needs: [build_core, build_wheels, build_sdist]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -194,6 +380,13 @@ jobs:
         # Currently disabled by default pending quota request
         if: inputs.publish_to_pypi == true
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b          # v1.14.0
+
+      - name: Gather libncarray
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c            # v8
+        with:
+          pattern: libncarray*
+          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b          # v3.0.1

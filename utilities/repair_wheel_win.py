@@ -1,10 +1,48 @@
 #!python
-import os
-import sys
 import glob
+import os
+import re
+import sys
 import subprocess
 import zipfile
 from typing import List, Optional
+
+
+def update_pc_in_repaired_wheel(whl_path: str):
+    with zipfile.ZipFile(whl_path, "r") as z:
+        pc_path_in_whl: str = next(
+            (f for f in z.namelist() if f.endswith("ncarray.pc")), None
+        )
+        if not pc_path_in_whl:
+            return
+
+        pc_content: str = z.read(pc_path_in_whl).decode("utf-8")
+
+        repaired_libs: List[str] = [
+            f
+            for f in z.namelist()
+            if re.search(r"(ncarray|ncarrayjit|ncdevarray)[a-zA-Z0-9_\-]*\.lib", f)
+        ]
+
+    if repaired_libs and pc_content:
+        pc_dir: str = os.path.dirname(pc_path_in_whl)
+        updated_libs: List[str] = []
+        for lib in repaired_libs:
+            rel_lib_path: str = os.path.relpath(lib, start=pc_dir).replace("\\", "/")
+            updated_libs.append(rel_lib_path)
+
+        new_link_str: str = " ".join(f"${{pcfiledir}}/{rl}" for rl in updated_libs)
+        updated_content: str = re.sub(r"Libs:.*", f"Libs: {new_link_str}", pc_content)
+
+        temp_whl: str = whl_path + ".tmp"
+        with zipfile.ZipFile(whl_path, "r") as zin:
+            with zipfile.ZipFile(temp_whl, "w", compression=zin.compression) as zout:
+                for item in zin.infolist():
+                    if item.filename == pc_path_in_whl:
+                        zout.writestr(item, updated_content.encode("utf-8"))
+                    else:
+                        zout.writestr(item, zin.read(item.filename))
+        os.replace(temp_whl, whl_path)
 
 
 def main():
@@ -24,7 +62,13 @@ def main():
     bin_dir: str = os.path.normpath(os.path.join(root_dir, "install", "bin"))
     lib_dir: str = os.path.normpath(os.path.join(root_dir, "install", "lib"))
 
-    delvewheel_cmd: List[str] = ["delvewheel", "repair", "--no-dll", "eagereval-1.dll"]
+    delvewheel_cmd: List[str] = [
+        "delvewheel",
+        "repair",
+        "--include-imports",
+        "--no-dll",
+        "eagereval-1.dll",
+    ]
     if not no_exclude_core:
         delvewheel_cmd.extend(
             [
@@ -76,16 +120,7 @@ def main():
     delvewheel_cmd.extend(["-w", dest_dir, wheel_path])
 
     subprocess.run(delvewheel_cmd, check=True)
-
-    # Add back `.lib` files.... How on erth does Windows build system work!??!?
-    repaired_wheels: List[str] = glob.glob(os.path.join(dest_dir, "*.whl"))
-    for whl in repaired_wheels:
-        print(f"Injecting .lib import libraries into {whl}...")
-        with zipfile.ZipFile(whl, "a") as z:
-            for lib_file in glob.glob(os.path.join(lib_dir, "*.lib")):
-                target_path: str = f"ncarray/lib/{os.path.basename(lib_file)}"
-                print(f"  Adding {lib_file} -> {target_path}")
-                z.write(lib_file, target_path)
+    update_pc_in_repaired_wheel(whl_path=wheel_path)
 
 
 if __name__ == "__main__":
