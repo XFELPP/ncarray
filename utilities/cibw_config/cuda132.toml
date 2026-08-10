@@ -31,6 +31,27 @@ config-settings = { "setup-args" = ["-Dbuild_core=false", "-Dbuildtype=release"]
 [tool.cibuildwheel.linux]
 # The CI YAML pulls cuda-toolkit and determines version.
 # Just setup links here.
+before-all = [
+    """
+    if command -v apt-get >/dev/null; then
+        apt-get update && apt-get install -y ccache
+    elif command -v dnf >/dev/null; then
+        if [ "$(uname -m)" = "aarch64" ]; then
+            NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/sbsa/cuda-rhel8.repo"
+        else
+            NVIDIA_URL="https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo"
+        fi
+        dnf config-manager --add-repo $NVIDIA_URL && dnf clean all && dnf -y install cuda-nvcc-13-2 cuda-cudart-devel-13-2 cuda-nvrtc-devel-13-2 cuda-cccl-13-2 cuda-driver-devel-13-2
+        ln -sf /usr/local/cuda-13.2 /usr/local/cuda
+        dnf install -y epel-release && dnf install -y ccache
+    elif command -v yum >/dev/null; then
+        yum install -y epel-release && yum install -y ccache
+    elif command -v apk >/dev/null; then
+        apk add ccache
+    fi
+    ccache -z
+    """,
+]
 repair-wheel-command = "python utilities/repair_wheel.py {wheel} {dest_dir} --no-exclude-core"
 
 [tool.cibuildwheel.linux.environment]

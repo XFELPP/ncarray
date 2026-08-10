@@ -10,7 +10,7 @@ from typing import List, Optional
 
 def update_pc_in_repaired_wheel(whl_path: str):
     with zipfile.ZipFile(whl_path, "r") as z:
-        pc_path_in_whl: str = next(
+        pc_path_in_whl: Optional[str] = next(
             (f for f in z.namelist() if f.endswith("ncarray.pc")), None
         )
         if not pc_path_in_whl:
@@ -21,7 +21,10 @@ def update_pc_in_repaired_wheel(whl_path: str):
         repaired_libs: List[str] = [
             f
             for f in z.namelist()
-            if re.search(r"(ncarray|ncarrayjit|ncdevarray)[a-zA-Z0-9_\-]*\.lib", f)
+            if re.search(
+                r"^(lib)?(ncarrayjit|ncarray|ncdevarray)[a-zA-Z0-9_.\-]*\.lib",
+                os.path.basename(f),
+            )
         ]
 
     if repaired_libs and pc_content:
@@ -31,8 +34,23 @@ def update_pc_in_repaired_wheel(whl_path: str):
             rel_lib_path: str = os.path.relpath(lib, start=pc_dir).replace("\\", "/")
             updated_libs.append(rel_lib_path)
 
+        # Update the includedir and libdir to point inside the wheel
+        # Leave prefix as is I guess?
+        whl_inc_dir: str = os.path.normpath(f"{pc_dir}/../include")
+        rel_inc_dir: str = os.path.relpath(whl_inc_dir, start=pc_dir).replace("\\", "/")
+
+        whl_lib_dir: str = os.path.normpath(os.path.dirname(repaired_libs[0]))
+        rel_lib_dir: str = os.path.relpath(whl_lib_dir, start=pc_dir).replace("\\", "/")
+
+        updated_content: str = re.sub(
+            r"includedir=.*", f"includedir=${{pcfiledir}}/{rel_inc_dir}", pc_content
+        )
+        updated_content = re.sub(
+            r"libdir=.*", f"libdir=${{pcfiledir}}/{rel_lib_dir}", updated_content
+        )
+
         new_link_str: str = " ".join(f"${{pcfiledir}}/{rl}" for rl in updated_libs)
-        updated_content: str = re.sub(r"Libs:.*", f"Libs: {new_link_str}", pc_content)
+        updated_content = re.sub(r"Libs:.*", f"Libs: {new_link_str}", updated_content)
 
         temp_whl: str = whl_path + ".tmp"
         with zipfile.ZipFile(whl_path, "r") as zin:
@@ -62,22 +80,25 @@ def main():
     bin_dir: str = os.path.normpath(os.path.join(root_dir, "install", "bin"))
     lib_dir: str = os.path.normpath(os.path.join(root_dir, "install", "lib"))
 
+    # There seems to be no possible way to have a soversion included in the (with meson)
+    # import lib .lib in Windows. This causes problems with delvewheel when trying
+    # to package the import libs in Python wheels. Just remove it for Windows....
     delvewheel_cmd: List[str] = [
         "delvewheel",
         "repair",
         "--include-imports",
         "--no-dll",
-        "eagereval-1.dll",
+        "eagereval.dll",
     ]
     if not no_exclude_core:
         delvewheel_cmd.extend(
             [
                 "--no-dll",
-                "ncarray-1.dll",
+                "ncarray.dll",
                 "--no-dll",
-                "ncdevarray-1.dll",
+                "ncdevarray.dll",
                 "--no-dll",
-                "ncarrayjit-1.dll",
+                "ncarrayjit.dll",
             ]
         )
 
@@ -120,7 +141,9 @@ def main():
     delvewheel_cmd.extend(["-w", dest_dir, wheel_path])
 
     subprocess.run(delvewheel_cmd, check=True)
-    update_pc_in_repaired_wheel(whl_path=wheel_path)
+    repaired_wheels: List[str] = glob.glob(os.path.join(dest_dir, "*.whl"))
+    for whl in repaired_wheels:
+        update_pc_in_repaired_wheel(whl_path=whl)
 
 
 if __name__ == "__main__":

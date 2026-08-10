@@ -7,6 +7,8 @@ if build_python_opt
         deps_for_py_mod += ncdevarray_dep
     endif
 
+    # NOTE: Because of the soversion implib stuff (see below) no version on the
+    #       Windows variants of the ncarray shared libs.
     # NOTE: The way the CUDA dependencies are linked would cause issues
     # opening host-only extension modules if the CUDA driver is not available. Using
     # DELAYLOAD will avoid the issue on Windows. On Linux, we provide a stub below.
@@ -14,21 +16,30 @@ if build_python_opt
     if nca_has_cuda and cpp.get_id() == 'msvc'
         if cuda_version.version_compare('>=13.0')
             py_mod_link_args += [
-                '/DELAYLOAD:ncdevarray-1.dll',
-                '/DELAYLOAD:ncarrayjit-1.dll',
+                '/DELAYLOAD:ncdevarray.dll',
+                '/DELAYLOAD:ncarrayjit.dll',
                 '/DELAYLOAD:cudart64_13.dll',
                 '/DELAYLOAD:nvrtc64_130_0.dll',
                 'delayimp.lib',
             ]
         else
             py_mod_link_args += [
-                '/DELAYLOAD:ncdevarray-1.dll',
-                '/DELAYLOAD:ncarrayjit-1.dll',
+                '/DELAYLOAD:ncdevarray.dll',
+                '/DELAYLOAD:ncarrayjit.dll',
                 '/DELAYLOAD:cudart64_12.dll',
                 '/DELAYLOAD:nvrtc64_12.dll',
                 'delayimp.lib',
             ]
         endif # cuda 13 casing
+    endif
+
+    # There seems to be no possible way to have a soversion included in the
+    # import lib .lib in Windows. This causes problems with delvewheel when trying
+    # to package the import libs in Python wheels. Just remove it for Windows....
+    if host_machine.system() == 'windows'
+        nca_version_kwargs = {}
+    else
+        nca_version_kwargs = {'version': '1', 'soversion': '1'}
     endif
 
     libeagereval = shared_library(
@@ -44,8 +55,7 @@ if build_python_opt
         install_rpath: py_to_lib_install_rpath,
         build_rpath: py_to_lib_install_rpath,
         link_args: py_mod_link_args,
-        version: '1',
-        soversion: '1',
+        kwargs: nca_version_kwargs,
         override_options: ['b_lundef=false'],
     )
 

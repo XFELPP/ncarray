@@ -22,8 +22,8 @@ def update_pc_in_repaired_wheel(whl_path: str):
             f
             for f in z.namelist()
             if re.search(
-                r"(lib)?(ncarray|ncarrayjit|ncdevarray)[a-zA-Z0-9_\-]*\.(so|dylib|dll)",
-                f,
+                r"^(lib)?(ncarrayjit|ncarray|ncdevarray)[a-zA-Z0-9_.\-]*\.(so|dylib|dll)",
+                os.path.basename(f),
             )
         ]
 
@@ -34,8 +34,23 @@ def update_pc_in_repaired_wheel(whl_path: str):
             rel_lib_path: str = os.path.relpath(lib, start=pc_dir).replace("\\", "/")
             updated_libs.append(rel_lib_path)
 
+        # Update the includedir and libdir to point inside the wheel
+        # Leave prefix as is I guess?
+        whl_inc_dir: str = os.path.normpath(f"{pc_dir}/../include")
+        rel_inc_dir: str = os.path.relpath(whl_inc_dir, start=pc_dir).replace("\\", "/")
+
+        whl_lib_dir: str = os.path.normpath(os.path.dirname(repaired_libs[0]))
+        rel_lib_dir: str = os.path.relpath(whl_lib_dir, start=pc_dir).replace("\\", "/")
+
+        updated_content: str = re.sub(
+            r"includedir=.*", f"includedir=${{pcfiledir}}/{rel_inc_dir}", pc_content
+        )
+        updated_content = re.sub(
+            r"libdir=.*", f"libdir=${{pcfiledir}}/{rel_lib_dir}", updated_content
+        )
+
         new_link_str: str = " ".join(f"${{pcfiledir}}/{rl}" for rl in updated_libs)
-        updated_content: str = re.sub(r"Libs:.*", f"Libs: {new_link_str}", pc_content)
+        updated_content = re.sub(r"Libs:.*", f"Libs: {new_link_str}", updated_content)
 
         temp_whl: str = whl_path + ".tmp"
         with zipfile.ZipFile(whl_path, "r") as zin:
@@ -141,39 +156,38 @@ def main():
             print(
                 "Warning: libnvrtc-builtins.so not found in CUDA directory. Skipping injection."
             )
-            sys.exit(0)
-
-        builtins_file: str = builtins_src[0]
 
         for whl in repaired_wheels:
-            print(f"Injecting builtins into {whl}...")
-            with zipfile.ZipFile(whl, "a") as z:
-                libs_dir: str = next(
-                    (
-                        os.path.dirname(name)
-                        for name in z.namelist()
-                        if "libnvrtc-" in os.path.basename(name)
-                    ),
-                    "",
-                )
-
-                if not libs_dir:
-                    libs_dir = next(
+            if builtins_src:
+                print(f"Injecting builtins into {whl}...")
+                with zipfile.ZipFile(whl, "a") as z:
+                    libs_dir: str = next(
                         (
                             os.path.dirname(name)
                             for name in z.namelist()
-                            if "libcudart-" in os.path.basename(name)
+                            if "libnvrtc-" in os.path.basename(name)
                         ),
-                        "ncarray.libs",
+                        "",
                     )
 
-                for builtins_file in builtins_src:
-                    # Make sure to update symlink'd filenames appropriately
-                    real_file: str = os.path.realpath(builtins_file)
-                    basename: str = os.path.basename(builtins_file)
-                    target_path: str = os.path.join(libs_dir, basename)
-                    print(f"  Adding {real_file} -> {target_path}")
-                    z.write(real_file, target_path)
+                    if not libs_dir:
+                        libs_dir = next(
+                            (
+                                os.path.dirname(name)
+                                for name in z.namelist()
+                                if "libcudart-" in os.path.basename(name)
+                            ),
+                            "ncarray.libs",
+                        )
+
+                    builtins_file: str
+                    for builtins_file in builtins_src:
+                        # Make sure to update symlink'd filenames appropriately
+                        real_file: str = os.path.realpath(builtins_file)
+                        basename: str = os.path.basename(builtins_file)
+                        target_path: str = os.path.join(libs_dir, basename)
+                        print(f"  Adding {real_file} -> {target_path}")
+                        z.write(real_file, target_path)
 
             update_pc_in_repaired_wheel(whl_path=whl)
 
