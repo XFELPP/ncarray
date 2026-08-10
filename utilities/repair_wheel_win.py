@@ -21,9 +21,7 @@ def update_pc_in_repaired_wheel(whl_path: str):
         repaired_libs: List[str] = [
             f
             for f in z.namelist()
-            if re.search(r"ncarray[a-zA-Z0-9_\-]*\.lib", f)
-            if re.search(r"ncarrayjit[a-zA-Z0-9_\-]*\.lib", f)
-            or re.search(r"ncdevarray[a-zA-Z0-9_\-]*\.lib", f)
+            if re.search(r"(ncarray|ncarrayjit|ncdevarray)[a-zA-Z0-9_\-]*\.lib", f)
         ]
 
     if repaired_libs and pc_content:
