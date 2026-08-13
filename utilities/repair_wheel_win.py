@@ -101,6 +101,17 @@ def main():
                 "ncarrayjit.dll",
             ]
         )
+    else:
+        delvewheel_cmd.extend(
+            [
+                "--no-mangle",
+                "ncarray.dll",
+                "--no-mangle",
+                "ncdevarray.dll",
+                "--no-mangle",
+                "ncarrayjit.dll",
+            ]
+        )
 
     delvewheel_search_path: str = f"{lib_dir};{bin_dir}"
 

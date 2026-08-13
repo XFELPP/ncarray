@@ -52,7 +52,9 @@ There are a number of flags which can be provided when running the `meson setup`
 - `build_core` : bool flag for whether to build the C++ libraries.
 - `build_python` : bool flag for whether to build the Python bindings.
 - `nca_cuda_archs` : A string of architectures for building CUDA fat binaries, or, alternatively, the string `all`, in which case architectures `75,80,86,89` and `90` are built (with `compute_90` at the end for PTX forward compatibility).
-- `nca_as_wheel` : bool flag for whether to build as the combined standard wheel. If not, it is expected that the wheel will built as `build_core=true build_python=false` in one phase, and `build_core=false build_python=true` in a second.
+- `nca_as_wheel` : bool flag for whether to build as the combined standard wheel.
+  - NOTE: If not using this flag, it is expected that the wheel will built as `build_core=true build_python=false` in one phase, and `build_core=false build_python=true` in a second.
+  - NOTE: It is possible to do two-phase builds with `nca_as_wheel` set to `true`. This can be somewhat more error-prone, but `build.sh` may have an example for Linux builds.
 - `build_examples` : bool flag for whether to build the example programs. These are small executables and in general are not needed. The tests are always built as part of `build_core`.
 
 ## Compilation

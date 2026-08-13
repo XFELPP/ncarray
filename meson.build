@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.7.5',
+    version: '0.7.6',
     meson_version: '>=1.10.0',
     default_options: [
         'cpp_std=c++23,c++latest',
