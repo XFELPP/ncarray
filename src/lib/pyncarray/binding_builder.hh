@@ -52,6 +52,35 @@ typedef SSIZE_T ssize_t;
 
 namespace py = pybind11;
 
+namespace {
+  static constexpr const char* reshape_doc = R"a(Reshape an array if possible.
+
+For contiguous arrays, reshaping can be a copy-free transformation. It requires
+that the final shape contain the same number of elements as in the inital shape.
+For NON-contiguous arrays, reshaping, in general, is not possible without a copy.
+As such, an explicit flag is passed as an extra parameter to indicate whether the
+reshape should occur by means of a copy operation. If False, an exception is raised.
+For contiguous arrays, the copy flag is ignored.
+
+Args:
+    shape (Sequence[int]): The target shape to reshape the array into.
+
+    copy (bool): Whether reshaping should use a copy. Applies only for non-contiguous
+        arrays, and is ignored for contiguous arrays. Default: False.
+
+Returns:
+    reshaped (View | Owner): The reshaped array if a transformation can be done.
+        For contiguous arrays, the reshaped array is a new view. For non-contiguous
+        arrays, the reshaped array is a new owning copy of the data.
+
+Raises:
+    RuntimeException: Raised if the input and output shapes have different numbers of
+        elements, or if attempting to reshape a non-contiguous array without the copy
+        parameter set to True.
+
+)a";
+} // anonymous namespace
+
 namespace pyncarray {
   /**
    * Global toggle for whether Python will eagerly convert Expr objects to arrays.
@@ -311,6 +340,37 @@ namespace pyncarray {
     .def("squeeze",
          &ArrayT::squeeze,
          "Collapse and remove all axes of length 1.")
+    .def("reshape",
+         [](const ArrayT& self,
+            const std::vector<ssize_t>& shape,
+            bool copy) -> py::object {
+           const ssize_t my_size { self.size() };
+           const ssize_t new_size {
+             std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<ssize_t>{})
+           };
+
+           if (new_size != my_size) {
+             throw std::runtime_error("Cannot reshape " + std::to_string(my_size) +
+                                      " elements into " + std::to_string(new_size));
+           }
+
+           const bool contiguous { self.is_contiguous() };
+           if (!contiguous && !copy) {
+             throw std::runtime_error("Array is not contiguous, and copy was not requested!");
+           } else {
+             if (!contiguous) {
+               // Copy into a new owning array
+               return py::cast(self.copy_as_shape(shape.data(), shape.size()));
+             } else {
+               // Just make the new view (no copy)
+               return py::cast(self.reshape(shape.data(), shape.size()));
+             }
+           }
+
+         },
+         py::arg("shape"),
+         py::arg("copy") = false,
+         reshape_doc)
     .def("astype",
          [](const ArrayT& self, ncarray::DType& dtype_out) {
            return self.astype(dtype_out);
