@@ -1,7 +1,7 @@
 project(
     'ncarray',
     'cpp',
-    version: '0.7.7',
+    version: '0.7.8',
     meson_version: '>=1.10.0',
     default_options: [
         'cpp_std=c++23,c++latest',
@@ -293,6 +293,7 @@ abs_lib_rpath = lib_prefix / py_to_lib_path
 if host_machine.system() == 'darwin'
     exe_install_rpath = '@executable_path' + ':' + ('@executable_path' / exe_to_libncarray) + ':' + abs_exe_rpath
     py_to_lib_install_rpath = '@loader_path' + ':' + ('@loader_path' / py_to_lib_path)  + ':' + abs_lib_rpath
+    py_to_lib_install_rpath = py_to_lib_install_rpath + ':@loader_path/.'
 else
     exe_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / exe_to_libncarray)  + ':' + abs_exe_rpath
     py_to_lib_install_rpath = '$ORIGIN' + ':' + ('$ORIGIN' / py_to_lib_path) + ':' + abs_lib_rpath
