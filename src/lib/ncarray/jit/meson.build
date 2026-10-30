@@ -53,6 +53,7 @@ if build_core_opt
             install: true,
             install_dir: libncarray_install_dir,
             install_rpath: lib_install_rpath,
+            link_args: delay_lib_link_args,
             kwargs: nca_version_kwargs,
         )
     endif # nca_has_cuda
