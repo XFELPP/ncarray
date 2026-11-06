@@ -12,6 +12,7 @@
 #ifdef __CUDACC_RTC__
 typedef long long ssize_t;
 
+#include <cuda/std/concepts>
 #include <cuda/std/type_traits>
 
 namespace hd_std = cuda::std;
@@ -24,6 +25,7 @@ typedef SSIZE_T ssize_t;
 #include <sys/types.h>
 #endif
 
+#include <concepts>
 #include <type_traits>
 
 namespace hd_std = std;

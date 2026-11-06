@@ -84,14 +84,3 @@ def test_scalar_ops():
     res_mul: nca.NCArray = ncarr * 2.0
     # NOTE: Need to squeeze due to extra dim
     assert np.array_equal(np.array(res_mul.squeeze()), arr * 2.0)
-
-
-def test_soarray_ops():
-    """Test simple binary sum with SOArray (suboffsets)."""
-    arr1: npt.NDArray[np.int32] = np.array([2, 4, 6], dtype=np.int32)
-    arr2: npt.NDArray[np.int32] = np.array([1, 2, 3], dtype=np.int32)
-    soarr: nca.SOArrayRef = nca.SOArrayRef(arr1)
-
-    res: nca.SOArray = soarr + arr2
-    # NOTE: Need to squeeze due to extra dim
-    assert np.array_equal(np.array(res.squeeze()), arr1 + arr2)

@@ -177,8 +177,7 @@ void test_fused_generic_add_bin_decomposed(ncarray::NCDevArrayView data,
                                                                                 n_scalars,
                                                                                 expr.ndim(),
                                                                                 expr.shape(),
-                                                                                expr.instrs,
-                                                                                expr.soarray);
+                                                                                expr.instrs);
       auto launch_op = [&] <typename WorkT> () {
         // Sadly prep is missing the lambda dispatch time
         auto prep_start = std::chrono::high_resolution_clock::now();
@@ -332,7 +331,6 @@ void test_fused_stencil_binning(ncarray::NCDevArrayView data,
   // 1. The "offsets" which are really indices that create the sub-views of the array
   // 2. The compiled kernel is specific to arrays with the same number of location
   //    of pointer axes, so the pointer axis info must be provided.
-  // 3. Whether to use SOArrayPolicy as the layout traversal.
   auto alloc_start = std::chrono::high_resolution_clock::now();
   ncarray::NCDevArray res(res_shape, ncarray::DType::float32);
   auto alloc_end = std::chrono::high_resolution_clock::now();
@@ -371,8 +369,7 @@ void test_fused_stencil_binning(ncarray::NCDevArrayView data,
   auto binning_stencil = ncarray::Stencil<3>::create<float>(offsets,
                                                             is_pointer_axis,
                                                             binning_expr,
-                                                            /*ext=*/{},
-                                                            /*is_soarr=*/false);
+                                                            /*ext=*/{});
 
   auto stencil_end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> stencil_diff = stencil_end - stencil_start;

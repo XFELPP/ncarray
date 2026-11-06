@@ -72,7 +72,7 @@ namespace ncarray {
   struct DynamicExprMVNode : public ExpressionTag, public ExprOpInterface {
     const Instruction* instrs { nullptr };         ///< Instruction stack
 
-    const SOArrayPolicy* layouts { nullptr };      ///< Array layout operands
+    const NCOffsetsPolicy* layouts { nullptr };      ///< Array layout operands
     const void* const * data { nullptr };          ///< Array data
     const DType* arr_dtypes { nullptr };           ///< Datatypes for arrays
 
@@ -115,8 +115,8 @@ namespace ncarray {
       offset += n_instrs * sizeof(Instruction);
       offset = align(offset);
 
-      size_t aligned_layout_size { align(sizeof(SOArrayPolicy)) };
-      layouts = reinterpret_cast<const SOArrayPolicy*>(buf + offset);
+      size_t aligned_layout_size { align(sizeof(NCOffsetsPolicy)) };
+      layouts = reinterpret_cast<const NCOffsetsPolicy*>(buf + offset);
       offset += n_layouts * aligned_layout_size;
 
       data = reinterpret_cast<const void* const *>(buf + offset);
@@ -159,21 +159,17 @@ namespace ncarray {
             stack[++top] = this->md_to_lin<WorkT>(coords);
             break;
           }
-          case OpCode::LOAD_NCARR:
-          case OpCode::LOAD_SOARR: {
+          case OpCode::LOAD_NCARR: {
             int arr_idx = get_index(instr);
             const hd_std::uint8_t* layout_ptr = reinterpret_cast<const hd_std::uint8_t*>(layouts);
             size_t aligned_offset =
-              arr_idx * ((sizeof(SOArrayPolicy) + (arr_alignment - 1)) & ~(arr_alignment - 1));
-            const auto& view = *reinterpret_cast<const SOArrayPolicy*>(layout_ptr + aligned_offset);
+              arr_idx * ((sizeof(NCOffsetsPolicy) + (arr_alignment - 1)) & ~(arr_alignment - 1));
+            const auto& view = *reinterpret_cast<const NCOffsetsPolicy*>(layout_ptr + aligned_offset);
 
             DType src_dtype { arr_dtypes[arr_idx] };
             const void* ptr { nullptr };
-            if (op == OpCode::LOAD_NCARR) {
-              ptr = reinterpret_cast<const NCOffsetsPolicy&>(view).advance(data[arr_idx], coords);
-            } else {
-              ptr = view.advance(data[arr_idx], coords);
-            }
+
+            ptr = view.advance(data[arr_idx], coords);
 
             int src_idx { static_cast<int>(src_dtype) };
 
@@ -260,7 +256,7 @@ namespace ncarray {
     auto n_arrays = node.layouts.size();
     auto n_scalars = node.scalars.size();
 
-    size_t aligned_layout_size { align(sizeof(SOArrayPolicy)) };
+    size_t aligned_layout_size { align(sizeof(NCOffsetsPolicy)) };
     size_t total_bytes =
       align(n_instrs  * sizeof(Instruction)) + // Packed instructions
       n_arrays  * aligned_layout_size        + // Array layout structs
@@ -291,9 +287,9 @@ namespace ncarray {
     offset += node.instrs.size() * sizeof(Instruction);
     offset = align(offset);
 
-    size_t aligned_layout_size { align(sizeof(SOArrayPolicy)) };
+    size_t aligned_layout_size { align(sizeof(NCOffsetsPolicy)) };
     for (size_t i = 0; i < n_arrays; ++i) {
-      auto* layout_ptr = reinterpret_cast<SOArrayPolicy*>(h_ptr + offset + i * aligned_layout_size);
+      auto* layout_ptr = reinterpret_cast<NCOffsetsPolicy*>(h_ptr + offset + i * aligned_layout_size);
       *layout_ptr = node.layouts[i];
     }
     offset += aligned_layout_size * n_arrays;

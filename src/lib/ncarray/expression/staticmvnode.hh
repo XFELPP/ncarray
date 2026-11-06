@@ -125,7 +125,7 @@ namespace ncarray {
         int idx = get_index(instr);
         OpCode op = get_op(instr);
 
-        if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+        if (op == OpCode::LOAD_NCARR) {
           op_map[operand_ptr++] = idx;
         } else if (op == OpCode::IDX) {
           // The IDX/IOTA (APL style index generator) is treated as a virtual load
@@ -193,23 +193,17 @@ namespace ncarray {
     }
     int stack_depth = 0;
     bool seen_arr { false };
-    bool expr_soarr { false };
     DType ref_dtype;
     for (const auto& instr : node.instrs) {
       OpCode op = get_op(instr);
-      if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+      if (op == OpCode::LOAD_NCARR) {
         stack_depth++;
 
         if (!seen_arr) {
           seen_arr = true;
           ref_dtype = node.dtypes[get_index(instr)];
-          if (op == OpCode::LOAD_SOARR) {
-            expr_soarr = true;
-          }
-        } else if (op == OpCode::LOAD_SOARR && !expr_soarr) {
-          // Have a different layout
-          return false;
         }
+
         int idx = get_index(instr);
         if (node.dtypes[idx] != ref_dtype) {
           // Arrays of different dtypes

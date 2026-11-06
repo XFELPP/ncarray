@@ -10,7 +10,6 @@
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 
 #include <pybind11/native_enum.h>
 #include <pybind11/numpy.h>
@@ -85,7 +84,6 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     .value("IDX", ncarray::OpCode::IDX)     ///< Index generator (APL)
     // Load operations (VM only)
     .value("LOAD_NCARR", ncarray::OpCode::LOAD_NCARR) ///< Load NCArray
-    .value("LOAD_SOARR", ncarray::OpCode::LOAD_SOARR) ///< Load SOArray
     .value("LOAD_CONST", ncarray::OpCode::LOAD_CONST) ///< Load a constant
     // --- Unary Ops --- //
     .value("NEG", ncarray::OpCode::NEG)     ///< Negative of the value
@@ -160,14 +158,14 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
                      &pyncarray::is_eager,
                      "Whether expressions are currently being eagerily evaluated.");
 
-  // --- Namesake NCArray* array classes --- //
-  auto ncview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")
+  // --- Namesake NCArray* array classes (Suboffsets support) --- //
+  auto soview_cls = py::classh<ncarray::NCArrayView>(ncarray_module, "NCArrayView")
     // These constructors, plus the implicitly_convertible below allow view interconversion
     .def(py::init<const ncarray::NCArrayRef&>())
     .def(py::init<const ncarray::NCArray&>());
-  register_common_array_methods(ncview_cls);
+  register_common_array_methods(soview_cls);
 
-  auto ncref_cls = py::classh<ncarray::NCArrayRef>(ncarray_module, "NCArrayRef")
+  auto soref_cls = py::classh<ncarray::NCArrayRef>(ncarray_module, "NCArrayRef")
     .def(py::init([](const py::array& arr, const bool read_only = false) {
       return pyarray_to_ref<ncarray::NCOffsetsPolicy>(arr, read_only);
     }),
@@ -178,39 +176,11 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
     }),
       py::arg("data"),
       py::arg("read_only") = py::cast(false));
-  register_common_array_methods(ncref_cls);
-
-  auto ncowner_cls = py::classh<ncarray::NCArray>(ncarray_module, "NCArray")
-    .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
-      return new ncarray::NCArray(shape, dtype);
-    }),
-      py::arg("shape"),
-      py::arg("dtype") = py::cast(ncarray::DType::float32));
-  register_common_array_methods(ncowner_cls);
-
-  // --- Suboffsets support --- //
-  auto soview_cls = py::classh<ncarray::SOArrayView>(ncarray_module, "SOArrayView")
-    // These constructors, plus the implicitly_convertible below allow view interconversion
-    .def(py::init<const ncarray::SOArrayRef&>())
-    .def(py::init<const ncarray::SOArray&>());
-  register_common_array_methods(soview_cls);
-
-  auto soref_cls = py::classh<ncarray::SOArrayRef>(ncarray_module, "SOArrayRef")
-    .def(py::init([](const py::array& arr, const bool read_only = false) {
-      return pyarray_to_ref<ncarray::SOArrayPolicy>(arr, read_only);
-    }),
-      py::arg("data"),
-      py::arg("read_only") = py::cast(false))
-    .def(py::init([](const py::list& list, const bool read_only = false) {
-      return pylist_to_ref<ncarray::SOArrayPolicy>(list, read_only);
-    }),
-      py::arg("data"),
-      py::arg("read_only") = py::cast(false));
   register_common_array_methods(soref_cls);
 
-  auto soowner_cls = py::classh<ncarray::SOArray>(ncarray_module, "SOArray")
+  auto soowner_cls = py::classh<ncarray::NCArray>(ncarray_module, "NCArray")
     .def(py::init([](const std::vector<ssize_t>& shape, const ncarray::DType& dtype) {
-      return new ncarray::SOArray(shape, dtype);
+      return new ncarray::NCArray(shape, dtype);
     }),
       py::arg("shape"),
       py::arg("dtype") = py::cast(ncarray::DType::float32));
@@ -220,6 +190,6 @@ PYBIND11_MODULE(_pyncarray, ncarray_module, py::mod_gil_not_used()) {
   py::implicitly_convertible<ncarray::NCArrayRef, ncarray::NCArrayView>();
   py::implicitly_convertible<ncarray::NCArray, ncarray::NCArrayView>();
 
-  py::implicitly_convertible<ncarray::SOArrayRef, ncarray::SOArrayView>();
-  py::implicitly_convertible<ncarray::SOArray, ncarray::SOArrayView>();
+  py::implicitly_convertible<ncarray::NCArrayRef, ncarray::NCArrayView>();
+  py::implicitly_convertible<ncarray::NCArray, ncarray::NCArrayView>();
 } // ncarray_module

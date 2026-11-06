@@ -214,8 +214,10 @@ void test_asmjit(ncarray::NCArrayView data,
       cc.imul(term, stride);     // term = coords[dim] * stride (2-operand imul)
       cc.add(addr, term);
 
-      cc.mov(term, layouts[v].offset(dim)); // Load 64-bit offset into register
-      cc.add(addr, term);                   // Register-register add
+      // TODO: DOUBLE CHECK CORRECTNESS. Used .offset from old NCOffsets
+      //       I.e., the non-suboffsets impl.
+      cc.mov(term, layouts[v].suboffset(dim)); // Load 64-bit offset into register
+      cc.add(addr, term);                      // Register-register add
     }
     cc.movss(val, x86::ptr(addr)); // Load float value
     cc.addss(accum, val);          // accum += val
@@ -401,8 +403,10 @@ void test_asmjit_opt(ncarray::NCArrayView data,
     cc.mov(addr, x86::ptr(src_ptrs_reg, v * 8));
     cc.add(addr, coord_offset);
     // Pre-calculate the total offset of the slice at compile time
-    ssize_t total_slice_offset = layouts[v].offset(0) + layouts[v].offset(1) + layouts[v].offset(2);
+    ssize_t total_slice_offset = layouts[v].suboffset(0) + layouts[v].suboffset(1) + layouts[v].suboffset(2);
     if (total_slice_offset != 0) {
+      // TODO: THIS IS WRONG NOW. This was for old NCOffsets (non suboffsets style)
+      //       FIX when possible. Just getting actual core and tests to be correct.
       cc.mov(term, total_slice_offset);
       cc.add(addr, term);
     }
@@ -521,8 +525,8 @@ void test_runtime_compiler(ncarray::NCArrayView data,
   DType src_dtype { expr.dtypes.empty() ? expr.work_dtype : expr.dtypes[0] };
   DType work_dtype { expr.work_dtype };
 
-  const ncarray::SOArrayPolicy& dest_layout =
-    reinterpret_cast<const ncarray::SOArrayPolicy&>(res);
+  const ncarray::NCOffsetsPolicy& dest_layout =
+    reinterpret_cast<const ncarray::NCOffsetsPolicy&>(res);
   auto kernel =
     ncarray::host::RuntimeCompiler::instance().get_expr_kernel(res.dtype(),
                                                                src_dtype,
@@ -530,8 +534,7 @@ void test_runtime_compiler(ncarray::NCArrayView data,
                                                                dest_layout,
                                                                expr.instrs,
                                                                expr.layouts,
-                                                               expr.scalars,
-                                                               expr.soarray);
+                                                               expr.scalars);
   // Setup input pointers for each view
   std::size_t num_views { expr.layouts.size() };
   std::vector<const float*> src_ptrs(num_views);

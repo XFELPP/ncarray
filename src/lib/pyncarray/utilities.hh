@@ -11,12 +11,10 @@
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
 // This code doesn't actually have anything GPU-specific (__device__ or kernels)
 // They are the specializations for GPU arrays
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #endif
 
 #include <pybind11/native_enum.h>
@@ -165,7 +163,7 @@ namespace pyncarray {
   /**
    * Construct a view over a NumPy array.
    *
-   * @tparam ViewType The kind of view to construct. E.g. NCArrayView, SOArrayView.
+   * @tparam ViewType The kind of view to construct. E.g. NCArrayView
    * @param[in] arr An input NumPy array to convert.
    * @param[in] target_ndim The target dimensionality of the output with padding.
    *            TODO: This mostly serves as a hack until broadcasting is suppported.
@@ -218,7 +216,7 @@ namespace pyncarray {
    * and strides.
    *
    * @tparam LayoutT The layout specifier for the returned reference type.
-   *         E.g., NCOffsetsPolicy or SOArrayPolicy (PEP3118).
+   *         E.g., NCOffsetsPolicy (PEP3118).
    * @tparam RefT The reference storage specifier. E.g. RefPolicy or DevRefPolicy.
    * @param[in] arr The input array of arrays.
    * @param[in] read_only_ Whether this reference should be read only.
@@ -233,11 +231,7 @@ namespace pyncarray {
     std::vector<ssize_t> strides(arr.strides(), arr.strides() + ndim);
 
     shape.insert(shape.begin(), 1);
-    if constexpr (std::is_same_v<LayoutT, ncarray::SOArrayPolicy>) {
-      strides.insert(strides.begin(), sizeof(void*));
-    } else {
-      strides.insert(strides.begin(), 1);
-    }
+    strides.insert(strides.begin(), sizeof(void*));
 
     std::vector<void*> data_ptrs { arr_info.ptr };
     ncarray::DType dtype = pydtype_to_dtype(arr.dtype());
@@ -262,7 +256,7 @@ namespace pyncarray {
    * and strides.
    *
    * @tparam LayoutT The layout specifier for the returned reference type.
-   *         E.g., NCOffsetsPolicy or SOArrayPolicy (PEP3118).
+   *         E.g., NCOffsetsPolicy (PEP3118).
    * @tparam RefT The reference storage specifier. E.g. RefPolicy or DevRefPolicy.
    * @param[in] list The input list of arrays.
    * @param[in] read_only_ Whether this reference should be read only.
@@ -273,11 +267,8 @@ namespace pyncarray {
   pylist_to_ref(const py::list& list, const bool read_only_ = false) {
     ssize_t len_ptr_axis = list.size();
     std::vector<ssize_t> strides;
-    if constexpr (std::is_same_v<LayoutT, ncarray::SOArrayPolicy>) {
-      strides.push_back(sizeof(void*));
-    } else {
-      strides.push_back(1);
-    }
+    strides.push_back(sizeof(void*));
+
     std::vector<ssize_t> shape { len_ptr_axis };
     std::vector<void*> data_ptrs;
 
@@ -314,7 +305,7 @@ namespace pyncarray {
   }
 
   /**
-   * Construct a NumPy array from an input nc/soarray type object.
+   * Construct a NumPy array from an input ncarray type object.
    *
    * @tparam ArrayT The kind of array being used. This is a full array specifier,
    *         including storage+layout specifier.

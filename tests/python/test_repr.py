@@ -34,7 +34,12 @@ def test_repr_2d_small():
     """Test repr for a small 2D array."""
     arr: npt.NDArray[np.int16] = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int16)
     ncarr: nca.NCArrayRef = nca.NCArrayRef(arr)
-    expected: str = "NCArrayRef([[[1, 2, 3],\n" "             [4, 5, 6]]], dtype=int16)"
+    # fmt: off
+    expected: str = (
+        "NCArrayRef([[[1, 2, 3],\n"
+        "             [4, 5, 6]]], dtype=int16)"
+    )
+    # fmt: on
 
     assert repr(ncarr) == expected
 
@@ -75,14 +80,3 @@ def test_repr_large_2d():
     )
 
     assert repr(ncarr) == expected
-
-
-def test_repr_soarray():
-    """Test repr for SOArray and float"""
-    # arr: npt.NDArray[np.float64] = np.array([1, 2, 3], dtype=np.float64)
-    # TODO: The 1. formatting of NumPy is not reproduced currently. 1.1 works
-    arr: npt.NDArray[np.float64] = np.array([1.1, 2.1, 3.1], dtype=np.float64)
-    soarr: nca.SOArrayRef = nca.SOArrayRef(arr)
-    expected: str = "SOArrayRef([[1.1, 2.1, 3.1]], dtype=float64)"
-
-    assert repr(soarr) == expected

@@ -60,51 +60,40 @@ cpp_dtypes: Tuple[str, ...] = (
 
 dev_funcs: str = """
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
   // Float32 support for both Layouts on Device
   INSTANTIATE_DEV_VM_OPS({typename}, NCOffsetsPolicy)
-
-  INSTANTIATE_DEV_VM_OPS({typename}, SOArrayPolicy)
 }}
 
 """
 
 dev_red_funcs: str = """
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
   // Float32 support for both Layouts on Device
   INSTANTIATE_DEV_REDUCTIONS({typename}, NCOffsetsPolicy)
-
-  INSTANTIATE_DEV_REDUCTIONS({typename}, SOArrayPolicy)
 }}
 
 """
 
 dev_separate_red_funcs: str = """
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
   // Float32 support for both Layouts on Device
   INSTANTIATE_DEV_VM_FULL_REDUCE({typename}, NCOffsetsPolicy, {traits})
   INSTANTIATE_DEV_VM_REDUCE({typename}, NCOffsetsPolicy, {traits})
-
-  INSTANTIATE_DEV_VM_FULL_REDUCE({typename}, SOArrayPolicy, {traits})
-  INSTANTIATE_DEV_VM_REDUCE({typename}, SOArrayPolicy, {traits})
 }}
 
 """
 
 dev_separate_full_red_funcs: str = """
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
@@ -115,7 +104,6 @@ namespace ncarray {{
 
 dev_separate_axes_red_funcs: str = """
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
@@ -126,27 +114,21 @@ namespace ncarray {{
 
 host_funcs: str = """
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
   // Float32 support for both Layouts on Device
   INSTANTIATE_HOST_VM_OPS({typename}, NCOffsetsPolicy)
-
-  INSTANTIATE_HOST_VM_OPS({typename}, SOArrayPolicy)
 }}
 
 """
 
 host_red_funcs: str = """
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #include "ncarray/expression/mvnode.hh"
 
 namespace ncarray {{
   INSTANTIATE_HOST_REDUCTIONS({typename}, NCOffsetsPolicy)
-
-  INSTANTIATE_HOST_REDUCTIONS({typename}, SOArrayPolicy)
 }}
 
 """
@@ -202,7 +184,7 @@ reduction_names: Tuple[str, ...] = (
     "any",
 )
 
-layout_names: Tuple[str, str] = ("ncarr", "soarr")
+layout_names: Tuple[str, ...] = ("ncarr",)
 
 if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser()

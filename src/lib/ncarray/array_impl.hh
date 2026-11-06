@@ -9,6 +9,7 @@
 #ifndef NCARRAY_ARRAY_IMPL_HH
 #define NCARRAY_ARRAY_IMPL_HH
 
+#include "layout.hh"
 #include "ncarray/array_element_proxy.hh"
 #include "ncarray/array_traits.hh"
 #include "ncarray/dtype.hh"
@@ -396,16 +397,12 @@ namespace ncarray {
                      bool read_only_) {
       this->m_dtype = dtype_;
       this->m_data = data_;
-      this->m_pointer_axis = pointer_axis_;
 
       auto ndim { shape_.ndim };
       this->m_shape.set(shape_.data, ndim);
       this->m_strides.set(strides_.data, ndim);
 
       if constexpr (hd_std::is_same_v<Layout, NCOffsetsPolicy>) {
-        this->m_offsets.ndim = this->ndim();
-        this->m_offsets.set(offsets_.data, ndim);
-      } else if constexpr (hd_std::is_same_v<Layout, SOArrayPolicy>) {
         this->m_suboffsets.ndim = this->ndim();
         this->m_suboffsets.set(offsets_.data, ndim);
       }
@@ -437,13 +434,9 @@ namespace ncarray {
       this->m_shape.set(shape_, ndim);
       this->m_strides.set(strides_, ndim);
       this->m_dtype = dtype_;
-      this->m_pointer_axis = pointer_axis_;
       this->m_read_only = read_only_;
       for (ssize_t i = 0; i < this->ndim(); ++i) {
         if constexpr (hd_std::is_same_v<Layout, NCOffsetsPolicy>) {
-          this->m_offsets.ndim = ndim;
-          this->m_offsets[i] = 0;
-        } else if constexpr (hd_std::is_same_v<Layout, SOArrayPolicy>) {
           this->m_suboffsets.ndim = ndim;
           this->m_suboffsets[i] = -1;
         }
@@ -478,26 +471,10 @@ namespace ncarray {
         }
         this->m_data = &this->m_ref_ptrs[0];
         this->m_dtype = dtype_;
-        this->m_pointer_axis = pointer_axis_;
         this->m_read_only = read_only_;
         this->m_shape.set(shape_.data(), shape_.size());
         this->m_strides.set(strides_.data(), strides_.size());
-      }
-
-      for (ssize_t i = 0; i < this->ndim(); ++i) {
-        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
-          this->m_suboffsets.ndim = this->ndim();
-          this->m_suboffsets[i] = -1;
-        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-          this->m_offsets.ndim = this->ndim();
-          this->m_offsets[i] = 0;
-        }
-      }
-
-      if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
-        if (this->m_pointer_axis >= 0) {
-          this->m_suboffsets[this->m_pointer_axis] = 0;
-        }
+        this->m_suboffsets[0] = 0;
       }
     }
 
@@ -520,15 +497,12 @@ namespace ncarray {
     ArrayImpl(const std::vector<ssize_t>& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         ssize_t ndim { static_cast<ssize_t>(shape_.size()) };
-        this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.ndim = ndim;
         this->m_strides.ndim = ndim;
 
-        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
           this->m_suboffsets.ndim = ndim;
-        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-          this->m_offsets.ndim = ndim;
         }
         auto new_strides = calculate_c_order_strides(shape_,
                                                      ncarray::itemsize(dtype_));
@@ -537,10 +511,8 @@ namespace ncarray {
         for (ssize_t i = 0; i < ndim; ++i) {
           this->m_shape[i] = shape_[i];
           this->m_strides[i] = new_strides[i];
-          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
             this->m_suboffsets[i] = -1;
-          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-            this->m_offsets[i] = 0;
           }
         }
         this->allocate(this->nbytes());
@@ -565,15 +537,12 @@ namespace ncarray {
     ArrayImpl(const Metadata& shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
         ssize_t ndim { shape_.ndim };
-        this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.ndim = ndim;
         this->m_strides.ndim = ndim;
 
-        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
           this->m_suboffsets.ndim = ndim;
-        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-          this->m_offsets.ndim = ndim;
         }
         auto new_strides = calculate_c_order_strides(ndim,
                                                      shape_.data,
@@ -583,10 +552,8 @@ namespace ncarray {
         for (ssize_t i = 0; i < ndim; ++i) {
           this->m_shape[i] = shape_[i];
           this->m_strides[i] = new_strides[i];
-          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
             this->m_suboffsets[i] = -1;
-          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-            this->m_offsets[i] = 0;
           }
         }
         this->allocate(this->nbytes());
@@ -611,15 +578,12 @@ namespace ncarray {
      */
     ArrayImpl(ssize_t ndim, const ssize_t* shape_, DType dtype_) {
       if constexpr (std::is_base_of_v<OwnerTag, Storage>) {
-        this->m_pointer_axis = -1;
         this->m_dtype = dtype_;
         this->m_shape.ndim = ndim;
         this->m_strides.ndim = ndim;
 
-        if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+        if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
           this->m_suboffsets.ndim = ndim;
-        } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-          this->m_offsets.ndim = ndim;
         }
         auto new_strides = calculate_c_order_strides(ndim,
                                                      shape_,
@@ -629,10 +593,8 @@ namespace ncarray {
         for (ssize_t i = 0; i < ndim; ++i) {
           this->m_shape[i] = shape_[i];
           this->m_strides[i] = new_strides[i];
-          if constexpr (std::is_same_v<Layout, SOArrayPolicy>) {
+          if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
             this->m_suboffsets[i] = -1;
-          } else if constexpr (std::is_same_v<Layout, NCOffsetsPolicy>) {
-            this->m_offsets[i] = 0;
           }
         }
         this->allocate(this->nbytes());
@@ -2000,63 +1962,6 @@ namespace ncarray {
 
   };
 
-#ifndef __CUDACC_RTC__
-
-  // --- End Array Implementations --- //
-
-  /**
-   * Convert an NCOffsets array to an SOArray.
-   *
-   * For convenience the function will consume all offsets in the NCOffsetsArray.
-   * All suboffsets should then be -1 or 0.
-   *
-   * @tparam MemTag The tag indicating whether array is host- or device-resident.
-   * @param[in] nc The NCArray* to be converted to SOArray*.
-   * @returns The SOArray* equivalent to the input `nc` array.
-   */
-  template <typename MemTag>
-  auto promote_to_so(const ArrayImpl<NCOffsetsPolicy,
-                                     typename StoragePolicyTraits<MemTag>::View>& nc) {
-    using SOView = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemTag>::View>;
-
-    Metadata shape;
-    Metadata strides;
-    Metadata suboffsets;
-    auto ndim { nc.ndim() };
-
-    void* data_ptr { const_cast<void*>(nc.data()) };
-
-    ssize_t pointer_axis { -1 };
-    shape.set(nc.shape(), ndim);
-    for (ssize_t i = 0; i < ndim; ++i) {
-      if (nc.is_pointer_axis(i)) {
-        pointer_axis = i;
-        data_ptr = reinterpret_cast<void**>(data_ptr) + nc.offset(i);
-
-        strides[i] = sizeof(void*);
-        suboffsets[i] = 0; // We just handled this for the SOArray
-      } else {
-        data_ptr = reinterpret_cast<std::uint8_t*>(data_ptr) + nc.offset(i);
-
-        strides[i] = nc.stride(i);
-        suboffsets[i] = -1;
-      }
-    }
-    strides.ndim = ndim;
-    suboffsets.ndim = ndim;
-    SOView so(data_ptr,
-              shape,
-              strides,
-              suboffsets,
-              nc.dtype(),
-              pointer_axis,
-              nc.read_only());
-
-    return so;
-  }
-
-#endif
-
   // --- Alias Helpers --- //
 
   template <typename MemType>
@@ -2067,15 +1972,6 @@ namespace ncarray {
 
   template <typename MemType>
   using NCOwnerFor = ArrayImpl<NCOffsetsPolicy, typename StoragePolicyTraits<MemType>::Owner>;
-
-  template <typename MemType>
-  using SOViewFor = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemType>::View>;
-
-  template <typename MemType>
-  using SORefFor = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemType>::Ref>;
-
-  template <typename MemType>
-  using SOOwnerFor = ArrayImpl<SOArrayPolicy, typename StoragePolicyTraits<MemType>::Owner>;
 
   // --- Indexing Helpers --- //
 

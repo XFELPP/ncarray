@@ -7,7 +7,6 @@
  */
 
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
 #include "ncarray/ncdevarrays.cuh"
 #endif

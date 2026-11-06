@@ -9,7 +9,6 @@
 #include "gtest/gtest.h"
 
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
 #include "ncarray/ncdevarrays.cuh"
 #endif
@@ -104,13 +103,4 @@ TEST(NCArrayIndexingTest, VariadicSlices) {
   EXPECT_EQ(view1.shape(0), 2);
   EXPECT_EQ(view1.shape(1), 2);
   EXPECT_EQ(view1.shape(2), 2);
-}
-
-TEST(SOArrayIndexingTest, OwnerCreationAndShape) {
-  std::vector<ssize_t> shape { 3, 3, 3 };
-  ncarray::SOArray arr(shape, ncarray::DType::float32);
-
-  EXPECT_EQ(arr.ndim(), 3);
-  EXPECT_EQ(arr.size(), 27);
-  EXPECT_EQ(arr.itemsize(), sizeof(float));
 }

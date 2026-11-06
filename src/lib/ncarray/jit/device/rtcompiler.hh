@@ -95,7 +95,7 @@ namespace ncarray {
     public:
       static RuntimeCompiler& instance();
 
-      CUfunction get_dynamic_vm_kernel(DType dest_t, bool expr_is_soarr);
+      CUfunction get_dynamic_vm_kernel(DType dest_t);
 
       CUfunction get_expr_kernel(DType dest_t,
                                  DType src_t,
@@ -104,8 +104,7 @@ namespace ncarray {
                                  int n_scalars,
                                  ssize_t ndim,
                                  const ssize_t* final_shape,
-                                 const std::vector<Instruction>& instrs,
-                                 bool expr_is_soarr = false);
+                                 const std::vector<Instruction>& instrs);
 
       template <int NDIM>
       CUfunction get_stencil_expr_kernel(DType dest_t,
@@ -115,8 +114,7 @@ namespace ncarray {
                                          const std::vector<Instruction>& instrs,
                                          const std::vector<Scalar>& scalars,
                                          const std::vector<std::uint8_t>& is_pointer_axis,
-                                         const StencilJITExtensions& ext = {},
-                                         bool expr_is_soarr = false) {
+                                         const StencilJITExtensions& ext = {}) {
         std::string arch_opt = get_arch_opt();
         std::string kernel_str = get_stencil_expr_kernel_str(dest_t,
                                                              src_t,
@@ -125,8 +123,7 @@ namespace ncarray {
                                                              instrs,
                                                              scalars,
                                                              is_pointer_axis,
-                                                             ext,
-                                                             expr_is_soarr);
+                                                             ext);
         std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
         if (m_kernel_cache.count(k_id)) {
@@ -153,12 +150,10 @@ namespace ncarray {
       // --- Reduction Kernels --- //
 
 
-      CUfunction get_fill_kernel(DType dest_t, bool dest_is_so = false);
-      CUfunction get_copy_kernel(DType dest_t, DType src_t, bool src_is_so = false);
+      CUfunction get_fill_kernel(DType dest_t);
+      CUfunction get_copy_kernel(DType dest_t, DType src_t);
       CUfunction get_copy_view_into_view_kernel(DType dest_t,
-                                                DType src_t,
-                                                bool dest_is_so = false,
-                                                bool src_is_so = false);
+                                                DType src_t);
 
     private:
       RuntimeCompiler();
@@ -172,7 +167,7 @@ namespace ncarray {
 
       CUfunction to_sass(std::string cubin, const char* func_name);
 
-      std::string get_dynamic_vm_kernel_str(DType dest_t, bool expr_is_soarr);
+      std::string get_dynamic_vm_kernel_str(DType dest_t);
 
       std::string get_expression_kernel_str(DType dest_t,
                                             DType src_t,
@@ -181,8 +176,7 @@ namespace ncarray {
                                             int n_scalars,
                                             ssize_t ndim,
                                             const ssize_t* final_shape,
-                                            const std::vector<Instruction>& instrs,
-                                            bool expr_is_soarr = false);
+                                            const std::vector<Instruction>& instrs);
 
       template <int NDIM>
       std::string get_stencil_expr_kernel_str(DType dest_t,
@@ -192,8 +186,7 @@ namespace ncarray {
                                               const std::vector<Instruction>& instrs,
                                               const std::vector<Scalar>& scalars,
                                               const std::vector<std::uint8_t>& is_pointer_axis,
-                                              const StencilJITExtensions& ext = {},
-                                              bool expr_is_soarr = false) {
+                                              const StencilJITExtensions& ext = {}) {
 
         auto get_dtype_name = [&] <typename T> () { return get_name_for_type<T>(); };
         std::string dest_t_name = dispatch(dest_t, get_dtype_name);
@@ -201,9 +194,6 @@ namespace ncarray {
         std::string work_t_name = dispatch(work_t, get_dtype_name);
 
         std::string view_t_name = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
-        if (expr_is_soarr) {
-          view_t_name = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-        }
 
         std::vector<std::string> stack;
         int v_ptr { 0 };
@@ -283,27 +273,15 @@ namespace ncarray {
           for (int dim = 0; dim <= max_ptr_axis; ++dim) {
             std::string off_val { std::to_string(unique_prefixes[grp][dim]) };
 
-            if (expr_is_soarr) {
+            load_logic +=
+              "  " + p_name + " += (c_src[" + std::to_string(dim) + "] + " + off_val +
+              ") * src_l.stride(" + std::to_string(dim) + ");\n";
+            if (is_pointer_axis[dim]) {
               load_logic +=
-                "  " + p_name + " += (c_src[" + std::to_string(dim) + "] + " + off_val +
-                ") * src_l.stride(" + std::to_string(dim) + ");\n";
-              if (is_pointer_axis[dim]) {
-                load_logic +=
-                  "  " + p_name + " = *reinterpret_cast<const uint8_t* const*>(" + p_name
-                  + ") + src_l.suboffset(" + std::to_string(dim) + ");\n";
-              }
-            } else {
-              if (is_pointer_axis[dim]) {
-                load_logic +=
-                  "  " + p_name + " = reinterpret_cast<const uint8_t*>(reinterpret_cast<const void* const*>(" +
-                  p_name + ")[c_src[" + std::to_string(dim) + "] + " + off_val +
-                  " + src_l.offset(" + std::to_string(dim) + ")]);\n";
-              } else {
-                load_logic +=
-                  "  " + p_name + " += (c_src[" + std::to_string(dim) + "] + " + off_val + ") * src_l.stride(" +
-                  std::to_string(dim) + ") + src_l.offset(" + std::to_string(dim) + ");\n";
-              }
+                "  " + p_name + " = *reinterpret_cast<const uint8_t* const*>(" + p_name
+                + ") + src_l.suboffset(" + std::to_string(dim) + ");\n";
             }
+
           }
         }
 
@@ -319,15 +297,10 @@ namespace ncarray {
             for (int dim = max_ptr_axis + 1; dim < NDIM; ++dim) {
               std::string off_val { std::to_string(offsets[idx][dim]) };
 
-              if (expr_is_soarr) {
-                load_logic +=
-                  "  byte_ptr_" + vid + " += (c_src[" + std::to_string(dim) + "] + " + off_val +
-                  ") * src_l.stride(" + std::to_string(dim) + ");\n";
-              } else {
-                load_logic +=
-                  "  byte_ptr_" + vid + " += (c_src[" + std::to_string(dim) + "] + " + off_val +
-                  ") * src_l.stride(" + std::to_string(dim) + ") + src_l.offset(" + std::to_string(dim) + ");\n";
-              }
+              load_logic +=
+                "  byte_ptr_" + vid + " += (c_src[" + std::to_string(dim) + "] + " + off_val +
+                ") * src_l.stride(" + std::to_string(dim) + ");\n";
+
             }
 
             load_logic +=
@@ -384,12 +357,10 @@ namespace ncarray {
         return source;
       }
 
-      std::string get_fill_kernel_str(DType dest_t, bool dest_is_so = false);
-      std::string get_copy_kernel_str(DType dest_t, DType src_t, bool src_is_so = false);
+      std::string get_fill_kernel_str(DType dest_t);
+      std::string get_copy_kernel_str(DType dest_t, DType src_t);
       std::string get_copy_view_into_view_kernel_str(DType dest_t,
-                                                     DType src_t,
-                                                     bool dest_is_so = false,
-                                                     bool src_is_so = false);
+                                                     DType src_t);
 
       std::string compile_kernel(std::string kernel_str, std::string k_id, const char* func_name);
 

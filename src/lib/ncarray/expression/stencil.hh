@@ -71,14 +71,12 @@ namespace ncarray {
      *        kinds of pointer dimensions (although shape and stride can vary freely).
      * @param op_func A lambda that takes a vector of views and returns an expression.
      * @param ext Optionally provide code to run before/after the main expression.
-     * @param is_soarr A boolean flag as to whether SOArrayPolicy traversal is needed.
      */
     template <typename SrcT, typename Func>
     static Stencil<NDIM> create(const std::vector<StaticCoords<NDIM>>& offsets_in,
                                 const std::vector<std::uint8_t>& is_pointer_axis,
                                 Func&& op_func,
-                                const device::StencilJITExtensions& ext = {},
-                                bool is_soarr = false) {
+                                const device::StencilJITExtensions& ext = {}) {
       Stencil s;
       int num_views { static_cast<int>(offsets_in.size()) };
       s.m_offsets = offsets_in;
@@ -149,8 +147,7 @@ namespace ncarray {
                                                                           s.m_instrs,
                                                                           expr.scalars,
                                                                           is_pointer_axis,
-                                                                          ext,
-                                                                          is_soarr);
+                                                                          ext);
 
       return s;
     }
@@ -196,17 +193,13 @@ namespace ncarray {
       std::vector<void*> args;
       args.reserve(4 + sizeof...(Args) + m_constants_offsets.size());
       args.push_back(reinterpret_cast<void*>(&src_ptr));
-      if constexpr (std::is_base_of_v<SOArrayPolicy, Src>) {
-        args.push_back(reinterpret_cast<void*>(&const_cast<SOArrayPolicy&>(static_cast<const SOArrayPolicy&>(src))));
-      } else {
-        args.push_back(reinterpret_cast<void*>(&const_cast<SOArrayPolicy&>(reinterpret_cast<const SOArrayPolicy&>(src))));
+      if constexpr (std::is_base_of_v<NCOffsetsPolicy, Src>) {
+        args.push_back(reinterpret_cast<void*>(&const_cast<NCOffsetsPolicy&>(static_cast<const NCOffsetsPolicy&>(src))));
       }
 
       args.push_back(&dest_ptr);
-      if constexpr (std::is_base_of_v<SOArrayPolicy, Src>) {
-        args.push_back(reinterpret_cast<void*>(&static_cast<SOArrayPolicy&>(dest)));
-      } else {
-        args.push_back(reinterpret_cast<void*>(&reinterpret_cast<SOArrayPolicy&>(dest)));
+      if constexpr (std::is_base_of_v<NCOffsetsPolicy, Src>) {
+        args.push_back(reinterpret_cast<void*>(&static_cast<NCOffsetsPolicy&>(dest)));
       }
 
       // Include the custom JIT extension parameters

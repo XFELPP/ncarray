@@ -10,12 +10,10 @@
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
 // This code doesn't actually have anything GPU-specific (__device__ or kernels)
 // They are the specializations for GPU arrays
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #endif
 
 #include <pybind11/numpy.h>
@@ -40,9 +38,6 @@ using namespace pyncarray;
 void register_ncdevarray_view(py::module_& m);
 void register_ncdevarray_ref(py::module_& m);
 void register_ncdevarray_owner(py::module_& m);
-void register_sodevarray_view(py::module_& m);
-void register_sodevarray_ref(py::module_& m);
-void register_sodevarray_owner(py::module_& m);
 
 PYBIND11_MODULE(_pyncdevarray, ncdevarray_module, py::mod_gil_not_used()) {
   ncdevarray_module.doc() = "Non-contiguous (NC) GPU Array Classes.";
@@ -51,8 +46,5 @@ PYBIND11_MODULE(_pyncdevarray, ncdevarray_module, py::mod_gil_not_used()) {
   register_ncdevarray_view(ncdevarray_module);
   register_ncdevarray_ref(ncdevarray_module);
   register_ncdevarray_owner(ncdevarray_module);
-  register_sodevarray_view(ncdevarray_module);
-  register_sodevarray_ref(ncdevarray_module);
-  register_sodevarray_owner(ncdevarray_module);
 #endif
 } // ncdevarray_module

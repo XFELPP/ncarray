@@ -90,7 +90,7 @@ namespace ncarray {
     }
   };
 
-  // --- Layout Policies (NCArray* vs SOArray*) --- //
+  // --- Layout Policies (NCArray*) --- //
 
   /**
    * By default, Metadata will use ssize_t which is compatible with the conventions
@@ -347,13 +347,7 @@ namespace ncarray {
 
             stride *= step;
 
-            if constexpr (requires { static_cast<const Derived*>(this)->offsets(); }) {
-              offset =
-                static_cast<const Derived*>(this)->get_offset(axis) +
-                start * static_cast<const Derived*>(this)->m_strides[axis];
-
-              data_shift = 0;
-            } else if constexpr (requires { static_cast<const Derived*>(this)->suboffsets(); }) {
+            if constexpr (requires { static_cast<const Derived*>(this)->suboffsets(); }) {
               offset = static_cast<const Derived*>(this)->get_offset(axis);
               data_shift = start * static_cast<const Derived*>(this)->m_strides[axis];
             }
@@ -439,224 +433,29 @@ namespace ncarray {
   protected:
     Metadata m_shape;
     Metadata m_strides;
-    // Pointer axis is provided for simplicity of interfaces only.
-    // It may not be used by all subclasses.
-    Metadata::value_type m_pointer_axis { -1 };
   };
 
   /**
-   * The NCOffsetsPolicy provides an additional offsets attribute and allows for a
-   * single pointer axis.
-   */
-  struct NCOffsetsPolicy : public LayoutPolicy<NCOffsetsPolicy> {
-  public:
-    /**
-     * The advance function takes a pointer to the current position in the array
-     * as well as an axis and index. Using this information, and the knowledge
-     * of the array layout it will move the pointer forward one data unit,
-     * accounting for strides, offsets, pointer jumps and so on.
-     *
-     * For NCArray* type arrays, if the current axis is a pointer axis, then
-     * traversal requires interpreting the data as a double pointer and indexing
-     * appropriately (with an offset, if slicing has selected a sub-view).
-     *
-     * @param[in] data The pointer to the current position in the array.
-     * @param[in] axis The current axis being traversed.
-     * @param[in] index The current index along the traversed axis.
-     * @returns The pointer to the next item in the array.
-     */
-    NCA_HD inline void* advance(void* data, ssize_t axis, ssize_t index) const {
-      if (axis == this->m_pointer_axis) {
-        return reinterpret_cast<void**>(data)[index + this->m_offsets[axis]];
-      }
-
-      return
-        reinterpret_cast<hd_std::uint8_t*>(data) +
-        index * this->m_strides[axis] + this->m_offsets[axis];
-    }
-
-    /**
-     * The advance function takes a pointer to the current position in the array
-     * as well as an axis and index. Using this information, and the knowledge
-     * of the array layout it will move the pointer forward one data unit,
-     * accounting for strides, offsets, pointer jumps and so on.
-     *
-     * For NCArray* type arrays, if the current axis is a pointer axis, then
-     * traversal requires interpreting the data as a double pointer and indexing
-     * appropriately (with an offset, if slicing has selected a sub-view).
-     *
-     * @param[in] data The pointer to the current position in the array.
-     * @param[in] axis The current axis being traversed.
-     * @param[in] index The current index along the traversed axis.
-     * @returns The const pointer to the next item in the array.
-     */
-    NCA_HD inline const void* advance(const void* data,
-                                      ssize_t axis,
-                                      ssize_t index) const {
-      if (axis == this->m_pointer_axis) {
-        return
-          reinterpret_cast<const void* const *>(data)[index + this->m_offsets[axis]];
-      }
-
-      return
-        reinterpret_cast<const hd_std::uint8_t*>(data) +
-        index * this->m_strides[axis] + this->m_offsets[axis];
-    }
-
-    /**
-     * The advance function overload takes a pointer to the current position in
-     * the array as well as a Coords (StaticCoords) object. The coords object
-     * provides multiple indices for multiple axes to traverse at once.
-     *
-     * For NCArray* type arrays, if the current axis is a pointer axis, then
-     * traversal requires interpreting the data as a double pointer and indexing
-     * appropriately (with an offset, if slicing has selected a sub-view).
-     *
-     * @param[in] data The pointer to the current position in the array.
-     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
-     * @returns The pointer to the specified item in the array.
-     */
-    template <typename Coords>
-    NCA_HD inline void* advance(void* data, const Coords& coords) const {
-      void* data_p { data };
-
-      for (int axis = 0; axis < coords.size(); ++axis) {
-        auto index { coords[axis] };
-
-        if (axis == this->m_pointer_axis) {
-          data_p = reinterpret_cast<void**>(data_p)[index + this->m_offsets[axis]];
-        } else {
-          data_p =
-            reinterpret_cast<hd_std::uint8_t*>(data_p) + index * this->m_strides[axis] +
-            this->m_offsets[axis];
-        }
-      }
-      return data_p;
-    }
-
-    /**
-     * The advance function overload takes a pointer to the current position in
-     * the array as well as a Coords (StaticCoords) object. The coords object
-     * provides multiple indices for multiple axes to traverse at once.
-     *
-     * For NCArray* type arrays, if the current axis is a pointer axis, then
-     * traversal requires interpreting the data as a double pointer and indexing
-     * appropriately (with an offset, if slicing has selected a sub-view).
-     *
-     * @param[in] data The pointer to the current position in the array.
-     * @param[in] coords The coordinates specifying the indices of all axes to traverse.
-     * @returns The const pointer to the specified item in the array.
-     */
-    template <typename Coords>
-    NCA_HD inline const void* advance(const void* data,
-                                      const Coords& coords) const {
-      const void* data_p { data };
-
-      for (int axis = 0; axis < coords.size(); ++axis) {
-        auto index { coords[axis] };
-
-        if (axis == this->m_pointer_axis) {
-          data_p = reinterpret_cast<const void* const*>(data_p)[index + this->m_offsets[axis]];
-        } else {
-          data_p =
-            reinterpret_cast<const hd_std::uint8_t*>(data_p) +
-            index * this->m_strides[axis] + this->m_offsets[axis];
-        }
-      }
-
-      return data_p;
-    }
-
-    /**
-     * The pointer to the underlying offsets metadata.
-     *
-     * @returns The pointer to the underlying offsets metadata.
-     */
-    NCA_HD inline const ssize_t* offsets() const {
-      return this->m_offsets.data;
-    }
-    /**
-     * The offset of a given axis of an array.
-     *
-     * @param[in] dim A dimension to check the shape of.
-     * @returns The offset of that dimension.
-     */
-    NCA_HD inline ssize_t offset(ssize_t dim) const {
-      return this->m_offsets[dim];
-    }
-
-    /**
-     * Returns whether a given axis is a pointer axis.
-     *
-     * @note For NCOffsetsPolicy this checks the m_pointer_axis flag.
-     *
-     * @param[in] The axis to check if its a pointer axis.
-     * @returns Whether that axis is a pointer axis.
-     */
-    NCA_HD inline bool is_pointer_impl(ssize_t axis) const {
-      return axis == this->m_pointer_axis;
-    }
-
-    /**
-     * The offset getter called by the generic version of the base class.
-     *
-     * @param[in] axis The axis to return the offset for.
-     * @returns The offset of that axis.
-     */
-    NCA_HD inline Metadata::value_type get_offset_impl(ssize_t axis) const {
-      return this->m_offsets[axis];
-    }
-
-    /**
-     * Returns the string representation of this Layout policy.
-     *
-     * @returns The string representation of this Layout policy.
-     */
-    NCA_HD inline const char* layout_repr() const { return "NCArray"; }
-
-    /**
-     * Determines whether the layout is contiguous by checking for pointer axes.
-     *
-     * @note This does NOT check for gaps due to strides. Only that there are no
-     *       pointer axes. This is intended to be incorporated into a broader
-     *       contiguity checking routine.
-     *
-     * @returns Whether there are no pointer axes.
-     */
-    NCA_HD inline bool is_contiguous_impl() const {
-      for (ssize_t i = 0; i < this->ndim(); ++i) {
-        if (this->m_offsets[i] != 0) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-  protected:
-    Metadata m_offsets;
-  };
-
-  /**
-   * The SOArrayPolicy implements PEP3118 compliance with the addition of a
+   * The NCOffsetsPolicy implements PEP3118 compliance with the addition of a
    * suboffsets field.
    */
-  struct SOArrayPolicy : public LayoutPolicy<SOArrayPolicy> {
+  struct NCOffsetsPolicy : public LayoutPolicy<NCOffsetsPolicy> {
   public:
     /**
      * The Metadata struct defaults values to 0 - this works for NCArray.
      * For suboffsets based classes, we want the value to be -1.
      * Flipping the suboffset back on requires explicitly setting it.
      */
-    NCA_HD SOArrayPolicy() {
+    NCA_HD NCOffsetsPolicy() {
       for (ssize_t i = 0; i < NCARRAY_MAX_NDIM; ++i) {
         this->m_suboffsets[i] = -1;
       }
     }
 
-    SOArrayPolicy(const SOArrayPolicy& other) = default;
-    SOArrayPolicy(SOArrayPolicy&& other) noexcept = default;
-    SOArrayPolicy& operator=(const SOArrayPolicy& other) = default;
-    SOArrayPolicy& operator=(SOArrayPolicy&& other) = default;
+    NCOffsetsPolicy(const NCOffsetsPolicy& other) = default;
+    NCOffsetsPolicy(NCOffsetsPolicy&& other) noexcept = default;
+    NCOffsetsPolicy& operator=(const NCOffsetsPolicy& other) = default;
+    NCOffsetsPolicy& operator=(NCOffsetsPolicy&& other) = default;
 
     /**
      * The advance function takes a pointer to the current position in the array
@@ -799,7 +598,7 @@ namespace ncarray {
     /**
      * Returns whether a given axis is a pointer axis.
      *
-     * @note For SOArrayPolicy this checks the value of the suboffset of the axis.
+     * @note For NCOffsetsPolicy this checks the value of the suboffset of the axis.
      *
      * @param[in] The axis to check if its a pointer axis.
      * @returns Whether that axis is a pointer axis.
@@ -823,7 +622,7 @@ namespace ncarray {
      *
      * @returns the string representation of this Layout policy.
      */
-    NCA_HD inline const char* layout_repr() const { return "SOArray"; }
+    NCA_HD inline const char* layout_repr() const { return "NCArray"; }
 
     /**
      * Determines whether the layout is contiguous by checking for pointer axes.
@@ -886,28 +685,10 @@ namespace ncarray {
   struct is_ncoffsets_policy<NCOffsetsPolicy> : hd_std::true_type {};
 
   /**
-   * Type-trait style struct for whether SOArrayPolicy default false specialization.
-   */
-  template <class L>
-  struct is_soarray_policy : hd_std::false_type {};
-
-  /**
-   * Type-trait style struct for whether SOArrayPolicy true specialization.
-   */
-  template <>
-  struct is_soarray_policy<SOArrayPolicy> : hd_std::true_type {};
-
-  /**
    * Underlying trait to check for if NCOffsetsPolicy.
    */
   template <class L>
   constexpr bool is_ncoffsets_policy_v = is_ncoffsets_policy<L>::value;
-
-  /**
-   * Underlying trait to check for if SOArrayPolicy.
-   */
-  template <class L>
-  constexpr bool is_soarray_policy_v = is_soarray_policy<L>::value;
 } // namespace ncarray
 
 #endif // NCARRAY_LAYOUT_HH

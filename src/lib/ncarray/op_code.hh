@@ -48,7 +48,6 @@ namespace ncarray {
     NOOP = 0,   ///< Null op
     IDX,        ///< Index generator (Like APL)
     LOAD_NCARR, ///< Load an NCArray (VM only)
-    LOAD_SOARR, ///< Load an SOArray (VM only)
     LOAD_CONST, ///< Load a constant (VM only)
     // --- Unary ops --- //
     NEG,        ///< Negative

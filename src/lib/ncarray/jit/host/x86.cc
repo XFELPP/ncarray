@@ -604,148 +604,61 @@ namespace ncarray {
                               asmjit::x86::Gp& index,
                               asmjit::Reg& value,
                               ssize_t dim,
-                              const SOArrayPolicy& arr_layout,
+                              const NCOffsetsPolicy& arr_layout,
                               asmjit::TypeId type_id,
-                              bool addr_is_sink,
-                              bool expr_is_soarr) {
-      if (!expr_is_soarr) {
-        auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(arr_layout);
-        if (ncl.is_pointer_axis(dim)) {
-          advance_ncoffsets_pointer_axis(cc,
-                                         addr,
-                                         index,
-                                         ncl.offset(dim));
-          if (!addr_is_sink) {
-            cc.emit(get_move_inst(type_id), value, asmjit::x86::ptr(addr));
-          } else {
-            cc.emit(get_move_inst(type_id), asmjit::x86::ptr(addr), value);
-          }
+                              bool addr_is_sink) {
+      // For NCOffsetsPolicy we first do normal strided traversal (index * stride)
+      ssize_t stride { arr_layout.stride(dim) };
+      ssize_t suboffset { arr_layout.suboffset(dim) };
+      if (suboffset >= 0) {
+        // Then, if it has a suboffset, dereference and add it
+        advance_ncarray_axis(cc, addr, index, stride, suboffset);
+        if (!addr_is_sink) {
+          cc.emit(get_move_inst(type_id), value, asmjit::x86::ptr(addr));
         } else {
-          // Normal strided traversal, with scaled loading
-          ssize_t stride { ncl.stride(dim) };
-          ssize_t offset { ncl.offset(dim) };
-          if (offset != 0) {
-            asmjit::x86::Gp term_off { cc.new_gp(asmjit::TypeId::kInt64) };
-            cc.mov(term_off, offset);
-            cc.add(addr, term_off);
-          }
-
-          // Use x86 scaled hardware loading
-          int scale_shift { -1 };
-          switch (stride) {
-          case 1:  { scale_shift =  0; break; }
-          case 2:  { scale_shift =  1; break; }
-          case 4:  { scale_shift =  2; break; }
-          case 8:  { scale_shift =  3; break; }
-          default: { scale_shift = -1; break; }
-          }
-
-          if (scale_shift >= 0) {
-            if (!addr_is_sink) {
-              cc.emit(get_move_inst(type_id),
-                      value,
-                      asmjit::x86::ptr(addr, index, scale_shift));
-            } else {
-              cc.emit(get_move_inst(type_id),
-                      asmjit::x86::ptr(addr, index, scale_shift),
-                      value);
-            }
-          } else {
-            // Offset handled up above, so pass -1
-            advance_ncoffsets_strided_axis(cc, addr, index, stride, -1);
-            if (!addr_is_sink) {
-              cc.emit(get_move_inst(type_id), value, asmjit::x86::ptr(addr));
-            } else {
-              cc.emit(get_move_inst(type_id), asmjit::x86::ptr(addr), value);
-            }
-          }
+          cc.emit(get_move_inst(type_id), asmjit::x86::ptr(addr), value);
         }
       } else {
-        // For SOArrayPolicy we first do normal strided traversal (index * stride)
-        ssize_t stride { arr_layout.stride(dim) };
-        ssize_t suboffset { arr_layout.suboffset(dim) };
-        if (suboffset >= 0) {
-          // Then, if it has a suboffset, dereference and add it
-          advance_soarray_axis(cc, addr, index, stride, suboffset);
+        // Without pointer axis, use x86 scaled hardware loading
+        int scale_shift { -1 };
+
+        switch (stride) {
+        case 1:  { scale_shift =  0; break; }
+        case 2:  { scale_shift =  1; break; }
+        case 4:  { scale_shift =  2; break; }
+        case 8:  { scale_shift =  3; break; }
+        default: { scale_shift = -1; break; }
+        }
+
+        if (scale_shift >= 0) {
+          if (!addr_is_sink) {
+            cc.emit(get_move_inst(type_id),
+                    value,
+                    asmjit::x86::ptr(addr, index, scale_shift));
+          } else {
+            cc.emit(get_move_inst(type_id),
+                    asmjit::x86::ptr(addr, index, scale_shift),
+                    value);
+          }
+        } else {
+          // suboffset should be negative, but we otherwise determined it should
+          // not be used, so pass -1 to emit instructions
+          advance_ncarray_axis(cc, addr, index, stride, -1);
           if (!addr_is_sink) {
             cc.emit(get_move_inst(type_id), value, asmjit::x86::ptr(addr));
           } else {
             cc.emit(get_move_inst(type_id), asmjit::x86::ptr(addr), value);
           }
-        } else {
-          // Without pointer axis, use x86 scaled hardware loading
-          int scale_shift { -1 };
-
-          switch (stride) {
-          case 1:  { scale_shift =  0; break; }
-          case 2:  { scale_shift =  1; break; }
-          case 4:  { scale_shift =  2; break; }
-          case 8:  { scale_shift =  3; break; }
-          default: { scale_shift = -1; break; }
-          }
-
-          if (scale_shift >= 0) {
-            if (!addr_is_sink) {
-              cc.emit(get_move_inst(type_id),
-                      value,
-                      asmjit::x86::ptr(addr, index, scale_shift));
-            } else {
-              cc.emit(get_move_inst(type_id),
-                      asmjit::x86::ptr(addr, index, scale_shift),
-                      value);
-            }
-          } else {
-            // suboffset should be negative, but we otherwise determined it should
-            // not be used, so pass -1 to emit instructions
-            advance_soarray_axis(cc, addr, index, stride, -1);
-            if (!addr_is_sink) {
-              cc.emit(get_move_inst(type_id), value, asmjit::x86::ptr(addr));
-            } else {
-              cc.emit(get_move_inst(type_id), asmjit::x86::ptr(addr), value);
-            }
-          }
         }
       }
     }
 
-    void advance_ncoffsets_pointer_axis(asmjit::x86::Compiler& cc,
-                                        asmjit::x86::Gp& addr,
-                                        asmjit::x86::Gp& index,
-                                        ssize_t offset) {
-      // For NCOffsetsPolicy for pointer axis dereference and load
-      asmjit::x86::Gp ptr_idx { cc.new_gp(asmjit::TypeId::kInt64) };
-      cc.mov(ptr_idx, index);
-      if (offset != 0) {
-        cc.add(ptr_idx, offset);
-      }
-      cc.shl(ptr_idx, 3); // Multiply by sizeof(void*) = 8 bytes (2^3)
-      cc.add(addr, ptr_idx);
-      // Now dereference
-      cc.mov(addr, asmjit::x86::ptr(addr));
-    }
-
-    void advance_ncoffsets_strided_axis(asmjit::x86::Compiler& cc,
-                                        asmjit::x86::Gp& addr,
-                                        asmjit::x86::Gp& index,
-                                        ssize_t stride,
-                                        ssize_t offset) {
-      asmjit::x86::Gp term { cc.new_gp(asmjit::TypeId::kInt64) };
-      cc.mov(term, index);
-      cc.imul(term, stride);
-      cc.add(addr, term);
-      if (offset > 0) {
-        asmjit::x86::Gp term_off { cc.new_gp(asmjit::TypeId::kInt64) };
-        cc.mov(term_off, offset);
-        cc.add(addr, term_off);
-      }
-    }
-
-    void advance_soarray_axis(asmjit::x86::Compiler& cc,
+    void advance_ncarray_axis(asmjit::x86::Compiler& cc,
                               asmjit::x86::Gp& addr,
                               asmjit::x86::Gp& index,
                               ssize_t stride,
                               ssize_t suboffset) {
-      // For SOArrayPolicy we first do normal strided traversal (index * stride)
+      // For NCOffsetsPolicy we first do normal strided traversal (index * stride)
       asmjit::x86::Gp term { cc.new_gp(asmjit::TypeId::kInt64) };
       cc.mov(term, index);
       cc.imul(term, stride);

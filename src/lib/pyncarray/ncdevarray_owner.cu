@@ -10,12 +10,10 @@
 
 #include "ncarray/custom_types.hh"
 #include "ncarray/ncarrays.hh"
-#include "ncarray/soarrays.hh"
 #ifdef NCA_HAS_CUDA
 // This code doesn't actually have anything GPU-specific (__device__ or kernels)
 // They are the specializations for GPU arrays
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #endif
 
 #include <pybind11/numpy.h>

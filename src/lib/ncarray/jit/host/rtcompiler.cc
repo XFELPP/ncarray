@@ -135,11 +135,10 @@ namespace ncarray {
     std::string compute_kernel_hash(DType dest_t,
                                     DType src_t,
                                     DType work_t,
-                                    const SOArrayPolicy& dest_layout,
+                                    const NCOffsetsPolicy& dest_layout,
                                     const std::vector<Instruction>& instrs,
-                                    const std::vector<SOArrayPolicy>& layouts,
-                                    const std::vector<Scalar>& scalars,
-                                    bool expr_is_soarr) {
+                                    const std::vector<NCOffsetsPolicy>& layouts,
+                                    const std::vector<Scalar>& scalars) {
       ssize_t ndim { dest_layout.ndim() };
       const ssize_t* final_shape { dest_layout.shape() };
       std::stringstream ss(std::ios::binary | std::ios::out | std::ios::in);
@@ -148,17 +147,14 @@ namespace ncarray {
       ss.write(reinterpret_cast<const char*>(&src_t), sizeof(src_t));
       ss.write(reinterpret_cast<const char*>(&work_t), sizeof(work_t));
       ss.write(reinterpret_cast<const char*>(&ndim), sizeof(ndim));
-      ss.write(reinterpret_cast<const char*>(&expr_is_soarr), sizeof(expr_is_soarr));
+
       // Serialize the shape, strides, pointer info of the result/destination
       for (ssize_t d = 0; d < ndim; ++d) {
         ssize_t stride { dest_layout.stride(d) };
         ssize_t offset { 0 };
-        if (expr_is_soarr) {
-          offset = dest_layout.suboffset(d);
-        } else {
-          auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(dest_layout);
-          offset = ncl.offset(d);
-        }
+
+        offset = dest_layout.suboffset(d);
+
         ss.write(reinterpret_cast<const char*>(&stride), sizeof(stride));
         ss.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
       }
@@ -174,12 +170,9 @@ namespace ncarray {
         for (ssize_t d = 0; d < ndim; ++d) {
           ssize_t stride = l.stride(d);
           ssize_t offset { 0 };
-          if (expr_is_soarr) {
-            offset = l.suboffset(d);
-          } else {
-            auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(l);
-            offset = ncl.offset(d);
-          }
+
+          offset = l.suboffset(d);
+
           ss.write(reinterpret_cast<const char*>(&stride), sizeof(stride));
           ss.write(reinterpret_cast<const char*>(&offset), sizeof(offset));
         }
@@ -226,19 +219,17 @@ namespace ncarray {
     ExprKernelFunc RuntimeCompiler::get_expr_kernel(DType dest_t,
                                                     DType src_t,
                                                     DType work_t,
-                                                    const SOArrayPolicy& dest_layout,
+                                                    const NCOffsetsPolicy& dest_layout,
                                                     const std::vector<Instruction>& instrs,
-                                                    const std::vector<SOArrayPolicy>& layouts,
-                                                    const std::vector<Scalar>& scalars,
-                                                    bool expr_is_soarr) {
+                                                    const std::vector<NCOffsetsPolicy>& layouts,
+                                                    const std::vector<Scalar>& scalars) {
       std::string k_id = compute_kernel_hash(dest_t,
                                              src_t,
                                              work_t,
                                              dest_layout,
                                              instrs,
                                              layouts,
-                                             scalars,
-                                             expr_is_soarr);
+                                             scalars);
       if (m_kernel_cache.count(k_id)) {
         return m_kernel_cache[k_id];
       }
@@ -258,8 +249,7 @@ namespace ncarray {
                                   dest_layout,
                                   instrs,
                                   layouts,
-                                  scalars,
-                                  expr_is_soarr);
+                                  scalars);
         } else if (env.is_arch_aarch64()) {
           // 64-bit AArch64 (ARM)
           compile_a64_expr_kernel(cache_path,
@@ -269,8 +259,7 @@ namespace ncarray {
                                   dest_layout,
                                   instrs,
                                   layouts,
-                                  scalars,
-                                  expr_is_soarr);
+                                  scalars);
         }
         // Don't handle other cases currently
       }
@@ -286,11 +275,10 @@ namespace ncarray {
                                                   DType dest_t,
                                                   DType src_t,
                                                   DType work_t,
-                                                  const SOArrayPolicy& dest_layout,
+                                                  const NCOffsetsPolicy& dest_layout,
                                                   const std::vector<Instruction>& instrs,
-                                                  const std::vector<SOArrayPolicy>& layouts,
-                                                  const std::vector<Scalar>& scalars,
-                                                  bool expr_is_soarr) {
+                                                  const std::vector<NCOffsetsPolicy>& layouts,
+                                                  const std::vector<Scalar>& scalars) {
       asmjit::CodeHolder code;
       code.init(asmjit::Environment::host());
       asmjit::x86::Compiler cc(&code);
@@ -332,7 +320,7 @@ namespace ncarray {
       std::vector<asmjit::x86::Gp> base_ptrs(instrs.size());
       for (const auto& instr : instrs) {
         OpCode op { get_op(instr) };
-        if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
+        if (op != OpCode::LOAD_NCARR) {
           continue;
         }
         int idx { get_index(instr) };
@@ -384,34 +372,16 @@ namespace ncarray {
             cc.mov(dest_ptrs[dim], dest_ptrs[dim - 1]);
           }
 
-          if (!expr_is_soarr) {
-            auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(dest_layout);
-            if (ncl.is_pointer_axis(dim)) {
-              // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
-              x86::advance_ncoffsets_pointer_axis(cc,
-                                                  dest_ptrs[dim],
-                                                  loop_regs[dim],
-                                                  ncl.offset(dim));
-            } else {
-              // Normal strided traversal (index * stride + offset)
-              x86::advance_ncoffsets_strided_axis(cc,
-                                                  dest_ptrs[dim],
-                                                  loop_regs[dim],
-                                                  ncl.stride(dim),
-                                                  ncl.offset(dim));
-            }
-          } else {
-            // For SOArrayPolicy we first do normal strided traversal (index * stride)
-            x86::advance_soarray_axis(cc,
-                                      dest_ptrs[dim],
-                                      loop_regs[dim],
-                                      dest_layout.stride(dim),
-                                      dest_layout.suboffset(dim));
-          }
+          // For NCOffsetsPolicy we first do normal strided traversal (index * stride)
+          x86::advance_ncarray_axis(cc,
+                                    dest_ptrs[dim],
+                                    loop_regs[dim],
+                                    dest_layout.stride(dim),
+                                    dest_layout.suboffset(dim));
 
           for (const auto& instr : instrs) {
             OpCode op { get_op(instr) };
-            if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
+            if (op != OpCode::LOAD_NCARR) {
               continue;
             }
             int idx { get_index(instr) };
@@ -424,31 +394,13 @@ namespace ncarray {
               cc.mov(op_ptrs[idx][dim], op_ptrs[idx][dim - 1]);
             }
 
-            if (!expr_is_soarr) {
-              auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(layouts[idx]);
-              if (ncl.is_pointer_axis(dim)) {
-                // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
-                x86::advance_ncoffsets_pointer_axis(cc,
-                                                    op_ptrs[idx][dim],
-                                                    loop_regs[dim],
-                                                    ncl.offset(dim));
-              } else {
-                // Normal strided traversal (index * stride + offset)
-                x86::advance_ncoffsets_strided_axis(cc,
-                                                    op_ptrs[idx][dim],
-                                                    loop_regs[dim],
-                                                    ncl.stride(dim),
-                                                    ncl.offset(dim));
-              }
-            } else {
-              auto& sol = layouts[idx];
-              // For SOArrayPolicy we first do normal strided traversal (index * stride)
-              x86::advance_soarray_axis(cc,
-                                        op_ptrs[idx][dim],
-                                        loop_regs[dim],
-                                        sol.stride(dim),
-                                        sol.suboffset(dim));
-            }
+            auto& sol = layouts[idx];
+            // For NCOffsetsPolicy we first do normal strided traversal (index * stride)
+            x86::advance_ncarray_axis(cc,
+                                      op_ptrs[idx][dim],
+                                      loop_regs[dim],
+                                      sol.stride(dim),
+                                      sol.suboffset(dim));
           }
         }
       }
@@ -461,7 +413,7 @@ namespace ncarray {
       for (const auto& instr : instrs) {
         OpCode op { get_op(instr) };
         int idx { get_index(instr) };
-        if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+        if (op == OpCode::LOAD_NCARR) {
           asmjit::Reg v_reg { cc.new_reg<asmjit::Reg>(type_id) };
           asmjit::x86::Gp val_addr { cc.new_gp_ptr() };
 
@@ -481,8 +433,7 @@ namespace ncarray {
                                     inner_dim,
                                     layouts[idx],
                                     src_type_id,
-                                    /*addr_is_sink=*/false,
-                                    expr_is_soarr);
+                                    /*addr_is_sink=*/false);
 
           // Load using the source type, but cast to our working type
           asmjit::Reg casted_reg {
@@ -584,8 +535,7 @@ namespace ncarray {
                                 inner_dim,
                                 dest_layout,
                                 dest_type_id,
-                                /*addr_is_sink=*/true,
-                                expr_is_soarr);
+                                /*addr_is_sink=*/true);
 
       // ---------------------------------------------------------
       // End inner loop body
@@ -613,11 +563,10 @@ namespace ncarray {
                                                   DType dest_t,
                                                   DType src_t,
                                                   DType work_t,
-                                                  const SOArrayPolicy& dest_layout,
+                                                  const NCOffsetsPolicy& dest_layout,
                                                   const std::vector<Instruction>& instrs,
-                                                  const std::vector<SOArrayPolicy>& layouts,
-                                                  const std::vector<Scalar>& scalars,
-                                                  bool expr_is_soarr) {
+                                                  const std::vector<NCOffsetsPolicy>& layouts,
+                                                  const std::vector<Scalar>& scalars) {
       asmjit::CodeHolder code;
       code.init(asmjit::Environment::host());
       asmjit::a64::Compiler cc(&code);
@@ -656,7 +605,7 @@ namespace ncarray {
       std::vector<asmjit::a64::Gp> base_ptrs(instrs.size());
       for (const auto& instr : instrs) {
         OpCode op { get_op(instr) };
-        if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
+        if (op != OpCode::LOAD_NCARR) {
           continue;
         }
         int idx { get_index(instr) };
@@ -709,34 +658,17 @@ namespace ncarray {
             cc.mov(dest_ptrs[dim], dest_ptrs[dim - 1]);
           }
 
-          if (!expr_is_soarr) {
-            auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(dest_layout);
-            if (ncl.is_pointer_axis(dim)) {
-              // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
-              a64::advance_ncoffsets_pointer_axis(cc,
-                                                  dest_ptrs[dim],
-                                                  loop_regs[dim],
-                                                  ncl.offset(dim));
-            } else {
-              // Normal strided traversal (index * stride + offset)
-              a64::advance_ncoffsets_strided_axis(cc,
-                                                  dest_ptrs[dim],
-                                                  loop_regs[dim],
-                                                  ncl.stride(dim),
-                                                  ncl.offset(dim));
-            }
-          } else {
-            // For SOArrayPolicy we first do normal strided traversal (index * stride)
-            a64::advance_soarray_axis(cc,
-                                      dest_ptrs[dim],
-                                      loop_regs[dim],
-                                      dest_layout.stride(dim),
-                                      dest_layout.suboffset(dim));
-          }
+          // For NCOffsetsPolicy we first do normal strided traversal (index * stride)
+          a64::advance_ncarray_axis(cc,
+                                    dest_ptrs[dim],
+                                    loop_regs[dim],
+                                    dest_layout.stride(dim),
+                                    dest_layout.suboffset(dim));
+
 
           for (const auto& instr : instrs) {
             OpCode op { get_op(instr) };
-            if (op != OpCode::LOAD_NCARR && op != OpCode::LOAD_SOARR) {
+            if (op != OpCode::LOAD_NCARR) {
               continue;
             }
             int idx { get_index(instr) };
@@ -749,31 +681,14 @@ namespace ncarray {
               cc.mov(op_ptrs[idx][dim], op_ptrs[idx][dim - 1]);
             }
 
-            if (!expr_is_soarr) {
-              auto& ncl = reinterpret_cast<const NCOffsetsPolicy&>(layouts[idx]);
-              if (ncl.is_pointer_axis(dim)) {
-                // For NCOffsetsPolicy for pointer axes we derefence with [index + offset]
-                a64::advance_ncoffsets_pointer_axis(cc,
-                                                    op_ptrs[idx][dim],
-                                                    loop_regs[dim],
-                                                    ncl.offset(dim));
-              } else {
-                // Normal strided traversal (index * stride + offset)
-                a64::advance_ncoffsets_strided_axis(cc,
-                                                    op_ptrs[idx][dim],
-                                                    loop_regs[dim],
-                                                    ncl.stride(dim),
-                                                    ncl.offset(dim));
-              }
-            } else {
-              auto& sol = layouts[idx];
-              // For SOArrayPolicy we first do normal strided traversal (index * stride)
-              a64::advance_soarray_axis(cc,
-                                        op_ptrs[idx][dim],
-                                        loop_regs[dim],
-                                        sol.stride(dim),
-                                        sol.suboffset(dim));
-            }
+            auto& sol = layouts[idx];
+            // For NCOffsetsPolicy we first do normal strided traversal (index * stride)
+            a64::advance_ncarray_axis(cc,
+                                      op_ptrs[idx][dim],
+                                      loop_regs[dim],
+                                      sol.stride(dim),
+                                      sol.suboffset(dim));
+
           }
         }
       }
@@ -786,7 +701,7 @@ namespace ncarray {
       for (const auto& instr : instrs) {
         OpCode op { get_op(instr) };
         int idx { get_index(instr) };
-        if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+        if (op == OpCode::LOAD_NCARR) {
           asmjit::Reg v_reg { cc.new_reg<asmjit::Reg>(type_id) };
           asmjit::a64::Gp val_addr { cc.new_gp_ptr() };
 
@@ -806,8 +721,7 @@ namespace ncarray {
                                     inner_dim,
                                     layouts[idx],
                                     src_type_id,
-                                    /*addr_is_sink=*/false,
-                                    expr_is_soarr);
+                                    /*addr_is_sink=*/false);
 
           // Load using the source type, but cast to our working type
           asmjit::Reg casted_reg {
@@ -910,8 +824,7 @@ namespace ncarray {
                                 inner_dim,
                                 dest_layout,
                                 dest_type_id,
-                                /*addr_is_sink=*/true,
-                                expr_is_soarr);
+                                /*addr_is_sink=*/true);
 
       // ---------------------------------------------------------
       // End inner loop body

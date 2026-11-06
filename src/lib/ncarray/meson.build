@@ -53,9 +53,6 @@ if build_core_opt
             'ncarrays.cc',
             'ncarrayrefs.cc',
             'ncarrayviews.cc',
-            'soarrays.cc',
-            'soarrayrefs.cc',
-            'soarrayviews.cc',
         ] + host_cc,
         cpp_args: ['-DNCA_BUILD_NCARRAY_API'],
         dependencies: deps_for_ncarray,
@@ -105,9 +102,6 @@ if build_core_opt
                 'ncdevarrayviews.cu',
                 'ncdevarrayrefs.cu',
                 'ncdevarrays.cu',
-                'sodevarrayviews.cu',
-                'sodevarrayrefs.cu',
-                'sodevarrays.cu',
             ] + dev_cu,
             cpp_args: ['-DNCA_BUILD_NCARRAY_API'],
             cuda_args: nca_cuda_args + ['-DNCA_BUILD_NCARRAY_API'],
@@ -169,14 +163,12 @@ installed_headers = [
     'op_code.hh',
     'op_traits.hh',
     'reductions.hh',
-    'soarrays.hh',
     'storage.hh',
 ]
 
 # The following headers are for integration with device code on host side
 installed_device_compat_headers = [
     'ncdevarrays.cuh',
-    'sodevarrays.cuh',
 ]
 
 if not nca_as_wheel_opt and build_core_opt

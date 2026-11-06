@@ -68,17 +68,15 @@ namespace ncarray {
        * @param[in] instrs The instructions (packed index + OpCode) for the expression.
        * @param[in] layouts The layouts of the arrays involved.
        * @param[in] scalars Any scalar constants involved.
-       * @param[in] expr_is_soarr Whether the arrays are SOArray* or NCArray*.
        * @returns k_func The function to evaluate the expression.
        */
       ExprKernelFunc get_expr_kernel(DType dest_t,
                                      DType src_t,
                                      DType work_t,
-                                     const SOArrayPolicy& dest_layout,
+                                     const NCOffsetsPolicy& dest_layout,
                                      const std::vector<Instruction>& instrs,
-                                     const std::vector<SOArrayPolicy>& layouts,
-                                     const std::vector<Scalar>& scalars,
-                                     bool expr_is_soarr = false);
+                                     const std::vector<NCOffsetsPolicy>& layouts,
+                                     const std::vector<Scalar>& scalars);
 
     private:
       RuntimeCompiler();
@@ -100,17 +98,15 @@ namespace ncarray {
        * @param[in] instrs The instructions (packed index + OpCode) for the expression.
        * @param[in] layouts The layouts of the arrays involved.
        * @param[in] scalars Any scalar constants involved.
-       * @param[in] expr_is_soarr Whether the arrays are SOArray* or NCArray*.
        */
       void compile_x86_expr_kernel(fs::path cache_path,
                                    DType dest_t,
                                    DType src_t,
                                    DType work_t,
-                                   const SOArrayPolicy& dest_layout,
+                                   const NCOffsetsPolicy& dest_layout,
                                    const std::vector<Instruction>& instrs,
-                                   const std::vector<SOArrayPolicy>& layouts,
-                                   const std::vector<Scalar>& scalars,
-                                   bool expr_is_soarr = false);
+                                   const std::vector<NCOffsetsPolicy>& layouts,
+                                   const std::vector<Scalar>& scalars);
 
       /**
        * Compile the function to evaluate an expression, for the a64 (ARM) architecture.
@@ -129,17 +125,15 @@ namespace ncarray {
        * @param[in] instrs The instructions (packed index + OpCode) for the expression.
        * @param[in] layouts The layouts of the arrays involved.
        * @param[in] scalars Any scalar constants involved.
-       * @param[in] expr_is_soarr Whether the arrays are SOArray* or NCArray*.
        */
       void compile_a64_expr_kernel(fs::path cache_path,
                                    DType dest_t,
                                    DType src_t,
                                    DType work_t,
-                                   const SOArrayPolicy& dest_layout,
+                                   const NCOffsetsPolicy& dest_layout,
                                    const std::vector<Instruction>& instrs,
-                                   const std::vector<SOArrayPolicy>& layouts,
-                                   const std::vector<Scalar>& scalars,
-                                   bool expr_is_soarr = false);
+                                   const std::vector<NCOffsetsPolicy>& layouts,
+                                   const std::vector<Scalar>& scalars);
 
       /**
        * In memory cache of compiled functions for expression evaluation.

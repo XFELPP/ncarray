@@ -119,35 +119,3 @@ def test_setitem_integer():
     ncarr[0, 5] = 42
     assert ncarr[0, 5] == 42
     assert arr[5] == 42  # Ref array modifies underneath numpy array
-
-
-def test_soarray_indexing_arr():
-    """Test simple indexing on SOArray*.
-
-    NOTE: The reference bindings insert a pointer axis to avoid complications with
-    pulling it out from inside NumPy. You can squeeze later to collapse the extra
-    axis.
-    """
-    arr: npt.NDArray[np.int32] = np.arange(12, dtype=np.int32).reshape((3, 4))
-    soarr: nca.SOArrayRef = nca.SOArrayRef(arr)
-    assert soarr[0, 1, 2] == 6
-
-    slc: nca.SOArrayView = soarr[0, 1:3, 0:2]
-    assert slc.shape == (2, 2)
-    assert np.array_equal(np.array(slc), arr[1:3, 0:2])
-
-
-def test_soarray_indexing_list_of_arrs():
-    """Test simple indexing on SOArray* - but bind a list of arrays.
-
-    NOTE: The reference bindings insert a pointer axis to avoid complications with
-    pulling it out from inside NumPy. You can squeeze later to collapse the extra
-    axis.
-    """
-    arr: npt.NDArray[np.int32] = np.arange(12, dtype=np.int32).reshape((3, 4))
-    soarr: nca.SOArrayRef = nca.SOArrayRef([arr])
-    assert soarr[0, 1, 2] == 6
-
-    slc: nca.SOArrayView = soarr[0, 1:3, 0:2]
-    assert slc.shape == (2, 2)
-    assert np.array_equal(np.array(slc), arr[1:3, 0:2])

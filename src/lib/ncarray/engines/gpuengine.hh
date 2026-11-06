@@ -112,8 +112,7 @@ namespace ncarray {
                                                                 n_scalars,
                                                                 expr.ndim(),
                                                                 expr.shape(),
-                                                                expr.instrs,
-                                                                expr.soarray);
+                                                                expr.instrs);
 
           auto launch_op = [&] <typename WorkT> () {
             // NOTE: I would just use a normal vector<DestT> ... but vector<bool> problems...
@@ -172,8 +171,7 @@ namespace ncarray {
           // execute_expression_kernel<DestT><<<blocks, TPB>>>(vm, result.view());
 
           auto kernel =
-            device::RuntimeCompiler::instance().get_dynamic_vm_kernel(result.dtype(),
-                                                                      expr.soarray);
+            device::RuntimeCompiler::instance().get_dynamic_vm_kernel(result.dtype());
 
           std::vector<void*> args;
           args.push_back(reinterpret_cast<void*>(&vm));
@@ -336,8 +334,6 @@ namespace ncarray {
 
     template <typename T, class ArrayT>
     static void execute_fill(const ArrayT& arr, Scalar val) {
-      using DestLayoutP = typename ArrayT::LayoutPolicy;
-      constexpr bool dest_is_soarr = std::is_same_v<DestLayoutP, SOArrayPolicy>;
 
       auto cast_op = [](auto&& arg) -> T {
         using FromT = std::decay_t<decltype(arg)>;
@@ -350,8 +346,7 @@ namespace ncarray {
       int blocks { static_cast<int>((arr.size() + TPB - 1)) / TPB };
 
       auto kernel =
-        device::RuntimeCompiler::instance().get_fill_kernel(arr.dtype(),
-                                                            dest_is_soarr);
+        device::RuntimeCompiler::instance().get_fill_kernel(arr.dtype());
 
       auto view = arr.view();
 
@@ -387,9 +382,6 @@ namespace ncarray {
         cudaGetLastError();
       }
 
-      using SrcLayoutP = typename ArrayT::LayoutPolicy;
-      constexpr bool src_is_soarr = std::is_same_v<SrcLayoutP, SOArrayPolicy>;
-
       // NOTE: cudaMemcpyDefault can presumably hide some of this complexity
       //       however, it hasn't been working realiably, seemingly, so manual it is.
       // We also use this for host->device transfers to make sure CPU-bound
@@ -419,8 +411,7 @@ namespace ncarray {
           // Casting copy from device to device
           auto kernel =
             device::RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
-                                                                arr.dtype(),
-                                                                src_is_soarr);
+                                                                arr.dtype());
           auto view = arr.view();
 
           std::vector<void*> args;
@@ -448,8 +439,7 @@ namespace ncarray {
 
           auto kernel =
             device::RuntimeCompiler::instance().get_copy_kernel(dtype_traits<DestT>::value,
-                                                                arr.dtype(),
-                                                                src_is_soarr);
+                                                                arr.dtype());
           auto view = arr.view();
 
           std::vector<void*> args;
@@ -515,14 +505,8 @@ namespace ncarray {
       using DestMemType = typename Dest::MemType;
       using SrcMemType = typename Src::MemType;
 
-      using DestLayoutP = typename Dest::LayoutPolicy;
-      using SrcLayoutP = typename Src::LayoutPolicy;
-
       constexpr bool dest_is_dev = std::is_same_v<DestMemType, DevTag>;
       constexpr bool src_is_dev = std::is_same_v<SrcMemType, DevTag>;
-
-      constexpr bool dest_is_soarr = std::is_same_v<DestLayoutP, SOArrayPolicy>;
-      constexpr bool src_is_soarr = std::is_same_v<SrcLayoutP, SOArrayPolicy>;
 
       using NCDevArray = NCOwnerFor<DevTag>;
 
@@ -535,9 +519,7 @@ namespace ncarray {
           // Device to device
           auto kernel =
             device::RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                               src.dtype(),
-                                                                               dest_is_soarr,
-                                                                               src_is_soarr);
+                                                                               src.dtype());
           auto dest_view = dest.view();
           auto src_view = src.view();
 
@@ -572,9 +554,7 @@ namespace ncarray {
           //       an NCOffsets-style Array -- so the last argument must be false.
           auto kernel =
             device::RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                               dest.dtype(),
-                                                                               dest_is_soarr,
-                                                                               false);
+                                                                               dest.dtype());
           auto dest_view = dest.view();
           auto src_view = tmp.view();
 
@@ -605,9 +585,7 @@ namespace ncarray {
         //       an NCOffsets-style Array -- so the last argument must be false.
         auto kernel =
           device::RuntimeCompiler::instance().get_copy_view_into_view_kernel(dest.dtype(),
-                                                                             src.dtype(),
-                                                                             false,
-                                                                             src_is_soarr);
+                                                                             src.dtype());
         auto dest_view = tmp_view;
         auto src_view = src.view();
 

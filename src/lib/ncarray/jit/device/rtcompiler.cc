@@ -53,8 +53,7 @@ namespace ncarray {
                                                 int n_scalars,
                                                 ssize_t ndim,
                                                 const ssize_t* final_shape,
-                                                const std::vector<Instruction>& instrs,
-                                                bool expr_is_soarr) {
+                                                const std::vector<Instruction>& instrs) {
       std::string arch_opt = get_arch_opt();
       std::string kernel_str = get_expression_kernel_str(dest_t,
                                                          src_t,
@@ -63,8 +62,7 @@ namespace ncarray {
                                                          n_scalars,
                                                          ndim,
                                                          final_shape,
-                                                         instrs,
-                                                         expr_is_soarr);
+                                                         instrs);
       std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
       if (m_kernel_cache.count(k_id)) {
@@ -88,9 +86,9 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
-    CUfunction RuntimeCompiler::get_dynamic_vm_kernel(DType dest_t, bool expr_is_soarr) {
+    CUfunction RuntimeCompiler::get_dynamic_vm_kernel(DType dest_t) {
       std::string arch_opt = get_arch_opt();
-      std::string kernel_str = get_dynamic_vm_kernel_str(dest_t, expr_is_soarr);
+      std::string kernel_str = get_dynamic_vm_kernel_str(dest_t);
       std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
       if (m_kernel_cache.count(k_id)) {
@@ -115,9 +113,9 @@ namespace ncarray {
     }
 
 
-    CUfunction RuntimeCompiler::get_fill_kernel(DType dest_t, bool dest_is_so) {
+    CUfunction RuntimeCompiler::get_fill_kernel(DType dest_t) {
       std::string arch_opt = get_arch_opt();
-      std::string kernel_str = get_fill_kernel_str(dest_t, dest_is_so);
+      std::string kernel_str = get_fill_kernel_str(dest_t);
       std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
       if (m_kernel_cache.count(k_id)) {
@@ -141,9 +139,9 @@ namespace ncarray {
       return m_kernel_cache[k_id];
     }
 
-    CUfunction RuntimeCompiler::get_copy_kernel(DType dest_t, DType src_t, bool src_is_so) {
+    CUfunction RuntimeCompiler::get_copy_kernel(DType dest_t, DType src_t) {
       std::string arch_opt = get_arch_opt();
-      std::string kernel_str = get_copy_kernel_str(dest_t, src_t, src_is_so);
+      std::string kernel_str = get_copy_kernel_str(dest_t, src_t);
       std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
       if (m_kernel_cache.count(k_id)) {
@@ -168,14 +166,10 @@ namespace ncarray {
     }
 
     CUfunction RuntimeCompiler::get_copy_view_into_view_kernel(DType dest_t,
-                                                               DType src_t,
-                                                               bool dest_is_so,
-                                                               bool src_is_so) {
+                                                               DType src_t) {
       std::string arch_opt = get_arch_opt();
       std::string kernel_str = get_copy_view_into_view_kernel_str(dest_t,
-                                                                  src_t,
-                                                                  dest_is_so,
-                                                                  src_is_so);
+                                                                  src_t);
       std::string k_id = hash_to_hex(kernel_str + arch_opt);
 
       if (m_kernel_cache.count(k_id)) {
@@ -217,8 +211,7 @@ namespace ncarray {
                                                            int n_scalars,
                                                            ssize_t ndim,
                                                            const ssize_t* final_shape,
-                                                           const std::vector<Instruction>& instrs,
-                                                           bool expr_is_soarr) {
+                                                           const std::vector<Instruction>& instrs) {
       auto get_dtype_name = [&] <typename T> () {
         return get_name_for_type<T>();
       };
@@ -227,15 +220,8 @@ namespace ncarray {
       std::string src_t_name = dispatch(src_t, get_dtype_name);
       std::string work_t_name = dispatch(work_t, get_dtype_name);
 
-      std::string result_type;
-      std::string layout_t;
-      if (expr_is_soarr) {
-        result_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-        layout_t = "ncarray::SOArrayPolicy";
-      } else {
-        result_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
-        layout_t = "ncarray::NCOffsetsPolicy";
-      }
+      std::string result_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
+      std::string layout_t = "ncarray::NCOffsetsPolicy";
 
       std::string d_params;
       std::string packing_logic;
@@ -272,7 +258,7 @@ namespace ncarray {
         int idx = get_index(instr);
         OpCode op = get_op(instr);
 
-        if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+        if (op == OpCode::LOAD_NCARR) {
           packing_logic += "  mvnode.op_map[" + std::to_string(operand_ptr++) + "] = " + std::to_string(idx) + ";\n";
         } else if (op == OpCode::IDX) {
           // Make data a nullptr for the "virtual array" defined by IDX
@@ -338,7 +324,7 @@ namespace ncarray {
       return wrapper;
     }
 
-    std::string RuntimeCompiler::get_dynamic_vm_kernel_str(DType dest_t, bool expr_is_soarr) {
+    std::string RuntimeCompiler::get_dynamic_vm_kernel_str(DType dest_t) {
       auto get_dtype_name = [&] <typename T> () {
         if constexpr (std::is_same_v<T, long double>) {
           return get_name_for_type<double>();
@@ -351,9 +337,7 @@ namespace ncarray {
 
       std::string dest_t_name = dispatch(dest_t, get_dtype_name);
       std::string dest_view_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
-      if (expr_is_soarr) {
-        dest_view_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-      }
+
       std::string wrapper =
         "extern \"C\" __global__ void jit_dynamic_vm_kernel(ncarray::DynamicExprMVNode<ncarray::DevTag> vm, " +
                                                             dest_view_type + " result) {\n"
@@ -365,7 +349,7 @@ namespace ncarray {
       return wrapper;
     }
 
-    std::string RuntimeCompiler::get_fill_kernel_str(DType dest_t, bool dest_is_so) {
+    std::string RuntimeCompiler::get_fill_kernel_str(DType dest_t) {
       auto get_dtype_name = [&] <typename T> () {
         return get_name_for_type<T>();
       };
@@ -373,10 +357,6 @@ namespace ncarray {
       std::string dest_t_name = dispatch(dest_t, get_dtype_name);
 
       std::string dest_view_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
-
-      if (dest_is_so) {
-        dest_view_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-      }
 
       std::string wrapper =
         "extern \"C\" __global__ void jit_fill_kernel(" + dest_view_type + " out, " + dest_t_name + " val) {\n"
@@ -390,8 +370,7 @@ namespace ncarray {
     }
 
     std::string RuntimeCompiler::get_copy_kernel_str(DType dest_t,
-                                                     DType src_t,
-                                                     bool src_is_so) {
+                                                     DType src_t) {
       auto get_dtype_name = [&] <typename T> () {
         return get_name_for_type<T>();
       };
@@ -399,10 +378,6 @@ namespace ncarray {
       std::string dest_t_name = dispatch(dest_t, get_dtype_name);
       std::string src_t_name = dispatch(src_t, get_dtype_name);
       std::string src_view_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
-
-      if (src_is_so) {
-        src_view_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-      }
 
       return
         "extern \"C\" __global__ void jit_copy_kernel(" + dest_t_name + "* dest, const " + src_view_type + " src) {\n"
@@ -414,9 +389,7 @@ namespace ncarray {
     }
 
     std::string RuntimeCompiler::get_copy_view_into_view_kernel_str(DType dest_t,
-                                                                    DType src_t,
-                                                                    bool dest_is_so,
-                                                                    bool src_is_so) {
+                                                                    DType src_t) {
       auto get_dtype_name = [&] <typename T> () {
         return get_name_for_type<T>();
       };
@@ -426,13 +399,6 @@ namespace ncarray {
       std::string dest_view_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
       std::string src_view_type = get_name_for_type<ArrayImpl<NCOffsetsPolicy, DevViewPolicy>>();
 
-      if (dest_is_so) {
-        dest_view_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-      }
-
-      if (src_is_so) {
-        src_view_type = get_name_for_type<ArrayImpl<SOArrayPolicy, DevViewPolicy>>();
-      }
       return
         "extern \"C\" __global__ void jit_copy_view_into_view_kernel(" + dest_view_type + " dest, const " + src_view_type + " src) {\n"
         "  ssize_t idx { static_cast<ssize_t>(blockIdx.x * blockDim.x + threadIdx.x) };\n"

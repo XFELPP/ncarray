@@ -15,13 +15,11 @@
 #include "ncarray/dtype.hh"
 #include "ncarray/ncarrays.hh"
 #include "ncarray/op_code.hh"
-#include "ncarray/soarrays.hh"
 
 #ifdef NCA_HAS_CUDA
 // This code doesn't actually have anything GPU-specific (__device__ or kernels)
 // They are the specializations for GPU arrays
 #include "ncarray/ncdevarrays.cuh"
-#include "ncarray/sodevarrays.cuh"
 #endif
 
 #include <pybind11/numpy.h>
@@ -113,8 +111,7 @@ namespace pyncarray {
 
   inline bool needs_device_vm(const py::handle& node) {
 #ifdef NCA_HAS_CUDA
-    if (is_nc_array<ncarray::NCOffsetsPolicy, ncarray::DevTag>(node) ||
-        is_nc_array<ncarray::SOArrayPolicy, ncarray::DevTag>(node)) {
+    if (is_nc_array<ncarray::NCOffsetsPolicy, ncarray::DevTag>(node)) {
       return true;
     }
     if (py::isinstance<ncarray::ExprMVNode<ncarray::DevTag>>(node)) {
@@ -131,8 +128,6 @@ namespace pyncarray {
       self.build_node(other.cast<ncarray::ExprMVNode<MemType>&>());
     } else if (is_nc_array<ncarray::NCOffsetsPolicy, MemType>(other)) {
       self.build_node(other.cast<ncarray::ArrayImpl<ncarray::NCOffsetsPolicy, VPolicy>&>());
-    } else if (is_nc_array<ncarray::SOArrayPolicy, MemType>(other)) {
-      self.build_node(other.cast<ncarray::ArrayImpl<ncarray::SOArrayPolicy, VPolicy>&>());
     } else {
       auto cast_op = [&](auto&& val) {
         self.build_node(val);
@@ -145,18 +140,13 @@ namespace pyncarray {
   py::object eval_python_expr(const py::object& pyexpr) {
     if (py::isinstance<ncarray::ExprMVNode<MemType>>(pyexpr)) {
       auto expr = pyexpr.cast<ncarray::ExprMVNode<MemType>>();
-      if (!expr.soarray) {
-        return py::cast(ncarray::NCOwnerFor<MemType>(expr));
-      }
-      return py::cast(ncarray::SOOwnerFor<MemType>(expr));
+
+      return py::cast(ncarray::NCOwnerFor<MemType>(expr));
     } else {
       ncarray::ExprMVNode<MemType> expr;
       _build_node_helper<MemType>(expr, pyexpr);
 
-      if (!expr.soarray) {
-        return py::cast(ncarray::NCOwnerFor<MemType>(expr));
-      }
-      return py::cast(ncarray::SOOwnerFor<MemType>(expr));
+      return py::cast(ncarray::NCOwnerFor<MemType>(expr));
     }
   }
 
@@ -200,11 +190,7 @@ namespace pyncarray {
                                      typename ArrayT::MemType>::View>& other) {                  \
       auto expr = self.view() OP other;                                                          \
       if (is_eager()) {                                                                          \
-        if constexpr (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) { \
-          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
-        } else {                                                                                 \
-          return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                  \
-        }                                                                                        \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -212,11 +198,7 @@ namespace pyncarray {
     .def("__" PYMETHOD "__", [](const ArrayT& self, const py::array& other) {                    \
       auto expr = self.view() OP pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim()); \
       if (is_eager()) {                                                                          \
-        if constexpr (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) { \
-          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
-        } else {                                                                                 \
-          return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                  \
-        }                                                                                        \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -225,11 +207,7 @@ namespace pyncarray {
       auto view = pyarray_to_view<typename ArrayT::ViewType>(other, self.ndim());                \
       auto expr = view OP self.view();                                                           \
       if (is_eager()) {                                                                          \
-        if constexpr (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) { \
-          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
-        } else {                                                                                 \
-          return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                  \
-        }                                                                                        \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -237,11 +215,7 @@ namespace pyncarray {
     .def("__" PYMETHOD "__", [](const ArrayT& self, const ncarray::Scalar& other) {              \
       auto expr = self.view() OP other;                                                          \
       if (is_eager()) {                                                                          \
-        if constexpr (std::is_same_v<typename ArrayT::LayoutPolicy, ncarray::NCOffsetsPolicy>) { \
-          return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                  \
-        } else {                                                                                 \
-          return py::cast(ncarray::SOOwnerFor<typename ArrayT::MemType>(expr));                  \
-        }                                                                                        \
+        return py::cast(ncarray::NCOwnerFor<typename ArrayT::MemType>(expr));                    \
       }                                                                                          \
       return py::cast(expr);                                                                     \
     },                                                                                           \
@@ -501,32 +475,13 @@ namespace pyncarray {
                return false;
              };
 #ifdef NCA_HAS_CUDA
-             // TODO: When cross-layouts are added to the shared libs add full matrix
-             // I.e. test NC to SOArray, SOArray to NC etc.
-             // For now, just use the single LayoutPolicy
              if (assign_op.template operator()<LayoutPolicy, ncarray::DevTag>()) {
                return;
              }
-             /*
-             if (assign_op.template operator()<ncarray::NCOffsetsPolicy, ncarray::DevTag>()) {
-               return;
-             }
-             if (assign_op.template operator()<ncarray::SOArrayPolicy, ncarray::DevTag>()) {
-               return;
-             }
-             */
 #endif
              if (assign_op.template operator()<LayoutPolicy, ncarray::HostTag>()) {
                return;
              }
-             /*
-             if (assign_op.template operator()<ncarray::NCOffsetsPolicy, ncarray::HostTag>()) {
-               return;
-             }
-             if (assign_op.template operator()<ncarray::SOArrayPolicy, ncarray::HostTag>()) {
-               return;
-             }
-             */
              // Convertible to scalar
              // Use the algorithm directly to avoid the variant gets
              try {

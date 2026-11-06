@@ -81,12 +81,11 @@ namespace ncarray {
    */
   template <class MemTag = DevTag>
   struct ExprMVNode : public ExpressionTag {
-    std::vector<SOArrayPolicy> layouts; // Same mem layout for NC and SO layouts
+    std::vector<NCOffsetsPolicy> layouts; // Same mem layout for NC and SO layouts
     std::vector<DType> dtypes;
     std::vector<void*> data;
     std::vector<Instruction> instrs;
     std::vector<Scalar> scalars;
-    bool soarray { true };
 
     Metadata final_shape;
     ssize_t final_size { 0 };
@@ -204,16 +203,8 @@ namespace ncarray {
         has_expr_dtype = true;
       }
       if constexpr (ArrayLike<Node>) {
-        OpCode code = OpCode::LOAD_NCARR;
-        if constexpr (std::is_base_of_v<SOArrayPolicy, Node>) {
-          code = OpCode::LOAD_SOARR;
-          this->layouts.push_back(static_cast<const SOArrayPolicy&>(node));
-        } else {
-          // If an NCOffsets array, the memory layout is the same so this is safe.
-          // The OpCode will tell use how to load it.
-          this->layouts.push_back(reinterpret_cast<const SOArrayPolicy&>(node));
-          this->soarray = false;
-        }
+        OpCode code { OpCode::LOAD_NCARR };
+        this->layouts.push_back(static_cast<const NCOffsetsPolicy&>(node));
         this->dtypes.push_back(node.dtype());
         this->data.push_back(node.data());
         this->instrs.push_back(pack_instruction(code,
@@ -237,7 +228,7 @@ namespace ncarray {
           OpCode op = get_op(instr);
           int idx = get_index(instr);
 
-          if (op == OpCode::LOAD_NCARR || op == OpCode::LOAD_SOARR) {
+          if (op == OpCode::LOAD_NCARR) {
             this->instrs.push_back(pack_instruction(op, idx + arr_idx_shift));
           } else if (op == OpCode::LOAD_CONST) {
             this->instrs.push_back(pack_instruction(op, idx + scalar_idx_shift));
